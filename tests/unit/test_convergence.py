@@ -126,5 +126,97 @@ class TestVersionFallbackAlignment(unittest.TestCase):
                          "两处版本回退值应一致")
 
 
+class TestPiiConvergence(unittest.TestCase):
+    """验证 PII 逻辑在 privacyguard.pii.* 内，main.py 不应重复实现。"""
+
+    def test_main_py_does_not_inline_pii_detection(self):
+        """main.py 不应包含内联 PII 检测函数（v37.7.6 收敛原则）。"""
+        source = MAIN_PY.read_text(encoding="utf-8")
+        self.assertNotIn("def detect_pii(self)", source,
+                         "main.py 不应保留内联 PII 检测函数")
+        self.assertNotIn("def validate_id_card(", source,
+                         "main.py 不应保留内联身份证校验函数")
+
+    def test_main_py_does_not_inline_pii_hit_class(self):
+        """main.py 不应包含内联 PIIHit 类定义。"""
+        source = MAIN_PY.read_text(encoding="utf-8")
+        for i, line in enumerate(source.splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith("class PIIHit"):
+                self.fail(f"main.py 第 {i} 行仍包含内联 PIIHit 类定义: {stripped}")
+
+    def test_pii_package_has_no_qt_dependency(self):
+        """privacyguard/pii/*.py 不应 import PyQt6（保持纯 Python / 不引入 GUI 依赖）。"""
+        pii_dir = Path(__file__).resolve().parents[2] / "privacyguard" / "pii"
+        self.assertTrue(pii_dir.exists(), "privacyguard/pii 应存在")
+        forbidden = ("PyQt6", "PyQt5", "QThread", "QObject", "pyqtSignal", "QWidget")
+        for py_file in pii_dir.rglob("*.py"):
+            # 跳过 __init__.py 的注释/文档字符串可能提及 Qt；只扫描 import / from 行
+            source = py_file.read_text(encoding="utf-8")
+            for i, line in enumerate(source.splitlines(), 1):
+                stripped = line.strip()
+                if stripped.startswith("import ") or stripped.startswith("from "):
+                    for kw in forbidden:
+                        if kw in stripped:
+                            self.fail(
+                                f"{py_file.relative_to(pii_dir.parent.parent)} 第 {i} 行含禁用的 Qt 依赖 '{kw}': {stripped}"
+                            )
+
+    def test_pii_package_has_no_network_dependency(self):
+        """ENGINE-08: privacyguard/pii/*.py 不应 import 网络库（零网络）。"""
+        pii_dir = Path(__file__).resolve().parents[2] / "privacyguard" / "pii"
+        forbidden = ("urllib", "requests", "httpx", "socket", "aiohttp")
+        for py_file in pii_dir.rglob("*.py"):
+            source = py_file.read_text(encoding="utf-8")
+            for i, line in enumerate(source.splitlines(), 1):
+                stripped = line.strip()
+                if stripped.startswith("import ") or stripped.startswith("from "):
+                    for kw in forbidden:
+                        if kw in stripped:
+                            self.fail(
+                                f"{py_file.relative_to(pii_dir.parent.parent)} 第 {i} 行含禁用的网络依赖 '{kw}': {stripped}"
+                            )
+
+    def test_pii_engine_uses_pdf_redact_image_pixels(self):
+        """SAFE-01: pdf_adapter.apply_pii_redactions 必须显式传 images=fitz.PDF_REDACT_IMAGE_PIXELS（=2）。"""
+        adapter_path = Path(__file__).resolve().parents[2] / "privacyguard" / "pii" / "pdf_adapter.py"
+        source = adapter_path.read_text(encoding="utf-8")
+        self.assertIn(
+            "PDF_REDACT_IMAGE_PIXELS",
+            source,
+            "apply_pii_redactions 必须显式传 images=fitz.PDF_REDACT_IMAGE_PIXELS（=2，非默认 0）",
+        )
+        # 仅扫描模块 docstring 之外的行；docstring 中允许提及 page.draw_rect 作为禁止说明
+        # 通过 ast 提取 docstring 范围之外的代码行
+        import ast as _ast
+        tree = _ast.parse(source)
+        doc_end = 0
+        if tree.body and isinstance(tree.body[0], _ast.Expr) and isinstance(tree.body[0].value, _ast.Constant):
+            doc_end = tree.body[0].end_lineno  # type: ignore[attr-defined]
+        for i, line in enumerate(source.splitlines(), 1):
+            if i <= doc_end:
+                continue
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            if "page.draw_rect" in line:
+                self.fail(
+                    f"pdf_adapter.py 第 {i} 行调用了 page.draw_rect（假脱敏，违反 SAFE-01）: {stripped}"
+                )
+
+    def test_pii_hit_field_order_is_locked(self):
+        """D-05: PIIHit 字段顺序锁定（entity_type, page_offset, page_length, page_rect, confidence_tier, source, mask_strategy）。"""
+        import inspect
+        from privacyguard.pii.hits import PIIHit
+        sig = inspect.signature(PIIHit)
+        names = list(sig.parameters.keys())
+        expected = [
+            'entity_type', 'page_offset', 'page_length', 'page_rect',
+            'confidence_tier', 'source', 'mask_strategy',
+        ]
+        self.assertEqual(names[:7], expected,
+                         f"PIIHit 前 7 字段顺序应为 {expected}，实际为 {names[:7]}")
+
+
 if __name__ == "__main__":
     unittest.main()

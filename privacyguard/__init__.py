@@ -56,6 +56,15 @@ __all__ = [
     'OCREngineManager',
     'OCRResult',
     'CharInfo',
+    # Phase 1 PII 引擎（v38.x）
+    'PIIEngine',
+    'PIIHit',
+    'TextUnit',
+    'validate_18_id',
+    'validate_15_id',
+    'is_mobile_segment',
+    'apply_pii_redactions',
+    'collect_pii_rects',
 ]
 
 _LAZY_IMPORTS = {
@@ -65,6 +74,15 @@ _LAZY_IMPORTS = {
     'OCREngineManager': ('privacyguard.ocr', 'OCREngineManager'),
     'OCRResult': ('privacyguard.ocr', 'OCRResult'),
     'CharInfo': ('privacyguard.ocr', 'CharInfo'),
+    # Phase 1 PII 引擎（v38.x）
+    'PIIEngine': ('privacyguard.pii.engine', 'PIIEngine'),
+    'PIIHit': ('privacyguard.pii.hits', 'PIIHit'),
+    'TextUnit': ('privacyguard.pii.hits', 'TextUnit'),
+    'validate_18_id': ('privacyguard.pii.validators', 'validate_18_id'),
+    'validate_15_id': ('privacyguard.pii.validators', 'validate_15_id'),
+    'is_mobile_segment': ('privacyguard.pii.validators', 'is_mobile_segment'),
+    'apply_pii_redactions': ('privacyguard.pii.pdf_adapter', 'apply_pii_redactions'),
+    'collect_pii_rects': ('privacyguard.pii.pdf_adapter', 'collect_pii_rects'),
 }
 
 
