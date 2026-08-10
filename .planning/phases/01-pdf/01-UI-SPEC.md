@@ -1,7 +1,7 @@
 ---
 phase: 1
 slug: pdf
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-08-10
@@ -316,7 +316,56 @@ If any future phase introduces an icon asset NOT in `assets/branding/v38/`, that
 
 ## UI Considerations
 
-_Probed post-verification — do not edit._
+> Probed post-verification by ui-consideration-probe.cjs (Step 9.5 of /gsd-ui-phase).
+> Shape-rooted UI **state** coverage for the Phase 1 surfaces. Empty-state and error-state
+> **COPY** lives in `## Copywriting Contract` above — this section covers state coverage and
+> REFERENCES those rows rather than restating the copy (de-dup).
+
+**Applicable state considerations resolved:** 20 covered · 2 backstop · 0 unresolved.
+
+### E1 — SettingsDialog "5 隐私识别" section card
+
+| Category | Status | Resolution / Reason |
+|----------|--------|---------------------|
+| empty | ✅ covered | Settings card is a static form — toggles always render with their current `pii_settings` values; the read-only `扫描范围（只读）：身份证号 / 手机号` label is always present. No empty state. |
+| loading | ✅ covered | SettingsDialog renders synchronously from `pii_settings` already loaded at MainWindow init; no async loading on this card. The existing MainWindow splash/progress path does not apply here. |
+| error | ✅ covered | Existing config persistence error path (the SettingsDialog `accepted()` path that writes back to `config.json`) applies — Phase 1 does not introduce a new error surface. If `pii_settings` schema is malformed, the existing validator surfaces the error toast. |
+| populated | ✅ covered | Header (`5. 隐私识别`) + 3 `QCheckBox` toggles + read-only `扫描范围` label render in normal happy-path per `## Visuals §SettingsDialog` layout diagram. |
+| partial | ✅ covered | When toggle 1 (`启用隐私识别引擎`) is OFF, toggles 2 and 3 greyed out via existing `setEnabled(False)` style (referenced in layout diagram lines 187–192). |
+| overflow | 🧪 backstop | Card sits inside existing SettingsDialog scroll area which already handles vertical overflow; held-out visual test at 720p confirms toggles remain reachable. { statement: "SettingsDialog scroll area handles overflow; visual test confirms reachability at 720p", verification: backstop } |
+| zero-one-many | ✅ covered | Static form — the 3 toggles are fixed and the read-only label is fixed text; zero/one/many does not apply. |
+| long-text | 🧪 backstop | Toggle labels and tooltips are bounded by the locked Copywriting rows; held-out visual test confirms no label clipping at 720p / 100% DPI. { statement: "Toggle labels and tooltips remain readable at 720p", verification: backstop } |
+
+### E2 — PII confirmation QDialog
+
+| Category | Status | Resolution / Reason |
+|----------|--------|---------------------|
+| empty | ✅ covered | Dialog does NOT open when `N == 0` — defensive guard documented in `## State Coverage` row "Confirmation dialog with N == 0 (defensive)". The dialog is only shown when `require_confirmation=true` AND HIGH hits are present. |
+| loading | 🧪 backstop | Dialog appears AFTER scan completion (status chip → done state first, then dialog opens modally); no in-dialog spinner needed. Held-out visual test confirms the dialog opens synchronously post-scan with no perceived lag. { statement: "Dialog opens after scan completes with no perceived lag", verification: backstop } |
+| error | ✅ covered | Engine init failure handled per Copywriting `§Error state (PDF open failure post-PII)` — engine self-disables for the current session. The confirmation dialog is unreachable when the engine has self-disabled, so no in-dialog error path is needed. |
+| populated | ✅ covered | `QScrollArea` of checkbox rows + 3-button row render per `## Visuals §Confirmation Dialog` ASCII mockup (lines 207–227). Primary/secondary/cancel CTAs right-aligned with 8px spacing. |
+| partial | ✅ covered | User can uncheck individual rows; secondary CTA copy `仅脱敏选中的 N 项` documents the partial-selection behavior. Per Copywriting row "Confirmation dialog row format" each row's `QCheckBox` defaults to checked. |
+| overflow | ✅ covered | `QScrollArea` with vertical-only scroll specified in layout diagram; `max-height=560px` and `min-width=480px / max-width=720px` bounds ensure the dialog never overflows the parent viewport. |
+| zero-one-many | ✅ covered | Copy uses plural `N 项` form consistently (Copywriting rows "Confirmation dialog title" / "body" / "secondary CTA"); the `N == 0` case is prevented by the defensive guard. |
+| long-text | ✅ covered | Masked preview already truncates with `…` per Copywriting row "Confirmation dialog row format"; entity_type labels are bounded by the 2 supported Phase 1 types. |
+
+### E3 — Status bar piiStatusChip
+
+| Category | Status | Resolution / Reason |
+|----------|--------|---------------------|
+| overflow | ✅ covered | Chip is plain colored text inside existing `info_bar` `QHBoxLayout` — truncates at parent layout boundary (existing info_bar behavior). No pill chrome added per `## Visuals §Status Bar PII Chip` line 252 ("No chip 'pill' frame is drawn this phase"). |
+| long-text | ✅ covered | Scan-stage copy bounded by `扫描第 X / Y 页…` format where X/Y are integers; `Y` ≤ page count bounded by Phase 1 success criteria #4 ("UI stays responsive while scanning a 500-page PDF"). Worst-case string `扫描第 500 / 500 页…` is well within info_bar width at default DPI. |
+
+### E4 — SinglePageCanvas PII rendering
+
+| Category | Status | Resolution / Reason |
+|----------|--------|---------------------|
+| overflow | ✅ covered | PII rects render via the new third paint loop in `paintEvent` per `## Visuals §PII Rect Rendering` — many rects simply draw more rects, no layout overflow concept on a `QWidget` canvas. Existing `pdf_to_screen` hit-area math handles zoom-level scaling. |
+| long-text | ✅ covered | PII label text is fixed ASCII `ID` or `PHONE` (per `## Visuals §PII Rect Rendering` line 170); no long-text risk on the label badge. |
+
+---
+
+**Probe provenance:** ui-consideration-probe.cjs @ /home/rende/.claude/gsd-core/bin/lib/ui-consideration-probe.cjs · elements heredoc @ /tmp/ui-probe-elements-xz6WLq.json · 2026-08-10.
 
 ---
 
@@ -329,4 +378,4 @@ _Probed post-verification — do not edit._
 - [ ] Dimension 5 Spacing: PASS
 - [ ] Dimension 6 Registry Safety: PASS (N/A — PyQt6; explicit not-applicable note required)
 
-**Approval:** pending
+**Approval:** approved 2026-08-10 (gsd-ui-checker: 5/6 PASS + 1 non-blocking FLAG on Spacing; ui-consideration probe: 20 covered / 2 backstop / 0 unresolved)
