@@ -38,12 +38,12 @@ progress:
 
 ## Current Position
 
-**Phase**: 0 (just initialized, ROADMAP drafted)
+**Phase**: 1 (UI-SPEC approved; awaiting /gsd-plan-phase)
 **Plan**: TBD
-**Status**: Awaiting roadmap approval → `/gsd-discuss-phase 1`
-**Next action**: User approves roadmap → `/gsd-plan-phase 1` produces detailed plans for Phase 1
+**Status**: Phase 1 CONTEXT gathered + UI-SPEC approved → ready for `/gsd-plan-phase 1`
+**Next action**: `/gsd-plan-phase 1` produces detailed PLAN.md files for Phase 1
 
-**Progress**: 0% — 0 phases complete out of 8 planned.
+**Progress**: 0% — 0 phases complete out of 8 planned. UI-SPEC 1/1 approved.
 
 ---
 
@@ -101,8 +101,9 @@ None — awaiting user approval of drafted roadmap to begin Phase 1 planning.
 
 ### Phase 1: PDF 自动识别身份证号与手机号并真脱敏
 
-- **Status**: Not started
+- **Status**: UI-SPEC approved (2026-08-10); planning not started
 - **Plans**: 0 / TBD
+- **UI-SPEC**: approved by gsd-ui-checker (5/6 PASS, 1 non-blocking FLAG on Spacing); ui-consideration probe: 20 covered / 2 backstop / 0 unresolved. Path: `.planning/phases/01-pdf/01-UI-SPEC.md`
 - **Key deliverables**: `privacyguard/pii/` types + Engine + 校验位 + PdfAdapter；PyMuPDF `add_redact_annot + apply_redactions` 真删除；reverse-test 断言
 - **First vertical slice** — proves the whole chain works end-to-end
 
@@ -152,13 +153,13 @@ None — awaiting user approval of drafted roadmap to begin Phase 1 planning.
 
 ## Session Continuity
 
-**Last session:** 2026-08-10T03:56:09.414Z
-**Stopped at:** Phase 1 context gathered
-**Resume file:** .planning/phases/01-pdf/01-CONTEXT.md
+**Last session:** 2026-08-10T04:03:00.000Z
+**Stopped at:** Phase 1 UI-SPEC approved
+**Resume file:** .planning/phases/01-pdf/01-UI-SPEC.md
 
-**Last session**: 2026-08-10 — initialized project + roadmap drafted.
-**Last action**: Wrote `.planning/ROADMAP.md` and `.planning/STATE.md`; updated `.planning/REQUIREMENTS.md` Traceability.
-**Resume instructions**: User approves roadmap → call `/gsd-plan-phase 1` to produce detailed PLAN.md files for Phase 1.
+**Last session**: 2026-08-10 — Phase 1 CONTEXT gathered, UI-SPEC approved.
+**Last action**: Wrote `.planning/phases/01-pdf/01-UI-SPEC.md` (5/6 PASS via gsd-ui-checker; ui-consideration probe resolved 20/20 state categories with 0 unresolved).
+**Resume instructions**: `/gsd-plan-phase 1` to produce detailed PLAN.md files for Phase 1.
 
 ---
 
