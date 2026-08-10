@@ -18,6 +18,7 @@ files_modified:
   - tests/unit/test_pdf_pii_pipeline.py
   - packaging/windows/config/PrivacyGuard_windows.spec
   - packaging/macos/scripts/build_complete.sh
+  - packaging/macos/config/PrivacyGuard.spec  (B5 — macOS spec is the file that PyInstaller actually reads; the shell script is just a launcher)
 autonomous: true
 requirements:
   - FMT-01
@@ -186,14 +187,18 @@ The engine + tracer are proven (Plans 01-01 + 01-02). Now they must actually run
     - Add new signal after `error_signal`: `pii_signal = pyqtSignal(int, list)  # Phase 1: (page_idx, [PIIHit.asdict, ...])`.
     - Extend `__init__` to accept `pii_engine_enabled: bool = False, pii_settings: dict = None`. Store as `self.pii_engine_enabled` and `self._pii_settings`. Add `self._pii_engine = None` (lazy init, cp30 discipline).
     - Add method `_get_pii_engine(self)`: lazy import `from privacyguard.pii.engine import PIIEngine`, instantiate `PIIEngine(rules_data=self._pii_settings.get("rules_data"))` if `_pii_engine is None`, cache in `self._pii_engine`. Wrap in try/except returning None on exception (worker must not crash).
-    - Add method `_detect_pii_for_page(self, page, page_idx, page_text) -> list`: import `from privacyguard.pii.hits import TextUnit` + `import dataclasses` inside; if `not self.pii_engine_enabled` return []; engine = `_get_pii_engine()`; if engine is None return []; source = "text" if `page_text.strip()` else "full_page_ocr"; unit = `TextUnit(page_idx, page_text, source)`; try hits = `engine.detect(unit)`; return `[dataclasses.asdict(h) for h in hits]`; except Exception as exc: `print(f"[PII ERROR] 页面 {page_idx}: {type(exc).__name__}: {exc}")` and return [].
+    - Add method `_detect_pii_for_page(self, page, page_idx, page_text, page_rects) -> list`: import `from privacyguard.pii.hits import TextUnit` + `import dataclasses` inside; if `not self.pii_engine_enabled` return []; engine = `_get_pii_engine()`; if engine is None return []; source = "text" if `page_text.strip()` else "full_page_ocr"; unit = `TextUnit(page_idx, page_text, source)`; try hits = `engine.detect(unit, page=page)` (engine uses page-side `search_for` per Plan 01-02 B2 fix — original span text, separator fallback, zero-area guard); return `[dataclasses.asdict(h) for h in hits]`; except Exception as exc: `print(f"[PII ERROR] 页面 {page_idx}: {type(exc).__name__}: {exc}")` and return [].
+    - **W2 reconciliation (existing line 397-398 vs new full-page OCR):** The existing block at lines 397-398 already promotes an empty-text page to a full-page rect (`image_clip_rects = [(page.rect.x0, page.rect.y0, page.rect.x1, page.rect.y1)]`) so that `collect_image_block_ocr_hits` runs over it as one big clip. THIS IS THE EXISTING FULL-PAGE PATH — it uses `collect_image_block_ocr_hits`, not a separate `collect_full_page_ocr_hits`. Do NOT add a second full-page OCR call that double-OCRs the same page. Resolution:
+      - Keep `collect_full_page_ocr_hits` in `privacyguard/ocr/full_page_ocr.py` for **external consumers** (Phase 2+ may invoke it directly from a different worker, or test code may want the simpler DI signature without clip processing).
+      - In `_ModularOCRWorker.run()`, do NOT invoke `collect_full_page_ocr_hits` directly. The existing line 397-398 promotion is sufficient.
+      - The new `collect_full_page_ocr_hits` becomes a "library function" available for future use; it does NOT appear in the worker run loop in Phase 1. Acceptance criterion: `grep -c "collect_full_page_ocr_hits" privacyguard/workers/ocr_worker.py` returns 0.
     - In `run()` method (currently at lines 347-474), after `self.page_result_signal.emit(i, rects)` (around line 447), insert:
       ```python
-      pii_hits = self._detect_pii_for_page(page, i, page_text)
+      pii_hits = self._detect_pii_for_page(page, i, page_text, rects)
       if pii_hits:
           self.pii_signal.emit(i, pii_hits)
       ```
-    - Inside the existing `if not image_clip_rects and not page_text.strip():` block (around line 397-398), extend the condition so that when `not page_text.strip()` we still call `collect_full_page_ocr_hits` to populate `image_clip_rects` (D-03 fallback). Pass the same DI callbacks used for `collect_image_block_ocr_hits` (`recognize_fn=lambda scan_img: ocr_engine.recognize(scan_img)`, `calculate_rect_fn=lambda box, text, span, scan_img: self.calculate_sub_rect(...)`, etc.). This wires the full-page OCR fallback per FMT-01.
+    - **B2 image-path preservation:** the `engine.detect(unit, page=page)` call from Plan 01-02 already implements original-span search + separator fallback + zero-area skip. This task does NOT need to add anything new — it relies on Plan 01-02's engine fix. Image-block OCR hits get page_rect via `iter_ocr_lines` + `calculate_rect_fn` (already wired in the existing `collect_image_block_ocr_hits`); engine.detect picks them up because OCR text is passed in via the worker's image-clip OCR result. **Acceptance criterion:** the image-block path must produce ≥1 PIIHit in `tests/unit/test_pdf_pii_pipeline.py::test_image_block_pdf_full_pipeline` (asserted explicitly per B3 — no vacuous green).
 
     After edits, run `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.unit.test_pdf_text_hit_dedup tests.unit.test_convergence -v` to confirm no regression.
   </action>
@@ -254,7 +259,9 @@ The engine + tracer are proven (Plans 01-01 + 01-02). Now they must actually run
 
     **Site 2: page_data init (around main.py:10521):** Change the page_data initialization to include `'pii': []` as a third key alongside `'ocr'` and `'manual'`. Search for the dict comprehension `{i: {'ocr': [], 'manual': []} for i in range(total)}` and add `'pii': []`.
 
-    **Site 3: OCRWorker construction in start_ocr (around main.py:11130-11142):** Extend the `OCRWorker(...)` call to include `pii_engine_enabled=self.pii_settings.get("engine_enabled", True)` and `pii_settings=self.pii_settings`. Add `self.worker.pii_signal.connect(self._on_pii_page_result)` immediately after the existing signal connections.
+    **Site 3a: OCRWorker compat-layer signature extension (main.py:4191-4201, B6):** The compat-layer `class OCRWorker(_ModularOCRWorker)` currently has a fixed signature `(pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w, use_char_level_ocr=False, seal_detection_enabled=False)`. Extend the signature to accept `pii_engine_enabled: bool = False, pii_settings: dict = None` and forward them via `super().__init__(...)`. The forward call must include BOTH kwargs in the super() arg list. Without this, calling `OCRWorker(..., pii_engine_enabled=True)` raises `TypeError: OCRWorker.__init__() got an unexpected keyword argument 'pii_engine_enabled'` the first time a user opens a PDF (B6 — Phase 1 dead on arrival in GUI). Acceptance criterion: `python3 -c "from main import OCRWorker; OCRWorker.__init__.__code__.co_varnames[:11]"` includes `'pii_engine_enabled'` and `'pii_settings'`; `python3 -c "from main import OCRWorker, config; OCRWorker('dummy.pdf', [], False, '', 1.0, 0, 0, pii_engine_enabled=True, pii_settings={'engine_enabled': True})"` does not raise.
+
+    **Site 3b: OCRWorker construction in start_ocr (around main.py:11130-11142):** Extend the `OCRWorker(...)` call to include `pii_engine_enabled=self.pii_settings.get("engine_enabled", True)` and `pii_settings=self.pii_settings`. Add `self.worker.pii_signal.connect(self._on_pii_page_result)` immediately after the existing signal connections.
 
     **Site 4: _on_pii_page_result slot (add new method near main.py:11255-11263):** Define:
     ```python
@@ -268,7 +275,7 @@ The engine + tracer are proven (Plans 01-01 + 01-02). Now they must actually run
             self.render_view()
     ```
 
-    **Site 5: SinglePageCanvas.paintEvent PII third loop (main.py:4100-4126):** Insert a third paint loop after the `rects_manual` loop and before the dragging-rubber-band loop. Use `QPen(QColor("#D64545"), 2)` for stroke, `QColor("#D64545")` with `setAlphaF(0.18)` for fill. Iterate `self.main_window.page_data.get(self.page_index, {}).get("pii", [])`. Each hit: `r = QRectF(*hit.page_rect)`, `sr = self.pdf_to_screen(r)`, `painter.drawRect(sr)`. Then draw label badge: `label = "ID" if hit.entity_type == "CN_ID_CARD" else "PHONE"`; badge bg = solid `#D64545`; badge text color = `#FFFFFF`; badge rect = `QRectF(sr.x() - 2, sr.y() - 18, len(label) * 8 + 8, 16)`; `painter.drawText(QPointF(sr.x() + 2, sr.y() - 5), label)`. The canvas needs a reference to main_window; add `self.main_window = main_window` to the `SinglePageCanvas.__init__` constructor signature, default None. Update existing call sites that construct SinglePageCanvas to pass the main_window reference. The SinglePageCanvas.mousePressEvent delete-rubber-band loop must skip PII rects — add a guard check before deletion (read-only on canvas per UI-SPEC §PII Rect Rendering line 172).
+    **Site 5: SinglePageCanvas.paintEvent PII third loop (main.py:4100-4126):** Insert a third paint loop after the `rects_manual` loop and before the dragging-rubber-band loop. Use `QPen(QColor("#D64545"), 2)` for stroke, `QColor("#D64545")` with `setAlphaF(0.18)` for fill. Iterate `self.main_window.page_data.get(self.page_index, {}).get("pii", [])`. Each hit: `r = QRectF(*hit.page_rect)`, `sr = self.pdf_to_screen(r)`, `painter.drawRect(sr)`. Then draw label badge: `label = "ID" if hit.entity_type == "CN_ID_CARD" else "PHONE"`; badge bg = solid `#D64545`; badge text color = `#FFFFFF`; badge rect = `QRectF(sr.x() - 2, sr.y() - 18, len(label) * 8 + 8, 16)`; `painter.drawText(QPointF(sr.x() + 2, sr.y() - 5), label)`. The canvas needs a reference to main_window; add `self.main_window = main_window` to the `SinglePageCanvas.__init__` constructor signature, default None. **C5 — enumerate every SinglePageCanvas instantiation site and update it to pass main_window:** grep `SinglePageCanvas(` in main.py to find all sites. Known sites (verify against current source) include the constructor on the left pane (around main.py:5200–5400 region), the right pane in Word compare mode (around main.py:5450–5500), and any thumbnail / preview instantiation. Add `main_window=self` to each `SinglePageCanvas(...)` call so the PII paint loop can reach `page_data`. **Add a defensive `getattr(self, 'main_window', None)` guard at the top of the PII paint loop body:** if `main_window is None`, skip the loop entirely (do not crash). This protects against any missed call site — `if getattr(self, 'main_window', None) is None: return  # PII render requires main_window.page_data; degraded gracefully`. The SinglePageCanvas.mousePressEvent delete-rubber-band loop must skip PII rects — add a guard check before deletion (read-only on canvas per UI-SPEC §PII Rect Rendering line 172): in the deletion loop, check `if getattr(rect, '_pii_marker', False): continue`.
 
     **Site 6: save_pdf pii_list merge (main.py:12354-12385):** Inside the page loop, after `for r in ocr_list + manual_list:` block (which adds redactions + applies + deletes annotations), add a separate loop for pii_list:
     ```python
@@ -371,6 +378,15 @@ The engine + tracer are proven (Plans 01-01 + 01-02). Now they must actually run
     **packaging/macos/scripts/build_complete.sh** (modify):
     - Locate the section that copies `privacyguard/ocr` data files (if present); add a parallel block copying `privacyguard/pii/data/rules.json` into the `.app` bundle's `Resources/privacyguard/pii/data/rules.json`.
     - Add a parity check: after the copy, run `test -f "$APP_BUNDLE/Contents/Resources/privacyguard/pii/data/rules.json" || { echo "[ERROR] rules.json missing in .app bundle"; exit 1; }`.
+    - Note: the macOS spec is the actual source of truth for what ships (B5). The shell script is just a launcher; the .spec is what PyInstaller reads. The next bullet is the real fix.
+
+    **packaging/macos/config/PrivacyGuard.spec** (modify — B5 critical fix):
+    - Locate the existing `datas=[...]` block (around lines 38-45 of the spec).
+    - Append (preserving tuple shape): `(os.path.join(project_root, 'privacyguard', 'pii', 'data'), 'privacyguard/pii/data')`.
+    - Locate the existing `hiddenimports=[...]` block.
+    - Append: `'privacyguard.pii'`, `'privacyguard.pii.engine'`, `'privacyguard.pii.hits'`, `'privacyguard.pii.validators'`, `'privacyguard.pii.validators.id_card'`, `'privacyguard.pii.validators.phone_segment'`, `'privacyguard.pii.pdf_adapter'`.
+    - Acceptance criterion: `python3 -c "import ast; spec = open('packaging/macos/config/PrivacyGuard.spec').read(); assert 'privacyguard/pii/data' in spec; assert \"'privacyguard.pii.engine'\" in spec; print('OK')"` prints OK.
+    - **B5 parity acceptance criterion:** `python3 -c "w = open('packaging/windows/config/PrivacyGuard_windows.spec').read(); m = open('packaging/macos/config/PrivacyGuard.spec').read(); assert 'privacyguard/pii/data' in w and 'privacyguard/pii/data' in m; assert \"'privacyguard.pii.engine'\" in w and \"'privacyguard.pii.engine'\" in m; print('OK')"` prints OK — both specs contain the data file entry AND the hiddenimports entry. Without the macOS spec fix, frozen macOS launches load an empty whitelist, `is_mobile_segment` returns False for every prefix, phone detection ships silently dead (exactly the cp30 regression class).
 
     Run the full combined verification command to confirm no regression and the new tests all green.
   </action>
@@ -393,9 +409,72 @@ The engine + tracer are proven (Plans 01-01 + 01-02). Now they must actually run
 
 </tasks>
 
-<verification>
-After all three tasks, the following command sequence must return all-green:
+## Artifacts this phase produces
 
+Plan 01-03 wires the engine into the running app and locks the safety floor. New and modified:
+
+**New modules (created in 01-03):**
+- `privacyguard/ocr/full_page_ocr.py` — `render_full_page_to_bgr(page, scan_scale)` + `collect_full_page_ocr_hits(page, scan_scale, recognize_fn, calculate_rect_fn, clip_to_page_rect_fn=None, preprocess_fn=None, render_fn=None)` (D-03 DI signature; library function per W2 reconciliation, not invoked in worker run loop).
+- `tests/unit/test_pii_offline.py` — `TestPiiOffline.test_engine_makes_no_network_calls` (500-page socket monkey-patch) + `TestPrivacyGuardPiiNoTopLevelNetwork.test_no_requests_or_httpx_imports` (static import scan).
+- `tests/unit/test_pdf_pii_pipeline.py` — `TestPiiPipelineEndToEnd` with `test_text_layer_pdf_full_pipeline`, `test_image_block_pdf_full_pipeline` (B3 — non-vacuous, asserts ≥1 hit pre-redaction), `test_save_loop_piilist_included_in_redaction`.
+
+**Modified files (in 01-03):**
+- `privacyguard/ocr/__init__.py` — re-export `collect_full_page_ocr_hits` + `render_full_page_to_bgr`.
+- `privacyguard/workers/ocr_worker.py` — `pii_signal` signal, `_get_pii_engine` lazy init, `_detect_pii_for_page` method, `_pii_engine` / `_pii_settings` / `pii_engine_enabled` instance attrs. Run loop calls `_detect_pii_for_page` after `page_result_signal.emit` per page. (Note: does NOT invoke `collect_full_page_ocr_hits` directly — the existing line 397-398 promotion is sufficient per W2.)
+- `main.py` — Six sites + Site 3a (B6) + Site 5 (C5):
+    - Site 1 (4892-4911): `self.pii_settings` dict + `self._pii_data_lock = QMutex()`.
+    - Site 2 (10521): `page_data[i] = {"ocr": [], "manual": [], "pii": []}`.
+    - Site 3a (4191-4201, B6): `class OCRWorker(_ModularOCRWorker)` signature gains `pii_engine_enabled: bool = False, pii_settings: dict = None`; forwards via `super().__init__`.
+    - Site 3b (11130-11142): `OCRWorker(...)` call passes `pii_engine_enabled` + `pii_settings`; `self.worker.pii_signal.connect(self._on_pii_page_result)`.
+    - Site 4 (new method near 11255-11263): `_on_pii_page_result(page_num, pii_hits)` — deserializes dicts to PIIHit via `PIIHit(**h)`, writes under `_pii_data_lock`, calls `render_view()` if current_page.
+    - Site 5 (4100-4126 + 4009): `SinglePageCanvas.__init__(self, page_index=0, parent=None, main_window=None)` — accepts main_window; `paintEvent` third loop renders PII rects with #D64545 stroke + alpha-0.18 fill + ID/PHONE label badge; defensive `getattr(self, 'main_window', None)` guard. `mousePressEvent` deletion loop skips PII rects (read-only per UI-SPEC). All `SinglePageCanvas(...)` instantiation sites in main.py updated to pass `main_window=self` (C5).
+    - Site 6 (12354-12385): `save_pdf` merges `pii_list` alongside `ocr_list + manual_list`; single `apply_redactions(images=PDF_REDACT_IMAGE_PIXELS)` call after all three lists; `delete_annot` cleanup.
+    - Site 7 (1526-1601 region): `SettingsDialog` "5 隐私识别" tab — `box_pii` QFrame card with 3 QCheckBox (`cb_pii_engine_enabled` / `cb_pii_auto_redact` / cb_pii_require_confirm) + read-only "扫描范围（只读）：身份证号 / 手机号" QLabel; `save_settings` persists via `config.set("pii_settings.*")`; `_sync_pii_toggle_state` greys-out toggles 2+3 when toggle 1 is OFF.
+    - New `_on_ocr_finished_safe` branch (in same method or follow-up): if `require_confirmation=true AND any HIGH hit`, show minimal QDialog confirmation (Phase 1 minimal UX, Phase 7 replaces).
+- `config.json` + `config.json.template` — added `pii_settings` block with `engine_enabled=true / auto_redact=true / require_confirmation=false / scan_scope=["CN_ID_CARD","CN_PHONE"]`.
+- `tests/unit/test_app_config.py` — added `test_simple_config_pii_settings_default` + `test_simple_config_pii_settings_round_trip`.
+- `packaging/windows/config/PrivacyGuard_windows.spec` — datas entry `(privacyguard/pii/data, privacyguard/pii/data)`; hiddenimports append.
+- `packaging/macos/config/PrivacyGuard.spec` (B5) — datas entry + hiddenimports append.
+- `packaging/macos/scripts/build_complete.sh` — parity check (test -f rules.json after build); references the .spec for data inclusion.
+
+**Qt signals (declared in 01-03):**
+- `privacyguard.workers.ocr_worker.OCRWorker.pii_signal = pyqtSignal(int, list)` — (page_idx, [PIIHit.asdict, ...]).
+
+**Config keys (persisted in 01-03):**
+- `pii_settings.engine_enabled: bool`
+- `pii_settings.auto_redact: bool`
+- `pii_settings.require_confirmation: bool`
+- `pii_settings.scan_scope: List[str]` — Phase 1 locked to `["CN_ID_CARD","CN_PHONE"]`.
+
+**New dataclass / class attribute:**
+- `MainWindow._pii_data_lock: QMutex` — protects page_data[page]["pii"] writes from worker thread (mirrors _word_data_lock pattern at main.py:4931).
+- `MainWindow.pii_settings: dict` — {engine_enabled, auto_redact, require_confirmation}.
+
+---
+
+<verification>
+After all three tasks, the per-test-class commands (matching `01-VALIDATION.md` Per-Task Verification Map) must each return all-green. The combined-suite below is the convenience invocation (C4 — per-class commands are authoritative; combined is equivalent).
+
+Per-class:
+```
+python3 -m unittest tests.unit.test_pii_offline.TestPiiOffline -v
+python3 -m unittest tests.unit.test_pii_offline.TestPrivacyGuardPiiNoTopLevelNetwork -v
+python3 -m unittest tests.unit.test_pdf_pii_pipeline.TestPiiPipelineEndToEnd -v
+python3 -m unittest tests.unit.test_app_config.TestAppConfig.test_simple_config_pii_settings_default -v
+python3 -m unittest tests.unit.test_app_config.TestAppConfig.test_simple_config_pii_settings_round_trip -v
+```
+
+Packaging parity (B5):
+```
+python3 -c "w=open('packaging/windows/config/PrivacyGuard_windows.spec').read(); m=open('packaging/macos/config/PrivacyGuard.spec').read(); assert 'privacyguard/pii/data' in w and 'privacyguard/pii/data' in m; assert \"'privacyguard.pii.engine'\" in w and \"'privacyguard.pii.engine'\" in m; print('OK')"
+```
+
+OCRWorker compat-layer (B6):
+```
+python3 -c "from main import OCRWorker; import inspect; sig = inspect.signature(OCRWorker.__init__); assert 'pii_engine_enabled' in sig.parameters; assert 'pii_settings' in sig.parameters; print('OK')"
+```
+
+Combined-suite (equivalent — C4 clarification):
 ```
 python3 -m compileall -q main.py privacyguard tests \
   && python3 -m unittest \
@@ -418,9 +497,9 @@ python3 -m compileall -q main.py privacyguard tests \
       -v
 ```
 
-Expected: 79 baseline + ≥2 reverse-extraction (Plan 01-01) + ≥40 validator + ≥30 engine (Plan 01-02) + ≥1 offline + ≥3 pipeline (Plan 01-03) all green.
+Expected: 79 baseline + ≥2 reverse-extraction (Plan 01-01) + ≥40 validator + ≥30 engine (Plan 01-02) + ≥1 offline + ≥3 pipeline (Plan 01-03) all green. Both PyInstaller specs contain rules.json datas + pii hiddenimports.
 
-PyInstaller smoke (manual): on a developer workstation, run `cd packaging/windows/scripts && build_complete.bat` and confirm the resulting .exe launches without `FileNotFoundError: rules.json`; same for macOS via `cd packaging/macos/scripts && ./build_complete.sh`.
+PyInstaller smoke (manual): on a developer workstation, run `cd packaging/windows/scripts && build_complete.bat` and confirm the resulting .exe launches without `FileNotFoundError: rules.json`; same for macOS via `cd packaging/macos/scripts && ./build_complete.sh` (which invokes `packaging/macos/config/PrivacyGuard.spec`).
 </verification>
 
 <success_criteria>

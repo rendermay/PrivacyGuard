@@ -174,6 +174,15 @@ The tracer (Plan 01-01) proved the spine works for one path. This plan broadens 
       - `test_non_15_digit_returns_empty`: `upgrade_15_to_18("123")` returns `''`.
       - `test_non_digit_15_rejected`: `upgrade_15_to_18("42010696090123A")` returns `''`.
       - `test_validate_15_passes_for_valid_upgraded`: `validate_15("420106960901234") == True`.
+      - **B1 second-gate negative tests** (new — guards against silently auto-redacting order numbers / tracking numbers / serial numbers):
+        - `test_15_digit_invalid_province_prefix_rejected`: `validate_15("990106800101001") == False` (prefix `99` is not in the GB/T 2260 valid province set — order numbers / serial numbers often start with `00`, `90`, `99`, etc.).
+        - `test_15_digit_zero_province_prefix_rejected`: `validate_15("000106800101001") == False` (prefix `00` not valid).
+        - `test_15_digit_impossible_month_rejected`: build a 15-digit run whose upgrade-to-18 contains month `13` in `YYMMDD` position (e.g. `420106801301001` upgrades to `42010619801301001`); assert `validate_15(...) == False`. Confirms `is_real_calendar_date` second gate works.
+        - `test_15_digit_impossible_day_rejected`: build a 15-digit run whose upgrade-to-18 contains day `32` in `YYMMDD` position (e.g. `420106800132001` upgrades to `42010619800132001`); assert `validate_15(...) == False`. Confirms day-of-month validation works.
+        - `test_15_digit_feb_30_rejected`: a run whose date falls on Feb 30 (impossible calendar date); assert `validate_15(...) == False`. Confirms month-aware day count.
+        - `test_is_valid_admin_division_prefix_2_whitelist`: parametrized-style loop asserting `is_valid_admin_division_prefix_2("11") == True`, `"82") == True`, `"00") == False`, `"90") == False`, `"99") == False`.
+        - `test_is_real_calendar_date_boundary`: assert `is_real_calendar_date(85, 1, 1) == True`; `is_real_calendar_date(85, 2, 29) == True` (1985 not leap; 1984 leap would be, but `85` is not divisible by 4); `is_real_calendar_date(85, 13, 1) == False`; `is_real_calendar_date(85, 1, 32) == False`; `is_real_calendar_date(85, 4, 31) == True` (April has 30 days — actually False; April has 30 days); `is_real_calendar_date(85, 2, 30) == False`.
+      - **Reconciliation note:** `validate_15` is no longer `True` for any 15-digit run whose upgrade passes mod-11-2. The previous always-True contract is removed. Plan 01-01 must_haves.truths entry "PIIEngine.detect emits HIGH for Faker-generated 18-digit ID" still holds (18-digit path); for 15-digit, the test `test_detects_15_digit_via_upgrade` in TestEngineDetect below must use a real 15-digit run with a valid province prefix + real calendar date, not a synthetic random run.
 
     - `TestPhoneSegment`:
       - `test_personal_segment_recognized`: parametrized-style loop asserting `is_mobile_segment` True for ≥30 prefixes: 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 150, 151, 152, 153, 155, 156, 157, 158, 159, 166, 170, 171, 173, 176, 180, 181, 183, 186, 188, 190, 192, 195, 196, 197, 198, 199. Each followed by 8 random digits.
@@ -203,9 +212,14 @@ The tracer (Plan 01-01) proved the spine works for one path. This plan broadens 
       - `test_detects_valid_phone`: `TextUnit(0, "联系 13812345678", "text")` → 1 hit with entity_type=CN_PHONE.
       - `test_rejects_iot_phone`: `TextUnit(0, "设备 14012345678", "text")` → 0 hits.
       - `test_rejects_invalid_id_check_digit`: `TextUnit(0, "bad 530102192005080119 here", "text")` → 0 hits.
-      - `test_detects_15_digit_via_upgrade`: `TextUnit(0, "old 420106960901234 here", "text")` → 1 hit.
+      - `test_detects_15_digit_via_upgrade`: `TextUnit(0, "old 420106960901234 here", "text")` → 1 hit. NOTE: 420106 is a valid Beijing province prefix and 1969-09-01 is a real calendar date, so the B1 second gate passes.
       - `test_empty_text_returns_no_hits`: `TextUnit(0, "", "text")` → 0 hits.
       - `test_whitespace_only_returns_no_hits`: `TextUnit(0, "   \n\t  ", "text")` → 0 hits.
+      - **B2 separator-bearing input tests** (NEW — guards against zero-area rect leak from `page.search_for` on separator-stripped text):
+        - `test_separated_id_card_recognized`: engine.detect produces a PIIHit for `"订单 110101-19900307-8811 备注"`. The hit's `page_rect` MUST be non-zero-area (width × height > 0; fixture wraps the same call against a `FakePage` whose `search_for` is called with the ORIGINAL span `"110101-19900307-8811"` — i.e. the literal as it appears on the page, not the flattened `"110101199003078811"`). The `FakePage` records `search_calls` so the test asserts `assertEqual(page.search_calls, ["110101-19900307-8811"])`. Same shape as `tests/unit/test_pdf_text_hit_dedup.py` FakePage pattern.
+        - `test_fullwidth_digits_id_card_recognized`: engine.detect on `"测试 １１０１０１１９６７０３０７８８１１ 备注"` produces a hit whose rect comes from `page.search_for` called with the ORIGINAL fullwidth literal (not the ASCII-flattened version).
+        - `test_separator_split_fallback`: when the original-span search returns empty (e.g. PyMuPDF cannot match `"110101-19900307-8811"` because the page is laid out with the digit groups on separate visual lines), engine.detect splits the original span on `[-\s　]+` and unions per-chunk rects via `page.search_for(chunk) for chunk in chunks`; the hit's `page_rect` is the bounding union, not zero-area. The fixture FakePage returns empty for the joined span and per-chunk rects for `"110101"`, `"19900307"`, `"8811"`; the test asserts the union rect matches the expected bounding box.
+        - `test_zero_area_rect_is_skipped_not_silently_emitted`: when both `page.search_for(original)` AND all per-chunk searches return zero rects, the hit MUST be skipped (not emitted with rect=(0,0,0,0)). The test asserts the engine returns 0 hits for this fixture; it MUST NOT emit a hit with zero-area rect that would later be passed to `apply_redactions` and redacted at origin (silent leak / 假脱敏 partial pattern).
 
     - `TestConfidenceTiers`:
       - `test_high_when_validator_passes_and_regex_matches`: PIIEngine._check_id_card returns confidence_tier=HIGH for valid 18-digit sample.
@@ -278,7 +292,10 @@ The tracer (Plan 01-01) proved the spine works for one path. This plan broadens 
     **privacyguard/pii/validators/id_card.py**:
     - Add defensive guards to `validate_18`: explicit length check `len(id_str) == 18`, explicit `id_str[:17].isdigit()`, explicit last char in `'0123456789Xx'`, then `last.upper() == compute_check_digit(id_str[:17])`.
     - Harden `upgrade_15_to_18`: empty-input guard, length check, digit check, then `body17 = id15[:6] + '19' + id15[6:]` and `body17 + compute_check_digit(body17)`.
-    - `validate_15` calls `upgrade_15_to_18`; if empty returned, returns False; else `validate_18(upgraded)`.
+    - **B1 second-gate additions:**
+      - `is_valid_admin_division_prefix_2(prefix2: str) -> bool`: accepts `"11","12","13","14","15","21","22","23","31","32","33","34","35","36","37","41","42","43","44","45","46","50","51","52","53","54","61","62","63","64","65","71","81","82"`. Returns False for `"00"`, `"90"`–`"99"`, or any prefix not in the whitelist. Backed by `frozenset` for O(1) lookup.
+      - `is_real_calendar_date(yy: int, mm: int, dd: int) -> bool`: validates month 1-12; day 1 to `calendar.monthrange(1900 + yy, mm)[1]` (handles Feb leap years). Returns False for out-of-range inputs.
+    - `validate_15(id_str)`: empty/length/digit guard → `upgrade_15_to_18` → if empty: False → `is_valid_admin_division_prefix_2(upgraded[:2])` → if False: False → `is_real_calendar_date(int(upgraded[8:10]), int(upgraded[10:12]), int(upgraded[12:14]))` → if False: False → `validate_18(upgraded)`.
 
     **privacyguard/pii/validators/phone_segment.py**:
     - Add explicit length-11 check before any prefix logic.
@@ -321,12 +338,21 @@ The tracer (Plan 01-01) proved the spine works for one path. This plan broadens 
 
     **privacyguard/pii/engine.py**:
     - Add internal cache: `self._mask_cache: Dict[Tuple[str, str], str] = {}`.
+    - Add instance attribute: `self.last_error: Optional[str] = None` — reset to None at the top of `detect()`; set to `f"{type(exc).__name__}: {exc}"` in any except branch (W1 — engine failures must be observable to the UI, not swallowed into stdout).
+    - Add class attribute `DEFAULT_TEXT_PAGE: Any` placeholder; actual page is passed per call.
     - In `_check_id_card` and `_check_phone`:
       - For each candidate: run validator; if validator_passed, compute `mask = self._mask_cache.get((entity_type, normalized))` else `mask_for_entity(entity_type, normalized)`; cache the result.
       - This guarantees ENGINE-04 consistency across multiple hits within the same engine instance.
     - In `detect()`:
-      - For text-layer source: call `page.search_for(normalized_text)` (PyMuPDF method) to compute page_rect. For OCR source, page_rect comes from the OCR box mapping.
-      - Wrap detect body in try/except for any unexpected exception; on exception, print `[PII ERROR] 页面 {page_index}: {type(exc).__name__}: {exc}` and return `[]` (do not crash the worker thread).
+      - For text-layer source: **B2 fix — preserve the safe pattern from `privacyguard/ocr/text_pdf.py:36-38`.** DO NOT call `page.search_for(normalized_text)` directly (the normalized text has separators / fullwidth digits stripped, so PyMuPDF cannot match the original page literal). Instead:
+        1. Compute `orig_span = map_flat_to_original(flat_text, m.span(), text)` — this returns the original (start, end) indices in `text`.
+        2. Extract `original_substring = text[orig_start:orig_end]`.
+        3. Call `page.search_for(original_substring)` to get candidate rects.
+        4. **Fallback when original returns empty rects:** split `original_substring` on `[-\s　]+` to get `chunks`. For each `chunk` with length ≥ 6 (avoid noise), call `page.search_for(chunk)`. If any chunk returns non-empty rects, union their bounding rects (min x0/y0, max x1/y1) into one `QRectF`.
+        5. **Zero-area guard:** if the union is empty OR has width 0 OR height 0 (degenerate rect), SKIP the hit. Do NOT emit a hit with rect=(0,0,0,0). Do NOT silently drop and re-emit at origin — skip entirely so `apply_redactions` never receives a zero-area rect.
+        6. If both paths fail (no rect at all), skip the hit (B3 B2 contract: zero-area rect → skip, not redact at origin).
+      - For OCR source (`source != "text"`): page_rect comes from the OCR box mapping (set by the OCR worker; the engine trusts the rect passed in via TextUnit — Phase 1 OCR path handled in Plan 01-03).
+      - Wrap detect body in try/except for any unexpected exception; on exception, **set `self.last_error = f"{type(exc).__name__}: {exc}"`**, **emit a sentinel return `[PIIHit(entity_type="__ENGINE_ERROR__", ...)]`** OR (preferred) append the error info to a side-channel `self.error_log: List[Tuple[int, str]]` and return hits without the engine-error sentinel. The chosen path is the side-channel `error_log`; the UI / worker reads `engine.last_error` after each `detect()` call and surfaces to the info bar per UI-SPEC §Copywriting error row: "文档打开成功，但隐私识别引擎初始化失败（{exception_class}）。请重新打开或前往设置关闭隐私识别。其他功能仍可正常使用。" (W1 — visible to user, not stdout-only.)
       - **Defensive input cap**: at the top of `detect()`, if `len(text) > 200_000`, truncate to first 200_000 chars and print a one-time-per-engine `[PII WARN] 单页文本超过 200,000 字符，截断以保护 UI 响应`. This guards ENGINE-07 input-size DoS without depending on a non-existent Python re timeout parameter.
 
     After all edits, run the combined test command:
@@ -387,9 +413,64 @@ The tracer (Plan 01-01) proved the spine works for one path. This plan broadens 
 
 </tasks>
 
-<verification>
-After all three tasks, the following command returns all-green:
+## Artifacts this phase produces
 
+Plan 01-02 produces test coverage and engine hardening — no new package files. The hardened internals land in:
+
+**Hardened public symbols (modified in 01-02):**
+- `privacyguard.pii.validators.id_card.validate_15` — now applies B1 second gate (province prefix + real calendar date) before trusting mod-11-2.
+- `privacyguard.pii.validators.id_card.is_valid_admin_division_prefix_2(prefix2)` — NEW public helper for the province prefix check.
+- `privacyguard.pii.validators.id_card.is_real_calendar_date(yy, mm, dd)` — NEW public helper for the date validity check.
+- `privacyguard.pii.validators.phone_segment.is_mobile_segment` — hardened with explicit length/digit/leading-1/excluded-4-before-excluded-3 prefix ordering.
+- `privacyguard.pii.normalize.map_flat_to_original` — hardened to return `(None, None)` on mapping failure (defensive, never silent 0).
+- `privacyguard.pii.confidence.classify_hit` — three-branch contract enforced.
+- `privacyguard.pii.mask.partial_mask_id_card / partial_mask_phone` — length-defensive: wrong-length input returns `'*' * len(input)`.
+- `privacyguard.pii.overlap.resolve` — validator_passed priority over first-encountered.
+- `privacyguard.pii.engine.PIIEngine._mask_cache` — `(entity_type, normalized) -> mask_strategy` for ENGINE-04.
+- `privacyguard.pii.engine.PIIEngine.last_error: Optional[str]` — NEW instance attribute (W1).
+- `privacyguard.pii.engine.PIIEngine.error_log: List[Tuple[int, str]]` — NEW instance attribute (W1, per-page error record).
+- `privacyguard.pii.engine.PIIEngine.rules_version(rules_data)` — NEW classmethod returning rules_data.get("phone_segment", {}).get("next_review", "unknown").
+- `privacyguard.pii.engine.PIIEngine.detect` — B2 fix: page.search_for called with ORIGINAL span text (preserves text_pdf.py:36-38 pattern); separator-split fallback for chunked union rects; zero-area rect guard (skip, not emit at origin).
+- `privacyguard.pii.engine.PIIEngine.detect` — 200KB input cap (ENGINE-07).
+- `privacyguard.pii.__init__.RULES_VERSION_DEFAULT = "2026-Q1"` — NEW module constant.
+- `privacyguard.pii.hits.PIIHit.confidence_tier` default `"HIGH"` — B4 resolution (default value, order unchanged).
+
+**New test files (created in 01-02):**
+- `tests/unit/test_pii_validators.py` — TestIdCardChecksum / TestIdCardUpgrade15To18 (with B1 negative tests) / TestIdCaseInsensitiveX / TestPhoneSegment / TestIotExclusion / TestIdCardDefensive / TestPhoneSegmentDefensive.
+- `tests/unit/test_pii_engine.py` — TestPIIHitSchema / TestEngineDetect (with B2 separator tests) / TestConfidenceTiers / TestMaskConsistency / TestNormalization / TestCrossBoundary / TestLargeDocumentNoBlock.
+
+**Modified files (in 01-02):**
+- `privacyguard/pii/validators/id_card.py` — added second gate + 2 new public helpers.
+- `privacyguard/pii/validators/phone_segment.py` — hardened.
+- `privacyguard/pii/normalize.py` — defensive None-return.
+- `privacyguard/pii/confidence.py` — contract clarification.
+- `privacyguard/pii/mask.py` — length defensive.
+- `privacyguard/pii/overlap.py` — validator_passed priority.
+- `privacyguard/pii/engine.py` — mask cache, last_error, error_log, rules_version, B2 page.search_for fix, 200KB cap.
+- `privacyguard/pii/__init__.py` — added RULES_VERSION_DEFAULT constant.
+
+---
+
+<verification>
+After all three tasks, the following per-test-class commands (matching `01-VALIDATION.md` Per-Task Verification Map) must each return all-green. The combined-suite command below is the convenience invocation (C4 — per-class commands are authoritative; combined is equivalent):
+
+Per-class:
+```
+python3 -m unittest tests.unit.test_pii_validators.TestIdCardChecksum -v
+python3 -m unittest tests.unit.test_pii_validators.TestIdCardUpgrade15To18 -v
+python3 -m unittest tests.unit.test_pii_validators.TestIdCaseInsensitiveX -v
+python3 -m unittest tests.unit.test_pii_validators.TestPhoneSegment -v
+python3 -m unittest tests.unit.test_pii_validators.TestIotExclusion -v
+python3 -m unittest tests.unit.test_pii_engine.TestPIIHitSchema -v
+python3 -m unittest tests.unit.test_pii_engine.TestEngineDetect -v
+python3 -m unittest tests.unit.test_pii_engine.TestConfidenceTiers -v
+python3 -m unittest tests.unit.test_pii_engine.TestMaskConsistency -v
+python3 -m unittest tests.unit.test_pii_engine.TestNormalization -v
+python3 -m unittest tests.unit.test_pii_engine.TestCrossBoundary -v
+python3 -m unittest tests.unit.test_pii_engine.TestLargeDocumentNoBlock -v
+```
+
+Combined-suite (equivalent — C4 clarification):
 ```
 python3 -m compileall -q privacyguard tests \
   && python3 -m unittest \
@@ -410,7 +491,7 @@ python3 -m compileall -q privacyguard tests \
       -v
 ```
 
-Expected: ≥79 baseline + ≥2 reverse-extraction + ≥40 validator assertions + ≥30 engine assertions all green.
+Expected: ≥79 baseline + ≥2 reverse-extraction + ≥40 validator assertions (including B1 negative tests) + ≥30 engine assertions (including B2 separator tests) all green.
 </verification>
 
 <success_criteria>
