@@ -70,7 +70,7 @@ must_haves:
     - monkey-patching socket.socket and running engine.detect over 500 pages produces zero recorded socket calls (ENGINE-08 zero-network).
   artifacts:
     - privacyguard/pii/__init__.py (lazy _LAZY_IMPORTS + __getattr__ + __all__; 8 exports: PIIEngine / PIIHit / TextUnit / validate_18_id / validate_15_id / is_mobile_segment / apply_pii_redactions / collect_pii_rects)
-    - privacyguard/pii/hits.py (PIIHit dataclass frozen=True; 7 named fields in D-05 order: entity_type, page_offset, page_length, page_rect, confidence_tier, source, mask_strategy; defaults: confidence_tier="HIGH", normalized="", validator_passed=True; TextUnit dataclass + ConfidenceTier Literal)
+    - privacyguard/pii/hits.py (PIIHit dataclass frozen=True; 7 D-05 field names in D-05 order, with trailing defaults: confidence_tier="HIGH", source="text", mask_strategy="", normalized="", validator_passed=True — B4 fix)
     - privacyguard/pii/validators/__init__.py (lazy re-export of id_card + phone_segment validators)
     - privacyguard/pii/validators/id_card.py (WEIGHTS tuple, MAPPING tuple, compute_check_digit, validate_18, validate_15, upgrade_15_to_18, is_valid_admin_division_prefix_2, is_real_calendar_date — B1 second gate for 15-digit path)
     - privacyguard/pii/validators/phone_segment.py (PHONE_PERSONAL_PREFIX_3, PHONE_EXCLUDED_PREFIX_3, PHONE_EXCLUDED_PREFIX_4, is_mobile_segment)
@@ -84,22 +84,32 @@ must_haves:
     - privacyguard/pii/data/rules.json (phone_segment.personal_prefix_3 / excluded_prefix_3 / excluded_prefix_4 + id_card.weights + id_card.mapping + last_verified + next_review)
     - tests/fixtures/fake_pii.py (fake_id_card / fake_phone / fake_phone_invalid)
     - tests/e2e/create_pii_test_pdf.py (create_pii_test_pdf via fitz insert_text)
-    - tests/unit/test_pdf_pii_redaction.py (reverse-extraction test for text-layer only; image-pixels case deferred to Plan 01-03 — B3)
+    - tests/unit/test_pdf_pii_redaction.py (text-layer reverse-extraction test only; image-pixels case deferred to Plan 01-03 per B3)
     - tests/unit/test_package_imports.py (extended with pii lazy-load assertion + pii_engine_loads_on_demand + pii_engine_lazy_under_rapidocr_block)
     - tests/unit/test_convergence.py (extended with TestPiiConvergence: no-inline-PIIHit-in-main.py assertion + pii-package-has-no-qt-dependency assertion)
     - privacyguard/__init__.py (_LAZY_IMPORTS extended with PIIEngine / PIIHit / TextUnit / validate_18_id / validate_15_id / is_mobile_segment / apply_pii_redactions / collect_pii_rects)
 
-    **Cross-plan deliverables (NOT produced by this plan — referenced only):**
-    - privacyguard/ocr/full_page_ocr.py → Plan 01-03 Task 1
-    - tests/unit/test_pii_validators.py → Plan 01-02 Task 1
-    - tests/unit/test_pii_engine.py → Plan 01-02 Task 1
-    - tests/unit/test_pdf_pii_pipeline.py → Plan 01-03 Task 3
-    - tests/unit/test_pii_offline.py → Plan 01-03 Task 3
-    - tests/unit/test_app_config.py (pii_settings extension) → Plan 01-03 Task 2
-    - config.json + config.json.template (pii_settings block) → Plan 01-03 Task 2
-    - privacyguard/workers/ocr_worker.py (pii_signal + _detect_pii_for_page) → Plan 01-03 Task 1
-    - main.py (page_data 'pii' key, OCRWorker compat layer, _on_pii_page_result slot, SettingsDialog tab, canvas paintEvent PII loop, save_pdf pii_list merge) → Plan 01-03 Task 2
-    - packaging/windows/config/PrivacyGuard_windows.spec + packaging/macos/scripts/build_complete.sh + packaging/macos/config/PrivacyGuard.spec → Plan 01-03 Task 3
+    ### Cross-plan reference index (NOT produced by this plan)
+
+    For traceability only — these files land in Plans 01-02 / 01-03, not here. The `artifacts` block above strictly enumerates what THIS plan produces:
+
+    | Cross-plan deliverable | Producer plan |
+    |----------------------|---------------|
+    | `privacyguard/ocr/full_page_ocr.py` | Plan 01-03 Task 1 |
+    | `tests/unit/test_pii_validators.py` | Plan 01-02 Task 1 |
+    | `tests/unit/test_pii_engine.py` | Plan 01-02 Task 1 |
+    | `tests/unit/test_pdf_pii_pipeline.py` | Plan 01-03 Task 3 |
+    | `tests/unit/test_pii_offline.py` | Plan 01-03 Task 3 |
+    | `tests/unit/test_app_config.py` (pii_settings extension) | Plan 01-03 Task 2 |
+    | `config.json` + `config.json.template` (pii_settings block) | Plan 01-03 Task 2 |
+    | `privacyguard/workers/ocr_worker.py` (pii_signal + _detect_pii_for_page) | Plan 01-03 Task 1 |
+    | `main.py` (page_data 'pii' key, OCRWorker compat layer Site 3a, _on_pii_page_result slot, SettingsDialog tab, canvas paintEvent PII loop, save_pdf pii_list merge) | Plan 01-03 Task 2 |
+    | `packaging/windows/config/PrivacyGuard_windows.spec` + `packaging/macos/scripts/build_complete.sh` + `packaging/macos/config/PrivacyGuard.spec` | Plan 01-03 Task 3 |
+
+    ### Known Limitations (I1 / D-11)
+
+    - **15-digit residual FP:** after the B1 second gate (province prefix + real calendar date), a 15-digit run that coincidentally satisfies both is still a possible business-data SKU. Phase 1 ships the `PIIEngine._check_id_card` demotion logic (bare 15-digit without context anchor → MEDIUM) but does not measure the residual FP rate. Phase 8's real-document accuracy baseline (OPS-06) will measure and either tighten the demotion heuristic or add context anchors.
+    - **NUM-03 [ASSUMED] MIIT 2026-Q1 baseline:** see the user sign-off gate above; this remains a pre-ship checklist item.
   key_links:
     - privacyguard/pii/engine.detect(TextUnit) → privacyguard/pii/validators/{id_card,phone_segment} (NUM-01/02/03 validation gate before hit emission)
     - privacyguard/pii/pdf_adapter.apply_pii_redactions → fitz.add_redact_annot + fitz.apply_redactions(images=PDF_REDACT_IMAGE_PIXELS) → doc.save(garbage=4, deflate=True, clean=True) (SAFE-01)
@@ -306,9 +316,23 @@ No silent drops (§C equality holds: 16 surfaced = 16). NUM-03 carries `[ASSUMED
 
     **privacyguard/pii/__init__.py** — Mirror `privacyguard/workers/__init__.py:7-34` (the `_LAZY_IMPORTS` + `__getattr__` + `__dir__` pattern). Top-level module docstring: "PrivacyGuard PII 自动识别子系统（v38.x Phase 1）". `__all__` exposes: PIIEngine, PIIHit, TextUnit, validate_18_id, validate_15_id, upgrade_15_to_18, compute_check_digit, is_mobile_segment, apply_pii_redactions, collect_pii_rects, PHONE_PERSONAL_PREFIX_3, PHONE_EXCLUDED_PREFIX_3, PHONE_EXCLUDED_PREFIX_4. `_LAZY_IMPORTS` maps each name to `(module_path, attr_name)` tuples. NO top-level `from privacyguard.pii.engine import PIIEngine` — OPS-03.
 
-    **privacyguard/pii/hits.py** — `PIIHit` is `@dataclass(frozen=True)` with field order EXACTLY (D-05 lock — order is fixed, default values are allowed and do NOT change order): entity_type: str, page_offset: int, page_length: int, page_rect: Tuple[float, float, float, float], confidence_tier: str = "HIGH", source: str, mask_strategy: str, normalized: str = "", validator_passed: bool = True. The seven field NAMES are locked in this order; `confidence_tier` carries a default of `"HIGH"` (Claude's Discretion) so that callers who only supply the four geometry + source + mask fields get a sensible HIGH default (consistent with Phase 1: every validator-passing hit is HIGH). `normalized` and `validator_passed` also carry defaults. Use `Tuple` from typing (NOT `tuple` lowercase — keeps frozen hashability strict). Also define `TextUnit` dataclass (page_index: int, text: str, source: str) and `ConfidenceTier = Literal["HIGH","MEDIUM","LOW"]`.
+    **privacyguard/pii/hits.py** — `PIIHit` is `@dataclass(frozen=True)`. The 7 D-05-locked field NAMES appear in the D-05 order; default values are placed on the trailing fields to satisfy Python's "non-default argument cannot follow default argument" rule (B4 fatal — `TypeError: non-default argument 'source' follows default argument 'confidence_tier'` was confirmed by live construction). The chosen layout (option (a) — apply defaults to the trailing fields) is:
 
-    **Resolution of B4:** `confidence_tier` is the 5th field by name (order locked) but carries a default value of `"HIGH"`. Plan 01-02's `TestPIIHitSchema.test_default_confidence_tier_is_high` therefore passes — constructing PIIHit with only `entity_type / page_offset / page_length / page_rect / source / mask_strategy` yields `confidence_tier == "HIGH"`. The 7-field order is unchanged.
+    ```python
+    @dataclass(frozen=True)
+    class PIIHit:
+        entity_type: str                                                              # required (D-05 1)
+        page_offset: int                                                              # required (D-05 2)
+        page_length: int                                                              # required (D-05 3)
+        page_rect: Tuple[float, float, float, float]                                  # required (D-05 4)
+        confidence_tier: str = "HIGH"                                                 # default "HIGH" (D-05 5; Claude's Discretion)
+        source: str = "text"                                                          # default "text" (D-05 6)
+        mask_strategy: str = ""                                                       # default "" (D-05 7; engine populates)
+        normalized: str = ""                                                          # default ""
+        validator_passed: bool = True                                                 # default True
+    ```
+
+    **B4 resolution rationale:** Python's `@dataclass` requires that once a default appears, ALL subsequent fields have defaults. Putting a default on `confidence_tier` (the 5th field) while `source` and `mask_strategy` remained required was a syntax error at class-definition time. The fix gives all three trailing D-05 fields defaults that match their natural "engine populates this" meaning (`confidence_tier` defaults to HIGH per Claude's Discretion, `source` defaults to "text" since OCR paths in Phase 1 only matter when the engine is called via the worker, `mask_strategy` defaults to empty string since callers using the dataclass directly may not have computed the mask yet). This keeps the 7 field NAMES in D-05 order (locked) while satisfying Python's dataclass rule. `test_field_order_locked` in 01-02 still passes (names + order intact); `test_default_confidence_tier_is_high` still passes (constructing with only the 4 required fields yields `confidence_tier == "HIGH"`). Use `Tuple` from typing (NOT `tuple` lowercase — keeps frozen hashability strict). Also define `TextUnit` dataclass (page_index: int, text: str, source: str) and `ConfidenceTier = Literal["HIGH","MEDIUM","LOW"]`. **Acceptance criterion (B4 import smoke test):** `python3 -c "from privacyguard.pii.hits import PIIHit; h = PIIHit('CN_ID_CARD', 0, 18, (0.0, 0.0, 18.0, 1.0)); print(h.confidence_tier)"` prints `HIGH` without `TypeError`. This guards against the dataclass-definition regression class.
 
     **privacyguard/pii/validators/__init__.py** — Same lazy `_LAZY_IMPORTS` pattern; `__all__` = ["validate_18_id","validate_15_id","upgrade_15_to_18","compute_check_digit","is_mobile_segment","PHONE_PERSONAL_PREFIX_3","PHONE_EXCLUDED_PREFIX_3","PHONE_EXCLUDED_PREFIX_4"]. Maps to id_card.py + phone_segment.py.
 
@@ -317,6 +341,8 @@ No silent drops (§C equality holds: 16 surfaced = 16). NUM-03 carries `[ASSUMED
     **B1 second gate for 15-digit path:** A bare 15-digit run whose upgrade-to-18 passes mod-11-2 is NOT enough — that contract accepts order numbers, tracking numbers, and serial numbers whose embedded digits happen to satisfy mod-11-2. The 15-digit validator must additionally enforce (a) `body17[0:2]` (the 行政区划码 province prefix after upgrade) is in the valid province set `{11,12,13,14,15,21,22,23,31,32,33,34,35,36,37,41,42,43,44,45,46,50,51,52,53,54,61,62,63,64,65,71,81,82}` (GB/T 2260 historical 1980s-1990s mapping; if first 2 digits are 00 or 90+ the run is rejected); (b) the embedded 6-digit birth date `YYMMDD` in `body17[6:12]` is a real calendar date (month 1-12, day 1 to days_in_month(yy+1900, mm)). The 18-digit path does NOT need this gate (GB 11643 already covers province prefix + date in the issued ID itself; the gate is specifically needed for the 15-digit synthetic-upgrade path).
 
     `validate_15(id_str)` calls `upgrade_15_to_18`; if empty returned, return False; then check `is_valid_admin_division_prefix_2(upgraded[:2])` — if False, return False; then check `is_real_calendar_date(int(upgraded[8:10]), int(upgraded[10:12]), int(upgraded[12:14]))` — if False, return False; then return `validate_18(upgraded)`. `validate_18` keeps its existing 18-digit contract (mod-11-2 + uppercase X). NOTE: `MAPPING[0] == '1'` (NOT `'0'` — Pitfall 3 reverse parity).
+
+    **I1 — residual false-positive guard for 15-digit:** even with the B1 second gate (valid province prefix + real calendar date), a 15-digit run that coincidentally satisfies both may still be a business-data SKU (e.g. an order number or warehouse ID starting with `42010619801301001`). Mitigation: in `PIIEngine._check_id_card` (NOT in `validate_15` — the validator stays binary True/False), if the candidate was a 15-digit run AND has NO context anchor (no `身份证` / `ID` / `公民身份号码` / `证件` keyword within ±20 characters in the page text), demote `confidence_tier` from `"HIGH"` to `"MEDIUM"`. This routes bare 15-digit matches through the `require_confirmation=true` path or visual review rather than auto-redacting. Phase 1 ships this demotion; Phase 2 may re-promote to HIGH when the FP rate is measured on real documents. This residual FP rate is recorded as a known Phase-1 limitation in `must_haves.truths` §"Known Limitations" below.
 
     **privacyguard/pii/validators/phone_segment.py** — `PHONE_PERSONAL_PREFIX_3` frozenset (NUM-03 personal mobile segments per 2026-Q1 MIIT baseline, `[ASSUMED]` pending user sign-off), `PHONE_EXCLUDED_PREFIX_3` (140/141/144/145/146/147/148/149 IoT + data card), `PHONE_EXCLUDED_PREFIX_4` (1349/1440/1740/1741 satellite). `is_mobile_segment(phone11: str) -> bool` rejects non-digit, wrong length, non-`1`-leading, excluded prefix 4 first then prefix 3, then requires prefix 3 in personal whitelist.
 
