@@ -50,27 +50,27 @@ estimate:
 must_haves:
   truths:
     - A synthetic PDF containing one 18-digit Chinese ID card (Faker-generated, mod-11-2 valid) opened through PIIEngine.detect returns exactly one PIIHit with entity_type="CN_ID_CARD", confidence_tier="HIGH", validator_passed=True.
-    - Exported PDF produced via privacyguard.pii.pdf_adapter.apply_pii_redactions contains zero instances of the ID card's first 10 digits when re-extracted via fitz.open(out).get_text() — i.e. 真删除 (SAFE-01 + SAFE-02).
+    - Exported PDF produced via privacyguard.pii.pdf_adapter.apply_pii_redactions contains zero instances of the ID card's first 10 digits when re-extracted via fitz.open(out).get_text() — i.e. 真删除 (SAFE-01 + SAFE-02). The reverse-extraction MUST use the `fitz` path (`fitz.open(out).get_text()`) per D-14 — not `pdftotext` / poppler-utils — so the test runs in any CI environment without requiring poppler installation; `pdftotext` is reserved for human verification only.
     - validate_18_id on a GB 11643-1999 standard sample "53010219200508011X" returns True and on a corrupted check-digit "530102192005080119" returns False (NUM-01).
     - validate_18_id on the same number with OCR-style lowercase tail "53010219200508011x" returns True (NUM-02 — case-insensitive X).
     - is_mobile_segment("19912345678") returns True (5G MIIT segment) while is_mobile_segment("14012345678") returns False (IoT exclusion NUM-03).
-    - PIIHit dataclass fields, in order, are entity_type, page_offset, page_length, page_rect, confidence_tier, source, mask_strategy (D-05 locked, no rename).
+    - PIIHit dataclass fields, in order, are entity_type, page_offset, page_length, page_rect, confidence_tier, source, mask_strategy (D-05 locked, no rename) AND the page_offset / page_length pair carries a char-level offset into the page text string — not just a QRectF (D-06 char-level offset contract). OCR paths recover the offset by joining `iter_ocr_lines` outputs into one string and aligning back to the original via `map_flat_to_original`; text-layer paths use `page.get_text()` string indices directly.
     - import privacyguard does not load privacyguard.pii.engine into sys.modules (OPS-03 lazy-load contract preserved).
-    - Existing 79/79 baseline (test_mixed_pdf_ocr / test_path_validation / test_ocr_api / test_package_imports / test_pdf_text_hit_dedup / test_app_config / test_word_replace_rules / test_batch_word_replace / test_config_alignment / test_fstring_safety / test_convergence) remains green after this plan lands.
+    - Existing 79/79 baseline (test_mixed_pdf_ocr / test_path_validation / test_ocr_api / test_package_imports / test_pdf_text_hit_dedup / test_app_config / test_word_replace_rules / test_batch_word_replace / test_config_alignment / test_fstring_safety / test_convergence) remains green after this plan lands (D-13 baseline preservation).
     - main.py contains no inline `class PIIHit` / `def detect_pii` / `def validate_id_card(` (convergence test, v37.7.6 rule).
     - SettingsDialog "5 隐私识别" tab visible in UI when SettingsDialog opened (UI-SPEC §E1 populated state).
     - SettingsDialog tab carries three QCheckBox with locked labels: "启用隐私识别引擎" / "扫描后自动真脱敏" / "HIGH 档命中需手动确认" plus a read-only "扫描范围（只读）：身份证号 / 手机号" label (UI-SPEC §Copywriting).
     - PII rects on SinglePageCanvas render in third paint loop with stroke color #D64545 (light) / #FF6B6B (dark) and label badges "ID" or "PHONE" anchored top-left (UI-SPEC §PII Rect Rendering).
     - PII status chip on info_bar shows one of the locked copy rows: "识别引擎已停用" / "PII 自动识别 已启用" / "已识别 N 项敏感内容" / "扫描完成：未发现敏感内容" / "扫描第 X / Y 页…" (UI-SPEC §Status Bar PII Chip).
     - Confirmation QDialog appears modally when require_confirmation=true AND HIGH hits present, with three CTAs "全部脱敏并保存" / "仅脱敏选中的 N 项" / "暂不脱敏（仅高亮）" (UI-SPEC §Confirmation Dialog).
-    - PDF save loop merges pii_list alongside ocr_list + manual_list and applies PyMuPDF add_redact_annot + apply_redactions(images=PDF_REDACT_IMAGE_PIXELS) so PII rects are truly deleted (D-04 + SAFE-01).
+    - PDF save loop merges pii_list alongside ocr_list + manual_list and applies PyMuPDF add_redact_annot + apply_redactions(images=PDF_REDACT_IMAGE_PIXELS) so PII rects are truly deleted (D-04 + SAFE-01 + D-07 default auto-redaction: HIGH-tier hits enter the redaction list automatically and are destroyed on save unless `pii_settings.require_confirmation` is enabled, in which case the user is prompted via the confirmation dialog).
     - PyInstaller spec datas contains (privacyguard/pii/data, privacyguard/pii/data) and hiddenimports contains privacyguard.pii.* modules so frozen launches can load rules.json (D-10 + OPS-03).
     - collect_full_page_ocr_hits is invoked in _ModularOCRWorker.run when page text is empty AND page contains image blocks, producing a page_rect tuple per OCR hit (D-03 dependency-injection).
     - A 500-page synthetic scan finishes in <60s and emits at least one progress_signal so UI stays responsive (Success Criteria #4 + ENGINE-07).
     - monkey-patching socket.socket and running engine.detect over 500 pages produces zero recorded socket calls (ENGINE-08 zero-network).
   artifacts:
     - privacyguard/pii/__init__.py (lazy _LAZY_IMPORTS + __getattr__ + __all__; 8 exports: PIIEngine / PIIHit / TextUnit / validate_18_id / validate_15_id / is_mobile_segment / apply_pii_redactions / collect_pii_rects)
-    - privacyguard/pii/hits.py (PIIHit dataclass frozen=True; 7 D-05 field names in D-05 order, with trailing defaults: confidence_tier="HIGH", source="text", mask_strategy="", normalized="", validator_passed=True — B4 fix)
+    - privacyguard/pii/hits.py (PIIHit dataclass frozen=True; 7 D-05 field names in D-05 order, with trailing defaults: confidence_tier="HIGH", source="text", mask_strategy="", normalized="", validator_passed=True — B4 fix) — carries D-06 char-level offset fields (page_offset / page_length)
     - privacyguard/pii/validators/__init__.py (lazy re-export of id_card + phone_segment validators)
     - privacyguard/pii/validators/id_card.py (WEIGHTS tuple, MAPPING tuple, compute_check_digit, validate_18, validate_15, upgrade_15_to_18, is_valid_admin_division_prefix_2, is_real_calendar_date — B1 second gate for 15-digit path)
     - privacyguard/pii/validators/phone_segment.py (PHONE_PERSONAL_PREFIX_3, PHONE_EXCLUDED_PREFIX_3, PHONE_EXCLUDED_PREFIX_4, is_mobile_segment)
@@ -84,7 +84,7 @@ must_haves:
     - privacyguard/pii/data/rules.json (phone_segment.personal_prefix_3 / excluded_prefix_3 / excluded_prefix_4 + id_card.weights + id_card.mapping + last_verified + next_review)
     - tests/fixtures/fake_pii.py (fake_id_card / fake_phone / fake_phone_invalid)
     - tests/e2e/create_pii_test_pdf.py (create_pii_test_pdf via fitz insert_text)
-    - tests/unit/test_pdf_pii_redaction.py (text-layer reverse-extraction test only; image-pixels case deferred to Plan 01-03 per B3)
+    - tests/unit/test_pdf_pii_redaction.py (text-layer reverse-extraction test only; image-pixels case deferred to Plan 01-03 per B3) — D-12 class 3 (SAFE-02 reverse-extraction via fitz path per D-14)
     - tests/unit/test_package_imports.py (extended with pii lazy-load assertion + pii_engine_loads_on_demand + pii_engine_lazy_under_rapidocr_block)
     - tests/unit/test_convergence.py (extended with TestPiiConvergence: no-inline-PIIHit-in-main.py assertion + pii-package-has-no-qt-dependency assertion)
     - privacyguard/__init__.py (_LAZY_IMPORTS extended with PIIEngine / PIIHit / TextUnit / validate_18_id / validate_15_id / is_mobile_segment / apply_pii_redactions / collect_pii_rects)

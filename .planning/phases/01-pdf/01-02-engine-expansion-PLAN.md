@@ -49,7 +49,7 @@ must_haves:
     - normalize_digits strips common separators - / space / fullwidth space (ENGINE-05).
     - flatten_for_match strips newlines / tabs / all whitespace (ENGINE-06 cross-line input).
     - map_flat_to_original returns (None, None) tuple when flat span cannot be mapped (defensive).
-    - map_flat_to_original returns correct original span when flat text is the original with separators inserted (ENGINE-05 offset reverse-mapping).
+    - map_flat_to_original returns correct original span when flat text is the original with separators inserted (ENGINE-05 offset reverse-mapping) — also implements D-06 char-level offset back-mapping for OCR paths where `iter_ocr_lines` outputs are concatenated into one string and the regex match span must be mapped back to the original page text index.
     - PIIEngine.detect emits HIGH confidence for Faker-generated 18-digit ID + 11-digit personal mobile (ENGINE-03 HIGH tier).
     - PIIEngine.detect emits zero hits for Faker-generated IoT segment 140xxxxxxxx (NUM-03 + ENGINE-03 LOW tier absent).
     - PIIEngine.detect returns identical mask_strategy for two occurrences of the same normalized entity within a page (ENGINE-04 mask consistency).
