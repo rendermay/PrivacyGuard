@@ -63,7 +63,11 @@ __all__ = [
     'has_bank_account_context',
     'VAT_INVOICE_CONTEXTS',
     'BANK_ACCOUNT_CONTEXTS',
-]
+    # Phase 3 (03-word) — word_adapter 三函数 (D-13 公开导出)
+    'collect_pii_word_hits',
+    'locate_pii_hits_in_paragraph',
+    'apply_pii_replacements_to_docx',
+]  # noqa: E501
 
 
 _LAZY_IMPORTS = {
@@ -106,6 +110,10 @@ _LAZY_IMPORTS = {
     'has_bank_account_context':  ('privacyguard.pii.validators', 'has_bank_account_context'),
     'VAT_INVOICE_CONTEXTS':      ('privacyguard.pii.validators', 'VAT_INVOICE_CONTEXTS'),
     'BANK_ACCOUNT_CONTEXTS':     ('privacyguard.pii.validators', 'BANK_ACCOUNT_CONTEXTS'),
+    # Phase 3 (03-word) — word_adapter 三函数 (D-13 + OPS-03 懒加载纪律)
+    'collect_pii_word_hits':          ('privacyguard.pii.word_adapter', 'collect_pii_word_hits'),
+    'locate_pii_hits_in_paragraph':   ('privacyguard.pii.word_adapter', 'locate_pii_hits_in_paragraph'),
+    'apply_pii_replacements_to_docx': ('privacyguard.pii.word_adapter', 'apply_pii_replacements_to_docx'),
 }
 
 
