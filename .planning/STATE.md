@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v37.7.6
 milestone_name: milestone
 status: shipped
-stopped_at: Phase 3 UI-SPEC approved
-last_updated: "2026-08-11T13:36:44.485Z"
+stopped_at: Completed 03-04-save-and-packaging-PLAN.md
+last_updated: "2026-08-11T14:59:49.081Z"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 11
-  completed_plans: 7
+  completed_plans: 11
 current_phase_name: Word 文档接入识别引擎
 ---
 
@@ -66,6 +66,7 @@ current_phase_name: Word 文档接入识别引擎
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 01-pdf P01-02 | 45 | 3 tasks | 6 files |
+| Phase 03 P04 | 28 | 4 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,9 @@ current_phase_name: Word 文档接入识别引擎
 - [Phase ?]: W-A: 不可定位 hit 记录到 unresolved_hits + error_log（不静默丢弃）
 - [Phase ?]: I1: bare 15-digit 无 context anchor → MEDIUM（避免订单号误识别）
 - [Phase ?]: page_rect 根因修复：engine 内部通过 page 参数取真实坐标，调用方不再需要各自 page.search_for workaround（test_pdf_pii_redaction.py 保留 safety net）
+- [Phase ?]: Word 保存默认 partial；文档级 override 通过独立 MainWindow 字段映射 blackout，并在打开新文档时复位。
+- [Phase ?]: PII 必须在既有替换之后按当前段文本重新定位，避免掩码长度变化造成偏移错位。
+- [Phase ?]: Windows 与 macOS spec 显式声明 privacyguard.pii.word_adapter；macOS 构建脚本保留 parity 证据。
 
 ### Architectural Facts
 
@@ -189,9 +193,9 @@ None — awaiting user approval of drafted roadmap to begin Phase 1 planning.
 
 ## Session Continuity
 
-**Last session:** 2026-08-11T12:52:12.187Z
-**Stopped at:** Phase 3 UI-SPEC approved
-**Resume file:** .planning/phases/03-word/03-UI-SPEC.md
+**Last session:** 2026-08-11T14:59:49.056Z
+**Stopped at:** Completed 03-04-save-and-packaging-PLAN.md
+**Resume file:** None
 
 **Last session**: 2026-08-11 — Phase 2 (4 plans) + 02-04 gap closure + 08 cross-platform packaging verification shipped.
 **Last action**: `fd994ae` docs(08): cross-platform packaging verification; `8804f68` fix(02-04): CR-01 + WR-01 + WR-03 + WR-04 closed; `a8ab75d` ... `068cca3` Phase 2 (01/02/03 + gap closure) shipped.

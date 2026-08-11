@@ -51,12 +51,12 @@
 ### 掩码策略 (MASK)
 
 - [ ] **MASK-01**: 系统支持部分掩码，按实体类型套用各自的保留规则（身份证保留前 6 后 4、手机号保留前 3 后 4、银行卡保留前 6 后 4、邮箱保留首字符与域名、姓名仅保留姓）
-- [ ] **MASK-02**: 用户可在部分掩码与完全遮蔽之间选择处置方式
+- [x] **MASK-02**: 用户可在部分掩码与完全遮蔽之间选择处置方式
 
 ### 格式支持 (FMT)
 
 - [x] **FMT-01**: PDF 文字层与 OCR 路径接入识别引擎，识别结果并入现有页面命中数据而非另起结构
-- [ ] **FMT-02**: Word 处理路径接入识别引擎，识别候选在双栏对比预览中高亮
+- [x] **FMT-02**: Word 处理路径接入识别引擎，识别候选在双栏对比预览中高亮
 - [ ] **FMT-03**: 用户可打开 `.xlsx` 工作簿并对全表执行敏感信息扫描
 - [ ] **FMT-04**: 系统在识别出整列同类型实体时提示按列批量处置
 - [ ] **FMT-05**: Excel 脱敏写回后保留公式、单元格样式、合并区域与命名区域
@@ -77,7 +77,7 @@
 - [ ] **OPS-01**: 每次脱敏生成单文件 JSON 报告，记录源文件、实体清单（类型/位置/置信度/处置方式）、规则版本与时间戳
 - [ ] **OPS-02**: 所有扫描与脱敏在工作线程中执行并上报进度，界面在处理大文档时保持响应
 - [x] **OPS-03**: 识别引擎与词典数据保持懒加载，包导入期不初始化 OCR 引擎
-- [ ] **OPS-04**: 新增模块与词典数据文件在 Windows 与 macOS 打包产物中均可正常加载
+- [x] **OPS-04**: 新增模块与词典数据文件在 Windows 与 macOS 打包产物中均可正常加载
 - [ ] **OPS-05**: 测试语料使用合成数据生成，仓库不存放真实个人信息
 - [ ] **OPS-06**: 基于真实文档建立识别准确率基线（召回率与误报率），并纳入回归验证
 - [x] **OPS-07**: 现有 79/79 测试基线在改动后保持通过
@@ -152,9 +152,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SAFE-05 | Phase 5 | Pending |
 | SAFE-06 | Phase 4 | Pending |
 | MASK-01 | Phase 2 | Pending |
-| MASK-02 | Phase 2 | Pending |
+| MASK-02 | Phase 2 | Complete |
 | FMT-01 | Phase 1 | Complete |
-| FMT-02 | Phase 3 | Pending |
+| FMT-02 | Phase 3 | Complete |
 | FMT-03 | Phase 4 | Pending |
 | FMT-04 | Phase 4 | Pending |
 | FMT-05 | Phase 4 | Pending |
@@ -169,7 +169,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OPS-01 | Phase 8 | Pending |
 | OPS-02 | Phase 8 | Pending |
 | OPS-03 | Phase 1 | Complete |
-| OPS-04 | Phase 8 | Pending |
+| OPS-04 | Phase 8 | Complete |
 | OPS-05 | Phase 4 | Pending |
 | OPS-06 | Phase 8 | Pending |
 | OPS-07 | Phase 1 | Complete |
