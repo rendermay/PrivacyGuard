@@ -7,14 +7,14 @@
 
 ### 识别引擎核心 (ENGINE)
 
-- [ ] **ENGINE-01**: 系统在文档打开后自动扫描全文并输出敏感项候选列表，无需用户预先输入关键词
-- [ ] **ENGINE-02**: 每条识别结果携带实体类型、精确字符起止位置、置信度档位、来源与建议掩码，供部分掩码与审计复用
+- [x] **ENGINE-01**: 系统在文档打开后自动扫描全文并输出敏感项候选列表，无需用户预先输入关键词
+- [x] **ENGINE-02**: 每条识别结果携带实体类型、精确字符起止位置、置信度档位、来源与建议掩码，供部分掩码与审计复用
 - [x] **ENGINE-03**: 系统按 HIGH / MEDIUM / LOW 三档给识别结果评级，HIGH 档直接脱敏，MEDIUM 与 LOW 档进入待确认列表
 - [x] **ENGINE-04**: 系统对同一实体的多次出现应用一致的掩码结果，避免跨实例拼接还原
 - [x] **ENGINE-05**: 系统在匹配前统一归一化输入文本（全角转半角、剔除空格与分隔符），并把匹配位置映射回原始偏移
 - [x] **ENGINE-06**: 系统能识别被换行、分栏或单元格边界切断的实体
 - [x] **ENGINE-07**: 正则匹配设置执行超时保护，避免异常输入导致界面无响应
-- [ ] **ENGINE-08**: 识别引擎为纯本地执行，运行期无任何网络请求
+- [x] **ENGINE-08**: 识别引擎为纯本地执行，运行期无任何网络请求
 
 ### 号码类实体识别 (NUM)
 
@@ -41,8 +41,8 @@
 
 ### 脱敏执行与安全底线 (SAFE)
 
-- [ ] **SAFE-01**: PDF 脱敏通过 PyMuPDF 真删除流程执行，脱敏后原文本不可通过文本提取还原
-- [ ] **SAFE-02**: 每种格式的脱敏实现都有反向提取测试，断言脱敏后原始敏感内容在产物中不存在
+- [x] **SAFE-01**: PDF 脱敏通过 PyMuPDF 真删除流程执行，脱敏后原文本不可通过文本提取还原
+- [x] **SAFE-02**: 每种格式的脱敏实现都有反向提取测试，断言脱敏后原始敏感内容在产物中不存在
 - [ ] **SAFE-03**: 系统在导出时清除文档元数据（PDF 文档信息、Office 文档属性）
 - [ ] **SAFE-04**: 系统在导出图片时清除 EXIF 信息（含 GPS 与设备标识）
 - [ ] **SAFE-05**: 图片脱敏采用像素级重绘，并在导出后重新 OCR 验证敏感文字确已消失
@@ -55,7 +55,7 @@
 
 ### 格式支持 (FMT)
 
-- [ ] **FMT-01**: PDF 文字层与 OCR 路径接入识别引擎，识别结果并入现有页面命中数据而非另起结构
+- [x] **FMT-01**: PDF 文字层与 OCR 路径接入识别引擎，识别结果并入现有页面命中数据而非另起结构
 - [ ] **FMT-02**: Word 处理路径接入识别引擎，识别候选在双栏对比预览中高亮
 - [ ] **FMT-03**: 用户可打开 `.xlsx` 工作簿并对全表执行敏感信息扫描
 - [ ] **FMT-04**: 系统在识别出整列同类型实体时提示按列批量处置
@@ -76,11 +76,11 @@
 
 - [ ] **OPS-01**: 每次脱敏生成单文件 JSON 报告，记录源文件、实体清单（类型/位置/置信度/处置方式）、规则版本与时间戳
 - [ ] **OPS-02**: 所有扫描与脱敏在工作线程中执行并上报进度，界面在处理大文档时保持响应
-- [ ] **OPS-03**: 识别引擎与词典数据保持懒加载，包导入期不初始化 OCR 引擎
+- [x] **OPS-03**: 识别引擎与词典数据保持懒加载，包导入期不初始化 OCR 引擎
 - [ ] **OPS-04**: 新增模块与词典数据文件在 Windows 与 macOS 打包产物中均可正常加载
 - [ ] **OPS-05**: 测试语料使用合成数据生成，仓库不存放真实个人信息
 - [ ] **OPS-06**: 基于真实文档建立识别准确率基线（召回率与误报率），并纳入回归验证
-- [ ] **OPS-07**: 现有 79/79 测试基线在改动后保持通过
+- [x] **OPS-07**: 现有 79/79 测试基线在改动后保持通过
 
 ## v2 Requirements
 
@@ -123,14 +123,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ENGINE-01 | Phase 1 | Pending |
-| ENGINE-02 | Phase 1 | Pending |
+| ENGINE-01 | Phase 1 | Complete |
+| ENGINE-02 | Phase 1 | Complete |
 | ENGINE-03 | Phase 1 | Complete |
 | ENGINE-04 | Phase 1 | Complete |
 | ENGINE-05 | Phase 1 | Complete |
 | ENGINE-06 | Phase 1 | Complete |
 | ENGINE-07 | Phase 1 | Complete |
-| ENGINE-08 | Phase 1 | Pending |
+| ENGINE-08 | Phase 1 | Complete |
 | NUM-01 | Phase 1 | Complete |
 | NUM-02 | Phase 1 | Complete |
 | NUM-03 | Phase 1 | Complete |
@@ -145,15 +145,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CTX-03 | Phase 6 | Pending |
 | CTX-04 | Phase 6 | Pending |
 | CTX-05 | Phase 6 | Pending |
-| SAFE-01 | Phase 1 | Pending |
-| SAFE-02 | Phase 1 | Pending |
+| SAFE-01 | Phase 1 | Complete |
+| SAFE-02 | Phase 1 | Complete |
 | SAFE-03 | Phase 2 | Pending |
 | SAFE-04 | Phase 5 | Pending |
 | SAFE-05 | Phase 5 | Pending |
 | SAFE-06 | Phase 4 | Pending |
 | MASK-01 | Phase 2 | Pending |
 | MASK-02 | Phase 2 | Pending |
-| FMT-01 | Phase 1 | Pending |
+| FMT-01 | Phase 1 | Complete |
 | FMT-02 | Phase 3 | Pending |
 | FMT-03 | Phase 4 | Pending |
 | FMT-04 | Phase 4 | Pending |
@@ -168,11 +168,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UX-07 | Phase 8 | Pending |
 | OPS-01 | Phase 8 | Pending |
 | OPS-02 | Phase 8 | Pending |
-| OPS-03 | Phase 1 | Pending |
+| OPS-03 | Phase 1 | Complete |
 | OPS-04 | Phase 8 | Pending |
 | OPS-05 | Phase 4 | Pending |
 | OPS-06 | Phase 8 | Pending |
-| OPS-07 | Phase 1 | Pending |
+| OPS-07 | Phase 1 | Complete |
 
 **Coverage:**
 

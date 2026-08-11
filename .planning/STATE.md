@@ -4,12 +4,13 @@ milestone: v37.7.6
 milestone_name: milestone
 status: unknown
 stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-08-11T01:20:45.836Z"
+last_updated: "2026-08-11T02:06:56.547Z"
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
+current_phase_name: PDF 增加银行卡/邮箱/财税实体识别与部分掩码
 ---
 
 # PrivacyGuard v38.x — Project State

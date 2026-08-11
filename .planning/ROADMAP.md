@@ -13,7 +13,7 @@
 
 ## Phases
 
-- [ ] **Phase 1: PDF 自动识别身份证号与手机号并真脱敏** - 首个端到端垂直切片（PDF + 号码类 + true redaction）
+- [x] **Phase 1: PDF 自动识别身份证号与手机号并真脱敏** - 首个端到端垂直切片（PDF + 号码类 + true redaction） (completed 2026-08-11)
 - [ ] **Phase 2: PDF 增加银行卡/邮箱/财税实体识别与部分掩码** - 扩展 PDF 检测覆盖 + 按实体定制部分掩码
 - [ ] **Phase 3: Word 文档接入识别引擎（双栏对比预览自动高亮）** - Word 格式垂直切片
 - [ ] **Phase 4: Excel 工作簿支持（全表散点扫描 + 11 隐藏通道 + 列名驱动升级）** - Excel 格式垂直切片
@@ -40,7 +40,7 @@
   4. UI stays responsive while scanning a 500-page PDF; user can cancel mid-scan
   5. Network is unreachable during detection (no telemetry, no API calls)
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans executed
 **UI hint**: yes
 
 Plans:
@@ -54,7 +54,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 01-03-worker-and-ui-PLAN.md — worker pii_signal + main.py UI/settings/canvas/save_loop + config + offline + packaging
+- [x] 01-03-worker-and-ui-PLAN.md — worker pii_signal + main.py UI/settings/canvas/save_loop + config + offline + packaging
 
 ---
 
@@ -192,7 +192,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. PDF 自动识别身份证号与手机号并真脱敏 | 2/3 | In Progress|  |
+| 1. PDF 自动识别身份证号与手机号并真脱敏 | 3/3 | Complete    | 2026-08-11 |
 | 2. PDF 增加银行卡/邮箱/财税实体识别与部分掩码 | 0/TBD | Not started | - |
 | 3. Word 文档接入识别引擎 | 0/TBD | Not started | - |
 | 4. Excel 工作簿支持 | 0/TBD | Not started | - |
