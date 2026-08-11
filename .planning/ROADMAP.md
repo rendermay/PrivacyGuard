@@ -71,8 +71,13 @@ Plans:
   3. User can switch between partial masking and full blackout per entity type or per document
   4. Exported PDF has no original sensitive content in the text layer; document metadata (`Title` / `Author` / `Subject` / `Producer` / `Creator`) is cleared
 
-**Plans**: TBD
+**Plans**: 3/3 plans drafted
 **UI hint**: no
+
+Plans:
+- [x] 02-01-tracer-PLAN.md — Tracer: USCC validator + partial mask write + metadata clear end-to-end (Wave 1)
+- [x] 02-02-engine-expansion-PLAN.md — Engine expansion: VAT invoice + bank account + 15-digit taxpayer ID validators + 9-entity engine coverage (Wave 2)
+- [x] 02-03-main-py-settings-packaging-PLAN.md — Ship bin dictionary (CC BY-SA 4.0) + SettingsDialog 9-row per-entity table + toolbar mask_override toggle + save_pdf wiring + PyInstaller parity (Wave 3)
 
 ---
 
@@ -193,7 +198,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. PDF 自动识别身份证号与手机号并真脱敏 | 3/3 | Complete    | 2026-08-11 |
-| 2. PDF 增加银行卡/邮箱/财税实体识别与部分掩码 | 0/TBD | Not started | - |
+| 2. PDF 增加银行卡/邮箱/财税实体识别与部分掩码 | 0/3 | Plans drafted | - |
 | 3. Word 文档接入识别引擎 | 0/TBD | Not started | - |
 | 4. Excel 工作簿支持 | 0/TBD | Not started | - |
 | 5. 独立图片文件支持 | 0/TBD | Not started | - |
