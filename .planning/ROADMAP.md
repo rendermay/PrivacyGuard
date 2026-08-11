@@ -95,8 +95,14 @@ Plans:
   3. User can browse a per-block candidate list and confirm each entry before save; list filters by entity type and paginates when over 50 entries
   4. Exported Word doc retains paragraph/table formatting and no longer contains the original sensitive text in its body or document properties
 
-**Plans**: TBD
+**Plans**: 4/4 plans drafted (01 word_adapter / 02 worker-pii / 03 merge-and-preview / 04 save-and-packaging)
 **UI hint**: yes
+
+Plans:
+- [ ] 03-01-word-adapter-PLAN.md — Wave 1 Foundation: privacyguard/pii/word_adapter.py 三函数 + _LAZY_IMPORTS 注册 + 三函数纯函数测试 + test_package_imports 懒加载守卫扩展
+- [ ] 03-02-worker-pii-integration-PLAN.md — Wave 1 Pipeline: _ModularWordWorker.run() 接入 collect_pii_word_hits + word_data["pii"] 字段扩展 + worker PII 端到端测试 (批量入口显式 skip)
+- [ ] 03-03-merge-and-preview-PLAN.md — Wave 2 UX: merge_word_matches_with_priority pii_matches 形参 + 双栏预览 pii-highlight 渲染 + test_convergence inline 守卫扩展 + DOM patch 边界守护
+- [ ] 03-04-save-and-packaging-PLAN.md — Wave 3 Production: _save_word 接入 apply_pii_replacements_to_docx 真脱敏 + _word_mask_override_this_doc 字段 + toggle 双路径 + PyInstaller 跨平台 hiddenimports 同步 + reverse-extraction 端到端测试
 
 ---
 
@@ -200,7 +206,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. PDF 自动识别身份证号与手机号并真脱敏 | 3/3 | Complete    | 2026-08-11 |
 | 2. PDF 增加银行卡/邮箱/财税实体识别与部分掩码 | 4/4 | Complete    | 2026-08-11 |
-| 3. Word 文档接入识别引擎 | 0/TBD | Not started | - |
+| 3. Word 文档接入识别引擎 | 0/4 | Plans drafted | - |
 | 4. Excel 工作簿支持 | 0/TBD | Not started | - |
 | 5. 独立图片文件支持 | 0/TBD | Not started | - |
 | 6. 上下文型实体识别 | 0/TBD | Not started | - |
