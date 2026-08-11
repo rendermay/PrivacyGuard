@@ -85,7 +85,7 @@ Plans:
 
 ### Phase 3: Word 文档接入识别引擎（双栏对比预览自动高亮）
 
-**Goal**: 用户打开 Word 文档，识别引擎自动跑一遍，敏感候选在双栏对比预览的左右两侧同时高亮，导出后原文不可还原。
+**Goal**: As a PrivacyGuard user, I want to open a Word document and automatically review PII candidates highlighted in both comparison panes, so that I can export a securely redacted document whose original sensitive content cannot be recovered.
 **Mode:** mvp
 **Depends on**: Phase 1
 **Requirements**: FMT-02, UX-01, UX-02
