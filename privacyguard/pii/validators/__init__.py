@@ -1,4 +1,4 @@
-"""PrivacyGuard PII 验证器子包（NUM-01/02/03 纯函数实现）。"""
+"""PrivacyGuard PII 验证器子包（NUM-01/02/03 + Phase 2 NUM-04/05/FIN-01 纯函数实现）。"""
 from importlib import import_module
 
 
@@ -11,6 +11,21 @@ __all__ = [
     'PHONE_PERSONAL_PREFIX_3',
     'PHONE_EXCLUDED_PREFIX_3',
     'PHONE_EXCLUDED_PREFIX_4',
+    # Phase 2 (02-01-tracer) 新增
+    'validate_uscc',
+    'validate_bank_card',
+    'validate_email',
+    'is_public_suffix_email',
+    'luhn_check',
+    'load_bin_whitelist',
+    'get_bin_whitelist',
+    'set_bin_whitelist_for_test',
+    'USCC_CHARSET',
+    'USCC_WEIGHTS',
+    'USCC_CATEGORY_CODES',
+    'EMAIL_RE',
+    'EMAIL_PUBLIC_SUFFIXES',
+    'BANK_CARD_BIN_WHITELIST',
 ]
 
 
@@ -23,6 +38,21 @@ _LAZY_IMPORTS = {
     'PHONE_PERSONAL_PREFIX_3':  ('privacyguard.pii.validators.phone_segment', 'PHONE_PERSONAL_PREFIX_3'),
     'PHONE_EXCLUDED_PREFIX_3':  ('privacyguard.pii.validators.phone_segment', 'PHONE_EXCLUDED_PREFIX_3'),
     'PHONE_EXCLUDED_PREFIX_4':  ('privacyguard.pii.validators.phone_segment', 'PHONE_EXCLUDED_PREFIX_4'),
+    # Phase 2 (02-01-tracer) — 3 new validators + constants + helpers
+    'validate_uscc':            ('privacyguard.pii.validators.uscc', 'validate_uscc'),
+    'USCC_CHARSET':             ('privacyguard.pii.validators.uscc', 'USCC_CHARSET'),
+    'USCC_WEIGHTS':             ('privacyguard.pii.validators.uscc', 'USCC_WEIGHTS'),
+    'USCC_CATEGORY_CODES':      ('privacyguard.pii.validators.uscc', 'USCC_CATEGORY_CODES'),
+    'validate_bank_card':       ('privacyguard.pii.validators.bank_card', 'validate_bank_card'),
+    'luhn_check':               ('privacyguard.pii.validators.bank_card', 'luhn_check'),
+    'load_bin_whitelist':       ('privacyguard.pii.validators.bank_card', 'load_bin_whitelist'),
+    'get_bin_whitelist':        ('privacyguard.pii.validators.bank_card', 'get_bin_whitelist'),
+    'set_bin_whitelist_for_test': ('privacyguard.pii.validators.bank_card', 'set_bin_whitelist_for_test'),
+    'BANK_CARD_BIN_WHITELIST':  ('privacyguard.pii.validators.bank_card', 'BANK_CARD_BIN_WHITELIST'),
+    'validate_email':           ('privacyguard.pii.validators.email', 'validate_email'),
+    'is_public_suffix_email':   ('privacyguard.pii.validators.email', 'is_public_suffix_email'),
+    'EMAIL_RE':                 ('privacyguard.pii.validators.email', 'EMAIL_RE'),
+    'EMAIL_PUBLIC_SUFFIXES':    ('privacyguard.pii.validators.email', 'EMAIL_PUBLIC_SUFFIXES'),
 }
 
 

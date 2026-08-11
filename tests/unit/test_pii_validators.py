@@ -284,8 +284,9 @@ class TestBankCardBin(unittest.TestCase):
     def test_valid_bin_in_whitelist_passes(self):
         """BIN 在白名单 + Luhn 通过 → True。"""
         from privacyguard.pii.validators.bank_card import validate_bank_card
+        # 6222021234567894 是 Luhn 校验通过的数字（BIN 622202）
         self.assertTrue(
-            validate_bank_card('6222021234567890', bin_whitelist=frozenset({'622202'}))
+            validate_bank_card('6222021234567894', bin_whitelist=frozenset({'622202'}))
         )
 
     def test_unknown_bin_rejected(self):
