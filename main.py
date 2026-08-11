@@ -10303,13 +10303,14 @@ class MainWindow(QMainWindow):
         return any(item.get("enabled", True) and item.get("find") for item in normalized)
 
     def _has_word_replacement_candidates(self):
-        """是否存在可在右侧预览中展示的替换结果（规则/OCR/手动）。"""
+        """是否存在可在右侧预览中展示的替换结果（规则/OCR/手动/PII）。"""
         if self._has_enabled_word_replace_rules():
             return True
         for data in self.word_data.values():
             if not isinstance(data, dict):
                 continue
-            if data.get("manual") or data.get("ocr"):
+            # [NEW G1 Gap 2] PII 命中也作为对比模式触发条件, 与 manual/ocr 同形态
+            if data.get("manual") or data.get("ocr") or data.get("pii"):
                 return True
         return False
 
