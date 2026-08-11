@@ -11963,7 +11963,8 @@ sudo dnf install antiword
                 [],
                 self.replacement_text,
                 manual_matches=data.get("manual", []),
-                ocr_matches=data.get("ocr", [])
+                ocr_matches=data.get("ocr", []),
+                pii_matches=data.get("pii", []),  # [NEW D-01] PII 命中注入
             )
             updates[key] = self._build_word_original_preview_fragment(key, source_text, merged_matches)
         return updates
@@ -11986,14 +11987,26 @@ sudo dnf install antiword
                 continue
 
             source = str(segment.get("source", "manual"))
-            css_class = "manual-highlight" if source == "manual" else "ocr-highlight"
+            if source == "manual":
+                css_class = "manual-highlight"
+            elif source == "pii":
+                css_class = "pii-highlight"  # [NEW D-01 + UI-SPEC §Color]
+            else:
+                css_class = "ocr-highlight"
             attrs = [
                 f'class="{css_class}"',
                 f'data-key="{html_escape(str(key))}"',
                 f'data-start="{int(segment.get("start", 0))}"',
                 f'data-end="{int(segment.get("end", 0))}"',
             ]
-            title = "手动脱敏" if source == "manual" else str(segment.get("rule_name", "")).strip() or "智能脱敏"
+            if source == "pii":
+                # [NEW UI-SPEC §Copywriting] PII 命中 hover tooltip
+                entity_type = str(segment.get("rule_name", "PII")).strip() or "PII"
+                title = f"[PII] {entity_type}"  # 简化形态; 完整形态由后续 Phase 7 扩展
+            elif source == "manual":
+                title = "手动脱敏"
+            else:
+                title = str(segment.get("rule_name", "")).strip() or "智能脱敏"
             if title:
                 attrs.append(f'title="{html_escape(title)}"')
             parts.append(f"<mark {' '.join(attrs)}>{escaped_value}</mark>")
@@ -12009,7 +12022,8 @@ sudo dnf install antiword
                 self.word_replace_rules,
                 self.replacement_text,
                 manual_matches=data.get("manual", []),
-                ocr_matches=data.get("ocr", [])
+                ocr_matches=data.get("ocr", []),
+                pii_matches=data.get("pii", []),  # [NEW D-01] PII 命中注入
             )
             updates[key] = self._build_replaced_preview_fragment(source_text, merged_matches)
         return updates
