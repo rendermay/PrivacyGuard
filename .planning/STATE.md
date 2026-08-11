@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v37.7.6
 milestone_name: milestone
 status: unknown
-stopped_at: Phase 1 context gathered
-last_updated: "2026-08-10T07:53:51.352Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-08-11T01:20:45.836Z"
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
+  completed_plans: 2
 ---
 
 # PrivacyGuard v38.x — Project State
@@ -61,6 +61,11 @@ progress:
 | Lazy-loading compliance | enforced (cp30) | unchanged |
 
 ---
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 01-pdf P01-02 | 45 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -72,6 +77,10 @@ progress:
 - **Detection is format-independent**：一份 `PIIHit` 数据结构贯穿四格式；引擎无 Qt、无线程、无格式 I/O；apply 阶段才在 `DocumentAdapter` 边界做格式分支。
 - **新数据存进现有 dict 的新 key**（`page_data[page]["pii"]` / `word_data[key]["pii"]`），不另起数据结构 — 守住 v37.7.6 收敛原则。
 - **Excel 走 openpyxl**（唯一能 round-trip 保留公式/样式的库）；图片复用 RapidOCR + Pillow；不引入 xlrd（除非承诺 `.xls` 支持）。
+- [Phase ?]: B2: detect(unit, page=None) — page 提供时走真实 page.search_for(original_substring)；fallback 按分隔符拆 chunk union
+- [Phase ?]: W-A: 不可定位 hit 记录到 unresolved_hits + error_log（不静默丢弃）
+- [Phase ?]: I1: bare 15-digit 无 context anchor → MEDIUM（避免订单号误识别）
+- [Phase ?]: page_rect 根因修复：engine 内部通过 page 参数取真实坐标，调用方不再需要各自 page.search_for workaround（test_pdf_pii_redaction.py 保留 safety net）
 
 ### Architectural Facts
 
@@ -153,9 +162,9 @@ None — awaiting user approval of drafted roadmap to begin Phase 1 planning.
 
 ## Session Continuity
 
-**Last session:** 2026-08-10T04:03:00.000Z
-**Stopped at:** Phase 1 UI-SPEC approved
-**Resume file:** .planning/phases/01-pdf/01-UI-SPEC.md
+**Last session:** 2026-08-11T01:20:45.768Z
+**Stopped at:** Completed 01-02-PLAN.md
+**Resume file:** None
 
 **Last session**: 2026-08-10 — Phase 1 CONTEXT gathered, UI-SPEC approved.
 **Last action**: Wrote `.planning/phases/01-pdf/01-UI-SPEC.md` (5/6 PASS via gsd-ui-checker; ui-consideration probe resolved 20/20 state categories with 0 unresolved).

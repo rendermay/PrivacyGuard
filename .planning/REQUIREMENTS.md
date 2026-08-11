@@ -9,18 +9,18 @@
 
 - [ ] **ENGINE-01**: 系统在文档打开后自动扫描全文并输出敏感项候选列表，无需用户预先输入关键词
 - [ ] **ENGINE-02**: 每条识别结果携带实体类型、精确字符起止位置、置信度档位、来源与建议掩码，供部分掩码与审计复用
-- [ ] **ENGINE-03**: 系统按 HIGH / MEDIUM / LOW 三档给识别结果评级，HIGH 档直接脱敏，MEDIUM 与 LOW 档进入待确认列表
-- [ ] **ENGINE-04**: 系统对同一实体的多次出现应用一致的掩码结果，避免跨实例拼接还原
-- [ ] **ENGINE-05**: 系统在匹配前统一归一化输入文本（全角转半角、剔除空格与分隔符），并把匹配位置映射回原始偏移
-- [ ] **ENGINE-06**: 系统能识别被换行、分栏或单元格边界切断的实体
-- [ ] **ENGINE-07**: 正则匹配设置执行超时保护，避免异常输入导致界面无响应
+- [x] **ENGINE-03**: 系统按 HIGH / MEDIUM / LOW 三档给识别结果评级，HIGH 档直接脱敏，MEDIUM 与 LOW 档进入待确认列表
+- [x] **ENGINE-04**: 系统对同一实体的多次出现应用一致的掩码结果，避免跨实例拼接还原
+- [x] **ENGINE-05**: 系统在匹配前统一归一化输入文本（全角转半角、剔除空格与分隔符），并把匹配位置映射回原始偏移
+- [x] **ENGINE-06**: 系统能识别被换行、分栏或单元格边界切断的实体
+- [x] **ENGINE-07**: 正则匹配设置执行超时保护，避免异常输入导致界面无响应
 - [ ] **ENGINE-08**: 识别引擎为纯本地执行，运行期无任何网络请求
 
 ### 号码类实体识别 (NUM)
 
-- [ ] **NUM-01**: 系统能识别 18 位与 15 位居民身份证号并通过 GB 11643 mod-11-2 校验位验证
-- [ ] **NUM-02**: 身份证识别正确处理末位大写 X，并对 OCR 输出的小写 x 标记为可疑而非直接判负
-- [ ] **NUM-03**: 系统能识别中国大陆手机号，依据号段白名单判定，并排除物联网与卫星专用号段
+- [x] **NUM-01**: 系统能识别 18 位与 15 位居民身份证号并通过 GB 11643 mod-11-2 校验位验证
+- [x] **NUM-02**: 身份证识别正确处理末位大写 X，并对 OCR 输出的小写 x 标记为可疑而非直接判负
+- [x] **NUM-03**: 系统能识别中国大陆手机号，依据号段白名单判定，并排除物联网与卫星专用号段
 - [ ] **NUM-04**: 系统能识别银行卡号并通过 Luhn 校验，结合 BIN 前缀与上下文关键词综合定档，避免误判订单号
 - [ ] **NUM-05**: 系统能识别电子邮箱地址
 
@@ -125,15 +125,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | ENGINE-01 | Phase 1 | Pending |
 | ENGINE-02 | Phase 1 | Pending |
-| ENGINE-03 | Phase 1 | Pending |
-| ENGINE-04 | Phase 1 | Pending |
-| ENGINE-05 | Phase 1 | Pending |
-| ENGINE-06 | Phase 1 | Pending |
-| ENGINE-07 | Phase 1 | Pending |
+| ENGINE-03 | Phase 1 | Complete |
+| ENGINE-04 | Phase 1 | Complete |
+| ENGINE-05 | Phase 1 | Complete |
+| ENGINE-06 | Phase 1 | Complete |
+| ENGINE-07 | Phase 1 | Complete |
 | ENGINE-08 | Phase 1 | Pending |
-| NUM-01 | Phase 1 | Pending |
-| NUM-02 | Phase 1 | Pending |
-| NUM-03 | Phase 1 | Pending |
+| NUM-01 | Phase 1 | Complete |
+| NUM-02 | Phase 1 | Complete |
+| NUM-03 | Phase 1 | Complete |
 | NUM-04 | Phase 2 | Pending |
 | NUM-05 | Phase 2 | Pending |
 | FIN-01 | Phase 2 | Pending |
@@ -175,6 +175,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OPS-07 | Phase 1 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 50 total
 - Mapped to phases: 50
 - Unmapped: 0 ✓

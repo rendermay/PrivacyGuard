@@ -40,17 +40,17 @@
   4. UI stays responsive while scanning a 500-page PDF; user can cancel mid-scan
   5. Network is unreachable during detection (no telemetry, no API calls)
 
-**Plans**: 3 plans
+**Plans**: 2/3 plans executed
 **UI hint**: yes
 
 Plans:
 **Wave 1**
 
-- [ ] 01-01-tracer-PLAN.md — 端到端 spine：validators + engine + adapter + reverse-extraction tracer
+- [x] 01-01-tracer-PLAN.md — 端到端 spine：validators + engine + adapter + reverse-extraction tracer
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-engine-expansion-PLAN.md — NUM-01/02/03 + ENGINE-03..07 全覆盖（validators/engine/normalize/confidence/mask/overlap）
+- [x] 01-02-engine-expansion-PLAN.md — NUM-01/02/03 + ENGINE-03..07 全覆盖（validators/engine/normalize/confidence/mask/overlap）
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -192,7 +192,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. PDF 自动识别身份证号与手机号并真脱敏 | 0/TBD | Not started | - |
+| 1. PDF 自动识别身份证号与手机号并真脱敏 | 2/3 | In Progress|  |
 | 2. PDF 增加银行卡/邮箱/财税实体识别与部分掩码 | 0/TBD | Not started | - |
 | 3. Word 文档接入识别引擎 | 0/TBD | Not started | - |
 | 4. Excel 工作簿支持 | 0/TBD | Not started | - |
