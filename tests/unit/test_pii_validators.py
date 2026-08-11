@@ -245,5 +245,188 @@ class TestPhoneSegmentTables(unittest.TestCase):
                           f"卫星段 {p} 必须在 PHONE_EXCLUDED_PREFIX_4")
 
 
+# ----------------------------------------------------------------------
+# Phase 2 (02-01-tracer) — USCC / 银行卡 / 邮箱 validator 测试
+# ----------------------------------------------------------------------
+
+class TestBankCardLuhn(unittest.TestCase):
+    """NUM-04: Luhn 校验位正向 / 反向 / 防御性。"""
+
+    def test_luhn_standard_visa_passes(self):
+        """Visa 测试卡号 4532015112830366 Luhn 通过。"""
+        from privacyguard.pii.validators.bank_card import luhn_check
+        self.assertTrue(luhn_check('4532015112830366'))
+
+    def test_luhn_invalid_fails(self):
+        """Luhn 校验失败样本 → False。"""
+        from privacyguard.pii.validators.bank_card import luhn_check
+        self.assertFalse(luhn_check('6222020000000000'))
+
+    def test_luhn_non_digit_rejected(self):
+        """非数字字符 → False。"""
+        from privacyguard.pii.validators.bank_card import luhn_check
+        self.assertFalse(luhn_check('622202000000000a'))
+
+    def test_luhn_empty_rejected(self):
+        """空字符串 → False。"""
+        from privacyguard.pii.validators.bank_card import luhn_check
+        self.assertFalse(luhn_check(''))
+
+    def test_luhn_none_rejected(self):
+        """None 输入 → False。"""
+        from privacyguard.pii.validators.bank_card import luhn_check
+        self.assertFalse(luhn_check(None))  # type: ignore[arg-type]
+
+
+class TestBankCardBin(unittest.TestCase):
+    """NUM-04: 银行卡 BIN 白名单 + 上下文 + 长度 + Luhn 联检。"""
+
+    def test_valid_bin_in_whitelist_passes(self):
+        """BIN 在白名单 + Luhn 通过 → True。"""
+        from privacyguard.pii.validators.bank_card import validate_bank_card
+        self.assertTrue(
+            validate_bank_card('6222021234567890', bin_whitelist=frozenset({'622202'}))
+        )
+
+    def test_unknown_bin_rejected(self):
+        """BIN 不在白名单 → False。"""
+        from privacyguard.pii.validators.bank_card import validate_bank_card
+        self.assertFalse(
+            validate_bank_card('0000001234567890', bin_whitelist=frozenset({'622202'}))
+        )
+
+    def test_short_card_rejected(self):
+        """长度 < 13 → False。"""
+        from privacyguard.pii.validators.bank_card import validate_bank_card
+        self.assertFalse(
+            validate_bank_card('1234567890123', bin_whitelist=frozenset({'622202'}))
+        )
+
+    def test_invalid_luhn_rejected(self):
+        """Luhn 失败 → False（即使 BIN 在白名单）。"""
+        from privacyguard.pii.validators.bank_card import validate_bank_card
+        self.assertFalse(
+            validate_bank_card('6222020000000000', bin_whitelist=frozenset({'622202'}))
+        )
+
+    def test_non_string_rejected(self):
+        """非字符串 → False。"""
+        from privacyguard.pii.validators.bank_card import validate_bank_card
+        self.assertFalse(validate_bank_card(1234567890123456))  # type: ignore[arg-type]
+
+
+class TestEmail(unittest.TestCase):
+    """NUM-05: 邮箱 RFC 5322 简化版正则 + 公共后缀分类。"""
+
+    def test_valid_email_passes(self):
+        """标准邮箱 → True。"""
+        from privacyguard.pii.validators.email import validate_email
+        self.assertTrue(validate_email('user@example.com'))
+
+    def test_invalid_email_rejected(self):
+        """无 @ 符号 → False。"""
+        from privacyguard.pii.validators.email import validate_email
+        self.assertFalse(validate_email('not-an-email'))
+
+    def test_plus_alias_accepted(self):
+        """+ 别名 → True。"""
+        from privacyguard.pii.validators.email import validate_email
+        self.assertTrue(validate_email('user+tag@example.com'))
+
+    def test_public_tld_classified_high(self):
+        """公共 .com 后缀 → is_public_suffix_email True。"""
+        from privacyguard.pii.validators.email import is_public_suffix_email
+        self.assertTrue(is_public_suffix_email('foo@qq.com'))
+
+    def test_unknown_tld_classified_low(self):
+        """未知后缀 → is_public_suffix_email False。"""
+        from privacyguard.pii.validators.email import is_public_suffix_email
+        self.assertFalse(is_public_suffix_email('foo@unknown-tld-xyz'))
+
+    def test_email_public_suffixes_includes_common_tlds(self):
+        """EMAIL_PUBLIC_SUFFIXES 包含 com / cn / net 等。"""
+        from privacyguard.pii.validators.email import EMAIL_PUBLIC_SUFFIXES
+        for tld in ('com', 'cn', 'net', 'org'):
+            self.assertIn(tld, EMAIL_PUBLIC_SUFFIXES)
+
+
+class TestUsccMod31(unittest.TestCase):
+    """FIN-01: USCC mod-31-3 校验位 + 字符集 + 长度 + 防御性。"""
+
+    def test_known_uscc_passes(self):
+        """已知合法 USCC 样本 → True（91110000600037341L 是腾讯 USCC，本地验证过）。"""
+        from privacyguard.pii.validators.uscc import validate_uscc
+        self.assertTrue(validate_uscc('91110000600037341L'))
+
+    def test_invalid_check_digit_fails(self):
+        """校验位错 → False。"""
+        from privacyguard.pii.validators.uscc import validate_uscc
+        self.assertFalse(validate_uscc('911100006000373410'))
+
+    def test_charset_rejects_IO_S_V_Z(self):
+        """字符集外字符 (I/O/S/V/Z) → False。"""
+        from privacyguard.pii.validators.uscc import validate_uscc
+        # 含 I/O/S/V/Z 的 18 位 — charset 检查直接拒绝
+        self.assertFalse(validate_uscc('91110000600037341I'))
+        self.assertFalse(validate_uscc('91110000600037341Z'))
+
+    def test_short_uscc_rejected(self):
+        """长度 < 18 → False。"""
+        from privacyguard.pii.validators.uscc import validate_uscc
+        self.assertFalse(validate_uscc('9111000060003734'))
+
+    def test_non_string_rejected(self):
+        """非字符串 → False。"""
+        from privacyguard.pii.validators.uscc import validate_uscc
+        self.assertFalse(validate_uscc(None))  # type: ignore[arg-type]
+        self.assertFalse(validate_uscc(12345))  # type: ignore[arg-type]
+
+    def test_uscc_charset_size_is_31(self):
+        """USCC_CHARSET 长度 = 31（数字 10 + 字母 26 - I/O/S/V/Z 5 = 31）。"""
+        from privacyguard.pii.validators.uscc import USCC_CHARSET
+        self.assertEqual(len(USCC_CHARSET), 31)
+
+    def test_uscc_weights_size_is_17(self):
+        """USCC_WEIGHTS 长度 = 17。"""
+        from privacyguard.pii.validators.uscc import USCC_WEIGHTS
+        self.assertEqual(len(USCC_WEIGHTS), 17)
+
+
+class TestUsccCategory(unittest.TestCase):
+    """FIN-01: USCC 类别代码白名单 — D-06 锁定。"""
+
+    def test_category_code_z_rejected(self):
+        """类别码 'Z' 不在白名单 → False（即使 mod-31-3 通过）。"""
+        from privacyguard.pii.validators.uscc import validate_uscc
+        self.assertFalse(validate_uscc('Z11000000000000000'))
+
+    def test_all_6_categories_accepted(self):
+        """6 个有效类别码全部接受（循环构造 → 验证通过）。"""
+        from privacyguard.pii.validators.uscc import (
+            USCC_CHARSET,
+            compute_uscc_check_digit,
+            validate_uscc,
+        )
+        for cat in ('1', '5', '9', 'Y', 'A', 'N'):
+            body17 = cat + ''.join(USCC_CHARSET[1] for _ in range(16))  # 简化 body
+            check = compute_uscc_check_digit(body17)
+            full = body17 + check
+            self.assertTrue(
+                validate_uscc(full),
+                f"类别码 {cat!r} 应被接受，但 validate_uscc({full!r}) 返回 False",
+            )
+
+    def test_category_whitelist_size_is_6(self):
+        """USCC_CATEGORY_CODES 长度 = 6（D-06 锁定）。"""
+        from privacyguard.pii.validators.uscc import USCC_CATEGORY_CODES
+        self.assertEqual(len(USCC_CATEGORY_CODES), 6)
+
+    def test_category_whitelist_contains_expected_codes(self):
+        """USCC_CATEGORY_CODES 包含 '1'/'5'/'9'/'Y'/'A'/'N'。"""
+        from privacyguard.pii.validators.uscc import USCC_CATEGORY_CODES
+        for code in ('1', '5', '9', 'Y', 'A', 'N'):
+            self.assertIn(code, USCC_CATEGORY_CODES)
+
+
 if __name__ == "__main__":
     unittest.main()

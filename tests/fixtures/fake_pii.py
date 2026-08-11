@@ -82,3 +82,101 @@ def fake_phone_invalid() -> str:
 def fake_phone_lowercase_tail() -> str:
     """占位辅助函数：保留扩展位，未来用于 NUM-02 小写 x 测试。"""
     raise NotImplementedError("OCR 小写 x 路径在 01-01 之外验证")
+
+
+# ----------------------------------------------------------------------
+# Phase 2 (02-01-tracer) — 新增 7 个 fake_* 合成器（OPS-05 严禁真实数据）
+# ----------------------------------------------------------------------
+
+def fake_bank_card(bin_prefix: str = '622576') -> str:
+    """生成一个通过 Luhn + BIN 前缀词典的 16 位伪银行卡号。
+
+    bin_prefix: 6 位 BIN 前缀（默认 '622576'；测试时可换其他已知 BIN）。
+    循环生成直到 luhn_check 通过。
+    """
+    from privacyguard.pii.validators.bank_card import luhn_check
+    while True:
+        body = bin_prefix + ''.join(random.choice('0123456789') for _ in range(9))
+        digits = [int(c) for c in body[::-1]]
+        # 标准 Luhn（从右数第 2 位起 ×2）
+        total = 0
+        for i, d in enumerate(digits):
+            if i % 2 == 1:
+                d *= 2
+                if d > 9:
+                    d -= 9
+            total += d
+        check = (10 - total % 10) % 10
+        full = body + str(check)
+        if luhn_check(full):
+            return full
+
+
+def fake_bank_card_invalid_luhn() -> str:
+    """Luhn 校验失败的银行卡号（应被 validate_bank_card 拒绝）。"""
+    return "6222020000000000"  # 不通过 Luhn
+
+
+def fake_email(local: str = None, tld: str = 'example.com') -> str:
+    """生成一个通过 validate_email 的伪邮箱。"""
+    if not local:
+        local = ''.join(random.choice('abcdefghijklmnopqrstuvwxyz0123456789') for _ in range(8))
+    return f"{local}@{tld}"
+
+
+def fake_email_invalid() -> str:
+    """格式不合法的伪邮箱（应被 validate_email 拒绝）。"""
+    return "not-an-email"
+
+
+def fake_uscc(category: str = '9') -> str:
+    """生成一个通过 mod-31-3 + 类别代码白名单的 18 位伪 USCC。
+
+    category: 'random' → 随机从 {'1','5','9','Y','A','N'} 选；否则固定。
+    """
+    from privacyguard.pii.validators.uscc import (
+        USCC_CHARSET,
+        compute_uscc_check_digit,
+        validate_uscc,
+    )
+    valid_categories = ['1', '5', '9', 'Y', 'A', 'N']
+    cat = random.choice(valid_categories) if category == 'random' else category
+    # 循环生成直到 validate_uscc 通过（category gate + mod-31-3 一并通过）
+    while True:
+        body17 = cat + ''.join(random.choice(USCC_CHARSET) for _ in range(16))
+        check = compute_uscc_check_digit(body17)
+        if not check:
+            continue
+        full = body17 + check
+        if validate_uscc(full):
+            return full
+
+
+def fake_uscc_invalid_category() -> str:
+    """登记管理部门类别代码无效的伪 USCC（首字符 'Z' — 应被 validate_uscc 拒绝）。"""
+    return "Z1100000000000000X"
+
+
+def fake_vat_invoice_8() -> str:
+    """生成 8 位纯数字的传统增值税发票号。"""
+    return ''.join(random.choice('0123456789') for _ in range(8))
+
+
+def fake_vat_invoice_20() -> str:
+    """生成 20 位纯数字的全电发票号。"""
+    return ''.join(random.choice('0123456789') for _ in range(20))
+
+
+def fake_taxpayer_id_15() -> str:
+    """生成 15 位旧版纳税人识别号（行政区划码 2 位 + 13 位数字）。
+
+    行政区划前缀取自与 id_card 同步的有效省份集合。
+    """
+    province = random.choice(('11', '12', '13', '21', '31', '33', '44', '51', '61'))
+    rest = ''.join(random.choice('0123456789') for _ in range(13))
+    return province + rest
+
+
+def fake_bank_account() -> str:
+    """生成 18 位纯数字的银行账号（在 9-21 位范围内）。"""
+    return ''.join(random.choice('0123456789') for _ in range(18))

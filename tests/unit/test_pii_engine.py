@@ -602,5 +602,118 @@ class TestEngineHardening(unittest.TestCase):
         self.assertEqual(RULES_VERSION_DEFAULT, "2026-Q1")
 
 
+# ----------------------------------------------------------------------
+# Phase 2 (02-01-tracer) — 引擎层 USCC / 银行卡 / 邮箱命中测试
+# ----------------------------------------------------------------------
+
+class TestEngineUscc(unittest.TestCase):
+    """FIN-01: PIIEngine 命中 USCC 路径。"""
+
+    def setUp(self):
+        self.engine = PIIEngine()
+
+    def test_detects_valid_uscc_in_text(self):
+        """合法 USCC → 命中 CN_USCC + HIGH + validator_passed。"""
+        from tests.fixtures.fake_pii import fake_uscc
+        uscc = fake_uscc()
+        unit = TextUnit(page_index=0, text=f"测试 {uscc}", source="text")
+        hits = self.engine.detect(unit)
+        # 至少一个 CN_USCC 命中
+        uscc_hits = [h for h in hits if h.entity_type == "CN_USCC"]
+        self.assertGreaterEqual(len(uscc_hits), 1)
+        hit = uscc_hits[0]
+        self.assertEqual(hit.confidence_tier, "HIGH")
+        self.assertTrue(hit.validator_passed)
+        # mask_strategy = 前 6 + 8 * + 后 4（18 位 → 18 字符 mask）
+        self.assertTrue(hit.mask_strategy.startswith(uscc[:6]))
+        self.assertTrue(hit.mask_strategy.endswith(uscc[-4:]))
+
+    def test_rejects_invalid_category(self):
+        """类别码 Z 的 USCC → 0 命中（category gate 拒绝）。"""
+        from tests.fixtures.fake_pii import fake_uscc_invalid_category
+        unit = TextUnit(
+            page_index=0,
+            text=f"测试 {fake_uscc_invalid_category()}",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        uscc_hits = [h for h in hits if h.entity_type == "CN_USCC"]
+        self.assertEqual(len(uscc_hits), 0)
+
+
+class TestEngineBankCard(unittest.TestCase):
+    """NUM-04: PIIEngine 命中银行卡路径（Luhn + BIN 必查）。"""
+
+    def setUp(self):
+        self.engine = PIIEngine()
+
+    def test_detects_known_bin_with_context(self):
+        """合法 Luhn + BIN '622576' 上下文 → 命中 CN_BANK_CARD。"""
+        from privacyguard.pii.validators.bank_card import get_bin_whitelist
+        from tests.fixtures.fake_pii import fake_bank_card
+        # 用 bin_prefix='622576' 合成一个必通过 Luhn 的卡号
+        card = fake_bank_card(bin_prefix='622576')
+        # 注入临时 BIN 白名单到全局缓存
+        from privacyguard.pii.validators import bank_card as _bc_mod
+        _bc_mod._BIN_WHITELIST_CACHE = frozenset({'622576'})
+        try:
+            unit = TextUnit(page_index=0, text=f"卡号 {card}", source="text")
+            hits = self.engine.detect(unit)
+            card_hits = [h for h in hits if h.entity_type == "CN_BANK_CARD"]
+            self.assertEqual(len(card_hits), 1)
+            self.assertEqual(card_hits[0].confidence_tier, "HIGH")
+            self.assertTrue(card_hits[0].validator_passed)
+        finally:
+            _bc_mod._BIN_WHITELIST_CACHE = None
+
+    def test_luhn_failure_rejected(self):
+        """Luhn 失败的卡号 → 0 命中（即使 BIN 白名单包含）。"""
+        from privacyguard.pii.validators import bank_card as _bc_mod
+        _bc_mod._BIN_WHITELIST_CACHE = frozenset({'622202'})
+        try:
+            unit = TextUnit(
+                page_index=0,
+                text="卡号 6222020000000000",
+                source="text",
+            )
+            hits = self.engine.detect(unit)
+            card_hits = [h for h in hits if h.entity_type == "CN_BANK_CARD"]
+            self.assertEqual(len(card_hits), 0)
+        finally:
+            _bc_mod._BIN_WHITELIST_CACHE = None
+
+
+class TestEngineEmail(unittest.TestCase):
+    """NUM-05: PIIEngine 命中邮箱路径。"""
+
+    def setUp(self):
+        self.engine = PIIEngine()
+
+    def test_detects_valid_email_with_context(self):
+        """合法邮箱 + 上下文锚点 → 命中 CN_EMAIL。"""
+        from tests.fixtures.fake_pii import fake_email
+        unit = TextUnit(
+            page_index=0,
+            text=f"邮箱 {fake_email()}",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        email_hits = [h for h in hits if h.entity_type == "CN_EMAIL"]
+        self.assertEqual(len(email_hits), 1)
+        self.assertTrue(email_hits[0].validator_passed)
+
+    def test_detects_email_without_context(self):
+        """合法邮箱（无锚点）→ 命中 CN_EMAIL（D-10 邮箱总是识别）。"""
+        from tests.fixtures.fake_pii import fake_email
+        unit = TextUnit(
+            page_index=0,
+            text=f"{fake_email()}",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        email_hits = [h for h in hits if h.entity_type == "CN_EMAIL"]
+        self.assertEqual(len(email_hits), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
