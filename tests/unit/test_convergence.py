@@ -335,5 +335,43 @@ class TestPiiConvergence(unittest.TestCase):
         )
 
 
+class TestPiiWordAdapterConvergence(unittest.TestCase):
+    """Phase 3 (03-03-merge-and-preview) — main.py 不应内联 word_adapter 三函数 (D-11)."""
+
+    def test_main_py_does_not_inline_word_adapter_functions(self):
+        """D-11: collect_pii_word_hits / locate_pii_hits_in_paragraph / apply_pii_replacements_to_docx 三函数
+        必须在 privacyguard.pii.word_adapter, main.py 不得内联.
+        """
+        source = MAIN_PY.read_text(encoding="utf-8")
+        forbidden = [
+            "def collect_pii_word_hits(",
+            "def locate_pii_hits_in_paragraph(",
+            "def apply_pii_replacements_to_docx(",
+        ]
+        for pat in forbidden:
+            self.assertNotIn(
+                pat, source,
+                f"main.py 不应保留内联 {pat}（D-11 + v37.7.6 收敛原则）",
+            )
+
+    def test_pii_word_adapter_module_does_not_import_docx(self):
+        """D-11 + T-03-02: privacyguard/pii/word_adapter.py 源码不得 import docx (AST 扫描)."""
+        import ast
+        path = Path(__file__).resolve().parents[2] / "privacyguard" / "pii" / "word_adapter.py"
+        self.assertTrue(path.exists(), "privacyguard/pii/word_adapter.py 应存在 (Plan 1 落地)")
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        bad = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "docx" or alias.name.startswith("docx."):
+                        bad.append((node.lineno, alias.name))
+            elif isinstance(node, ast.ImportFrom):
+                if node.module == "docx" or (node.module and node.module.startswith("docx.")):
+                    bad.append((node.lineno, node.module))
+        self.assertEqual(bad, [], f"word_adapter.py 不得 import docx (D-11); 实际: {bad}")
+
+
 if __name__ == "__main__":
     unittest.main()
