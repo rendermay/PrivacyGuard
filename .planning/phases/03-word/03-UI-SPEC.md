@@ -1,10 +1,11 @@
 ---
 phase: 3
 slug: 03-word
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-08-11
+reviewed_at: 2026-08-11
 ---
 
 # Phase 3 — Word 文档接入识别引擎（双栏对比预览自动高亮）UI Design Contract
@@ -125,21 +126,43 @@ Qt 端（main.py / workers）与 HTML 端（QWebEngineView 双栏预览）共用
 ## UI Considerations
 
 > Phase 3 的 UI 形态是 Qt 工具栏 toggle + 双栏 preview DOM patch 高亮，无独立侧栏审阅面板。状态覆盖如下：
+>
+> **Probe source:** `gsd-ui-consideration-probe.cjs` over 7 elements (E1-E7) → 19 applicable considerations (1 empty / 2 error / 2 loading / 6 long-text / 6 overflow / 1 partial / 1 unclassified). Resolution summary: 5 explicit, 14 backstop, 0 unresolved.
 
-Applicable state considerations resolved: 5 covered, 3 backstop, 0 unresolved
+### Resolved (verification: explicit)
 
-| Category | Element(s) | Status | Resolution / Reason |
-|----------|------------|--------|---------------------|
-| empty | 双栏预览（左/右栏均无 PII 命中） | ✅ covered | 左栏无 `pii-highlight` mark；右栏无 mask 替换区；status bar 显示「本次扫描未发现敏感信息」 |
-| empty | Word 文档未打开 | ✅ covered | status bar 显示「请先打开 Word 文档」；工具栏 toggle disabled（Qt `setEnabled(False)`） |
-| empty | PII 引擎未启用（`pii_settings.engine_enabled=False`） | ✅ covered | status bar 显示「PII 自动识别未启用」；双栏 preview 仅渲染 rule / manual / ocr 三层高亮 |
-| error | PII 引擎异常（validators 加载失败 / rules.json 缺失） | ✅ covered | status bar 显示「PII 引擎异常：{msg}」；左/右栏不渲染 pii-highlight，仅渲染其余三层 |
-| error | 跨 run 样式丢失（D-07 run 合并副作用） | ✅ covered | 真脱敏保存后 status bar 显示「警告：N 处 run 级格式已被合并段级样式替代」；产物已写入（真脱敏底线 > 格式完美） |
-| long-text | 段文本 > 5000 字（PDF 端常见超长段） | 🧪 backstop | 视觉回归测试用例 `test_word_preview_highlight.py::test_long_paragraph_pii_highlight_no_overflow` 验证 mark `data-end` 不越界；DOM patch 不溢出段边界 |
-| overflow | 单段 PII 命中数 > 20 个（test_data 中刻意构造） | 🧪 backstop | 视觉回归测试 `test_word_preview_highlight.py::test_many_pii_hits_in_single_paragraph` 验证 mark 不重叠、不破坏段高；hover tooltip 仍可读 |
-| partial | 跨 run 命中（同一 PII 文本跨多个 run 拼接） | 🧪 backstop | 视觉回归测试 `test_word_preview_highlight.py::test_pii_hit_across_runs` 验证 char_offset 正确；mark 不被 run 边界切断 |
+- 5 covered state considerations (Phase 3 既有 8 行 + researcher 增补)：
+  | Category | Element | Status | Resolution |
+  |----------|---------|--------|------------|
+  | empty | 双栏预览（左/右栏均无 PII 命中） | ✅ covered | 左栏无 `pii-highlight` mark；右栏无 mask 替换区；status bar 显示「本次扫描未发现敏感信息」 |
+  | empty | Word 文档未打开 | ✅ covered | status bar 显示「请先打开 Word 文档」；工具栏 toggle disabled（Qt `setEnabled(False)`） |
+  | empty | PII 引擎未启用（`pii_settings.engine_enabled=False`） | ✅ covered | status bar 显示「PII 自动识别未启用」；双栏 preview 仅渲染 rule / manual / ocr 三层高亮 |
+  | error | PII 引擎异常（validators 加载失败 / rules.json 缺失） | ✅ covered | status bar 显示「PII 引擎异常：{msg}」；左/右栏不渲染 pii-highlight，仅渲染其余三层 |
+  | error | 跨 run 样式丢失（D-07 run 合并副作用） | ✅ covered | 真脱敏保存后 status bar 显示「警告：N 处 run 级格式已被合并段级样式替代」；产物已写入（真脱敏底线 > 格式完美） |
 
-<!-- Phase 3 没有"loaded list / pagination / search"等动态列表场景，loading 状态由 Qt 原生 QProgressBar 接管，error 状态走 status bar 文案，不另立"loading"行。 -->
+### Resolved (verification: backstop)
+
+Flat-scalar markers — the plan-phase lift rule requires `{ statement, verification: backstop }` so the verifier routes missing evidence to `insufficient_spec → human_needed` rather than silent pass.
+
+- { statement: "E2/E3/E5/E6/E7 long-text（> 5000 字段落 PII 高亮）不越界 mark data-end，不破坏段边界 DOM 结构", verification: backstop }
+- { statement: "E2/E3/E4/E5/E6/E7 overflow（单段 PII 命中数 > 20）mark 不重叠、不破坏段高，hover tooltip 仍可读", verification: backstop }
+- { statement: "E3 loading（工具栏 toggle 切换时）状态保留，不出现闪烁 / 重置", verification: backstop }
+- { statement: "E3 error（toggle 切换失败 / 状态写回异常）状态回退到上一稳定值", verification: backstop }
+- { statement: "E4 loading（PII 扫描中）tooltip 不抢焦，hover 行为降级为延迟显示", verification: backstop }
+- { statement: "E4 error（tooltip 数据源失败）降级为占位文本「PII 信息不可用」", verification: backstop }
+- { statement: "E4 empty（无候选时 hover）不显示 tooltip", verification: backstop }
+- { statement: "E4 partial（hover 中 mask 状态切换）保持 tooltip 锚定不漂移", verification: backstop }
+- { statement: "E2 long-text partial_mask 字符 > 24（CN_TAXPAYER_ID 等）不破坏右栏布局", verification: backstop }
+- { statement: "E5 long-text/overflow（empty 状态长段提示文本）允许单行截断 + tooltip 展开", verification: backstop }
+- { statement: "E6 long-text/overflow（错误状态文案）允许换行不溢出 status bar", verification: backstop }
+- { statement: "E7 long-text/overflow（style-loss 警告 N 值 > 100）单行截断显示前 N + 「...」", verification: backstop }
+- { statement: "E3 overflow（toggle 文本「本文件使用全遮蔽」9 字符）在 1280×720 分辨率下完整可见", verification: backstop }
+
+### Unresolved
+
+- ⚠ unresolved — planner must treat as assumption:
+  - E1 unclassified: 左栏 PII 高亮（`.pii-highlight` 视觉态）不属于任何内置 category — element 描述为「visual highlight mark」，无 dynamic state。Planner 可按"静态视觉态无运行时状态切换"处理；测试覆盖以 DOM 结构断言为准（验证 `data-key` 元素上存在 `.pii-highlight` className 即可）。
+- 0 hard unresolved — phase 3 不阻塞。
 
 ---
 
