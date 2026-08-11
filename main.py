@@ -10800,7 +10800,8 @@ class MainWindow(QMainWindow):
                     'index': idx,
                     'text': para.text,
                     'ocr': [],
-                    'manual': []
+                    'manual': [],
+                    'pii': [],
                 }
 
             # 扫描表格
@@ -10815,7 +10816,8 @@ class MainWindow(QMainWindow):
                             'cell': cell_idx,
                             'text': cell.text,
                             'ocr': [],
-                            'manual': []
+                            'manual': [],
+                            'pii': [],
                         }
 
             # 启用按钮
