@@ -12853,6 +12853,23 @@ sudo dnf install antiword
                                 )
 
             # 保存文档
+            # Phase 3 (G2 Gap 4): 清空 .docx core_properties (Title / Author / Subject /
+            # Comments / Keywords), 与 Phase 2 PDF SAFE-03 metadata clearing 同策略
+            # (D-15: 空字符串而非占位符)。metadata 是次要防线, 失败不阻塞 save。
+            try:
+                from privacyguard.utils import clear_word_core_properties
+                _cleared_count = clear_word_core_properties(new_doc)
+                if getattr(self, "logger", None) is not None:
+                    self.logger.info(f"[word_props] cleared {_cleared_count} core_properties")
+            except Exception as _gap4_exc:
+                try:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "clear_word_core_properties failed: %s", _gap4_exc
+                    )
+                except Exception:
+                    pass
+
             new_doc.save(fname)
 
             QApplication.restoreOverrideCursor()
