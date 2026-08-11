@@ -271,34 +271,64 @@ class TestPiiConvergence(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_main_py_uses_write_partial_masks_in_save_loop(self):
-        """Phase 2 (02-03): main.py save loop 必须调用 write_partial_masks / clear_pdf_metadata 而非内联实现。"""
+        """Phase 2 (02-04 WR-03 fix): main.py save_pdf 必须 AST-调用 write_partial_masks + clear_pdf_metadata。
+
+        WR-03 fix: 旧版只检查字符串存在（'write_partial_masks' in source），无法区分
+        import 与 call — CR-01 即因此漏过收敛门禁。新版用 ast.parse + ast.FunctionDef +
+        ast.Call 双重检查，确认函数在 def save_pdf(...) body 内被实际调用（ast.Call 节点）。
+        """
+        import ast
+
         source = MAIN_PY.read_text(encoding="utf-8")
-        # write_partial_masks 必须在 main.py 中被引用（import + call）
-        self.assertIn(
-            "write_partial_masks", source,
-            "main.py 必须引用 write_partial_masks（02-03 save_pdf 重写）",
+        tree = ast.parse(source)
+
+        # 定位 def save_pdf
+        save_pdf_func = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "save_pdf":
+                save_pdf_func = node
+                break
+        self.assertIsNotNone(save_pdf_func, "main.py 必须定义 def save_pdf(...)")
+
+        # 在 save_pdf body 内查找 ast.Call with func.id/attr == 'write_partial_masks'
+        found_write = False
+        found_clear = False
+        for node in ast.walk(save_pdf_func):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if isinstance(func, ast.Name) and func.id == "write_partial_masks":
+                found_write = True
+            elif isinstance(func, ast.Attribute) and func.attr == "write_partial_masks":
+                found_write = True
+            if isinstance(func, ast.Name) and func.id == "clear_pdf_metadata":
+                found_clear = True
+            elif isinstance(func, ast.Attribute) and func.attr == "clear_pdf_metadata":
+                found_clear = True
+
+        self.assertTrue(
+            found_write,
+            "main.py::save_pdf 必须调用 write_partial_masks（02-04 CR-01 fix；字符串存在性不足）",
         )
-        # clear_pdf_metadata 必须在 main.py 中被引用
-        self.assertIn(
-            "clear_pdf_metadata", source,
-            "main.py 必须引用 clear_pdf_metadata（02-03 SAFE-03）",
+        self.assertTrue(
+            found_clear,
+            "main.py::save_pdf 必须调用 clear_pdf_metadata（02-04 SAFE-03）",
         )
-        # D-12 mask_override_this_doc 必须在 main.py 中出现（toggle + save loop + reset on open）
+
+        # D-12 / D-13 配置字段引用（保留向后兼容检查）
         self.assertIn(
             "mask_override_this_doc", source,
             "main.py 必须引用 mask_override_this_doc（D-12 toggle key）",
         )
-        # D-13 per_entity_default 必须在 main.py 中被读取
         self.assertIn(
             "per_entity_default", source,
             "main.py 必须引用 per_entity_default（D-13 config field）",
         )
-        # v37.7.6 收敛原则：main.py 不得内联 write_partial_masks 实现
+        # v37.7.6 收敛原则：main.py 不得内联 write_partial_masks / clear_pdf_metadata 实现
         self.assertNotIn(
             "def write_partial_masks(", source,
             "main.py 不得内联 write_partial_masks（v37.7.6 收敛原则）",
         )
-        # v37.7.6 收敛原则：main.py 不得内联 clear_pdf_metadata 实现
         self.assertNotIn(
             "def clear_pdf_metadata(", source,
             "main.py 不得内联 clear_pdf_metadata（v37.7.6 收敛原则）",

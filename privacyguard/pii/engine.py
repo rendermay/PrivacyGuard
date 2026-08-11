@@ -18,6 +18,16 @@ B2 文字层真实坐标：detect(unit, page=...) 接收可选 page 对象；
     fallback：原始 substring 搜不到时按分隔符拆 chunk 并 union per-chunk rects。
 W-A 不可定位记录：unresolvable hit 不静默丢弃，记录到 unresolved_hits + error_log。
 I1 15 位降级：bare 15-digit 无 context anchor → confidence_tier=MEDIUM。
+
+WR-01 (02-04 acceptance): 本模块顶层 import 6 个新 validator 子模块（uscc / bank_card /
+email / vat_invoice / bank_account / taxpayer_id）。这是有意为之：PIIEngine 是这 6 个
+validator 的唯一访问路径，为简化代码并与 Phase 1 validator loading 形态保持一致而选择
+顶层 import。OPS-03 严格契约（`import privacyguard` 不触发任何 PII 模块加载）不受影响；
+本模块顶层的 import 仅在 `import privacyguard.pii.engine` 时触发。各 validator 子模块
+仍通过 `privacyguard.pii.validators.__init__._LAZY_IMPORTS` + `__getattr__` 提供独立
+的延迟访问路径（用于命令行工具 / 测试 fixture / 单元测试等不需要 PIIEngine 的场景）。
+如果未来需要更细粒度的按需加载，可在本模块内重构成 `importlib.import_module(...)` 形式；
+当前实现保留 eager 形态以保持代码简洁。
 """
 import re
 from typing import Any, Dict, List, Optional, Tuple

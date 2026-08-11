@@ -614,6 +614,47 @@ class TestBankAccountContextAnchor(unittest.TestCase):
             self.assertIn(kw, BANK_ACCOUNT_CONTEXTS, f"BANK_ACCOUNT_CONTEXTS 缺少 {kw}")
 
 
+class TestBankAccountContextMultipleOccurrences(unittest.TestCase):
+    """WR-04 fix (02-04): has_bank_account_context must check ALL find() positions, not just first."""
+
+    def test_two_occurrences_second_has_context_returns_true(self):
+        from privacyguard.pii.validators.bank_account import has_bank_account_context
+        # 同一账号字符串出现两次:第一次裸出现（无锥点），第二次带'账号'锥点。
+        # 第一次 occurrence 周围没有锥点，第二次 occurrence 周围有。
+        # Buggy text.find(target) only checks first occurrence -> False.
+        # Fixed version iterates find positions -> finds second with anchor -> True.
+        target = "622202123456789012"
+        # 第一次裸出现（无 '账号' 锥点）+ 第二次带 '账号' 锥点
+        text = "X" * 60 + target + "Y" * 30 + "账号 " + target
+        self.assertTrue(has_bank_account_context(text, target))
+
+    def test_three_occurrences_only_last_has_context_returns_true(self):
+        from privacyguard.pii.validators.bank_account import has_bank_account_context
+        # 三次出现：前两次裸，第三次带锥点 — 必须扫描到第三次
+        target = "622202123456789012"
+        text = target + " " + target + " " + target + " 账号 "
+        self.assertTrue(has_bank_account_context(text, target))
+
+    def test_two_occurrences_either_has_context_returns_true(self):
+        from privacyguard.pii.validators.bank_account import has_bank_account_context
+        # 两个不同账号都有锥点（first has '账号', second has '账户'）
+        text = "账号 622202123456789012 中间 账户 622202987654321098"
+        self.assertTrue(has_bank_account_context(text, '622202123456789012'))
+        self.assertTrue(has_bank_account_context(text, '622202987654321098'))
+
+    def test_two_occurrences_neither_has_context_returns_false(self):
+        from privacyguard.pii.validators.bank_account import has_bank_account_context
+        # 同一账号出现两次都无锥点 — 应当 False
+        target = "622202123456789012"
+        text = target + " " + target + " 其他文本"
+        self.assertFalse(has_bank_account_context(text, target))
+
+    def test_single_occurrence_no_context_still_returns_false(self):
+        """Backward-compat: existing single-occurrence behavior preserved."""
+        from privacyguard.pii.validators.bank_account import has_bank_account_context
+        self.assertFalse(has_bank_account_context('random 622202123456789012', '622202123456789012'))
+
+
 class TestVatInvoiceContextConstants(unittest.TestCase):
     """FIN-02: VAT_INVOICE_CONTEXTS 包含必要关键词。"""
 

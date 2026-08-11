@@ -43,23 +43,31 @@ def validate_bank_account(account: str) -> bool:
 def has_bank_account_context(text: str, target: str, window: int = 20) -> bool:
     """target ±window 字符内是否存在银行账号上下文锥点（D-08 必查）。
 
+    02-04 WR-04 fix: 遍历 text.find(target, start) 所有位置,任一 occurrence 的
+    ±window 内存在 BANK_ACCOUNT_CONTEXTS 锥点即返回 True。原实现只检查首次出现,
+    当文档含多个裸账号时,仅第一个被正确评估,后续账号即使有锥点也被错误 reject。
+
     Args:
         text: 完整页面文本
         target: 待测候选字符串（账号本身）
         window: 锥点判定窗口半径（默认 20 字符，±20 字符）
 
     Returns:
-        True 当且仅当 text 内 target 附近存在 BANK_ACCOUNT_CONTEXTS 任一锥点。
+        True 当且仅当 text 内 target 任一 occurrence 附近存在 BANK_ACCOUNT_CONTEXTS 任一锥点。
     """
     if not text or not target:
         return False
-    idx = text.find(target)
-    if idx < 0:
-        return False
-    lo = max(0, idx - window)
-    hi = min(len(text), idx + len(target) + window)
-    window_text = text[lo:hi]
-    return any(ctx in window_text for ctx in BANK_ACCOUNT_CONTEXTS)
+    start = 0
+    while True:
+        idx = text.find(target, start)
+        if idx < 0:
+            return False
+        lo = max(0, idx - window)
+        hi = min(len(text), idx + len(target) + window)
+        window_text = text[lo:hi]
+        if any(ctx in window_text for ctx in BANK_ACCOUNT_CONTEXTS):
+            return True
+        start = idx + 1
 
 
 __all__ = [
