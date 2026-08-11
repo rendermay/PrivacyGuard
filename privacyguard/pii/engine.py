@@ -35,6 +35,17 @@ from privacyguard.pii.validators.email import (
     is_public_suffix_email,
     validate_email,
 )
+# Phase 2 (02-02-engine-expansion) — FIN-02 / FIN-03 / FIN-04 三个新 validator
+from privacyguard.pii.validators.vat_invoice import (
+    has_vat_invoice_context,
+    validate_vat_invoice_8,
+    validate_vat_invoice_20,
+)
+from privacyguard.pii.validators.bank_account import (
+    has_bank_account_context,
+    validate_bank_account,
+)
+from privacyguard.pii.validators.taxpayer_id import validate_taxpayer_id_15
 from privacyguard.pii.normalize import (
     flatten_for_match,
     map_flat_to_original,
@@ -146,7 +157,9 @@ class PIIEngine:
                     hit = self._check_phone(
                         unit, cand, normalized, flat_span, text, page,
                     )
-                # Phase 2 (02-01-tracer) — 6 new entity_hints (3 active + 3 stubbed)
+                # Phase 2 (02-01-tracer + 02-02-engine-expansion)
+                # — 7 new entity_hints (CN_BANK_CARD/EMAIL/USCC active;
+                # CN_TAXPAYER_ID D-09 双 type + VAT/TAXPAYER_15/BANK_ACCOUNT 完整实现)
                 elif entity_hint == 'CN_BANK_CARD':
                     hit = self._check_bank_card(
                         unit, cand, normalized, flat_span, text, page,
@@ -157,6 +170,11 @@ class PIIEngine:
                     )
                 elif entity_hint == 'CN_USCC':
                     hit = self._check_uscc(
+                        unit, cand, normalized, flat_span, text, page,
+                    )
+                # 02-02 (D-09 双 type 契约): 同一 18-位 USCC regex 二次 yield
+                elif entity_hint == 'CN_TAXPAYER_ID':
+                    hit = self._check_taxpayer_id(
                         unit, cand, normalized, flat_span, text, page,
                     )
                 elif entity_hint == 'CN_VAT_INVOICE':
@@ -362,6 +380,43 @@ class PIIEngine:
             confidence_tier="HIGH",
         )
 
+    def _check_taxpayer_id(
+        self,
+        unit: TextUnit,
+        cand: str,
+        normalized: str,
+        flat_span: Tuple[int, int],
+        original_text: str,
+        page: Any,
+    ) -> Optional[PIIHit]:
+        """D-09 双 type 契约：18 位 USCC 同时打 CN_TAXPAYER_ID 标。
+
+        复用 validate_uscc（GB 32100 mod-31-3 + 6 字符类别码白名单）。
+        mask_strategy 与 CN_USCC 完全一致（前 6 + 后 4 = 18 字符 mask），
+        保留在 mask.py::mask_for_entity 的 `entity_type in
+        ("CN_USCC", "CN_TAXPAYER_ID")` 联合分派分支。
+        """
+        if not validate_uscc(normalized):
+            return None
+
+        page_rect = self._resolve_page_rect(
+            unit, cand, flat_span, original_text, page,
+        )
+        if page_rect is None:
+            return None
+
+        return self._make_hit(
+            unit=unit,
+            normalized=normalized,
+            flat_span=flat_span,
+            original_text=original_text,
+            entity_type='CN_TAXPAYER_ID',
+            source=unit.source or 'text',
+            page_rect=page_rect,
+            validator_passed=True,
+            confidence_tier="HIGH",
+        )
+
     def _check_vat_invoice(
         self,
         unit: TextUnit,
@@ -371,9 +426,41 @@ class PIIEngine:
         original_text: str,
         page: Any,
     ) -> Optional[PIIHit]:
-        """FIN-02: VAT 发票号 — 8 位 / 20 位双格式（02-02 完整实现）。"""
-        # 02-01 占位：返回 None（不发射）。02-02 落地完整实现。
-        return None
+        """FIN-02: VAT 发票号 — 8 位 / 20 位双格式（D-07 上下文锥点分级）。
+
+        D-07: 8 位无 anchor 单独出现 → MEDIUM（保留"疑似票号"）；
+        20 位与 8 位有 anchor → HIGH（结构性唯一）。
+        """
+        is_8 = validate_vat_invoice_8(normalized)
+        is_20 = validate_vat_invoice_20(normalized)
+        if not (is_8 or is_20):
+            return None
+
+        has_anchor = has_vat_invoice_context(original_text, normalized)
+        # D-07: 20 位天然结构唯一 → HIGH；8 位仅在有 anchor → HIGH，
+        # 否则 → MEDIUM。
+        if is_20 or has_anchor:
+            confidence_tier = "HIGH"
+        else:
+            confidence_tier = "MEDIUM"
+
+        page_rect = self._resolve_page_rect(
+            unit, cand, flat_span, original_text, page,
+        )
+        if page_rect is None:
+            return None
+
+        return self._make_hit(
+            unit=unit,
+            normalized=normalized,
+            flat_span=flat_span,
+            original_text=original_text,
+            entity_type='CN_VAT_INVOICE',
+            source=unit.source or 'text',
+            page_rect=page_rect,
+            validator_passed=True,
+            confidence_tier=confidence_tier,
+        )
 
     def _check_taxpayer_id_15(
         self,
@@ -384,9 +471,31 @@ class PIIEngine:
         original_text: str,
         page: Any,
     ) -> Optional[PIIHit]:
-        """FIN-03: 15 位旧版纳税人识别号（02-02 完整实现）。"""
-        # 02-01 占位：返回 None（不发射）。02-02 落地完整实现。
-        return None
+        """FIN-03: 15 位旧版纳税人识别号（D-09 无强校验位 → MEDIUM）。
+
+        D-09: 15 位路径**不**复用 USCC 的 mod-31-3；validator 内部仅做
+        格式（15 位）+ 行政区划前缀白名单 gate；confidence_tier = MEDIUM。
+        """
+        if not validate_taxpayer_id_15(normalized):
+            return None
+
+        page_rect = self._resolve_page_rect(
+            unit, cand, flat_span, original_text, page,
+        )
+        if page_rect is None:
+            return None
+
+        return self._make_hit(
+            unit=unit,
+            normalized=normalized,
+            flat_span=flat_span,
+            original_text=original_text,
+            entity_type='CN_TAXPAYER_ID_15',
+            source=unit.source or 'text',
+            page_rect=page_rect,
+            validator_passed=True,
+            confidence_tier="MEDIUM",
+        )
 
     def _check_bank_account(
         self,
@@ -397,9 +506,41 @@ class PIIEngine:
         original_text: str,
         page: Any,
     ) -> Optional[PIIHit]:
-        """FIN-04: 银行账号 — 9-21 位 + 上下文锥点（02-02 完整实现）。"""
-        # 02-01 占位：返回 None（不发射）。02-02 落地完整实现。
-        return None
+        """FIN-04: 银行账号 — 9-21 位 + 上下文锥点必查（D-08 strict）。
+
+        D-08: 无 context anchor → 直接 reject，不发射 hit（与 VAT 8 位
+        降级 MEDIUM 不同 — 银行账号严格不能漏判为"疑似账号"）。
+
+        Args:
+            unit: TextUnit（用于 unit.source + error_log）
+            cand / normalized: 候选字符串与 normalize_digits 归一化结果
+            flat_span: 文本扁平化 span
+            original_text: 完整页面文本（传给 has_*_context）
+            page: 可选 fitz Page（page.search_for 取真实 rect）
+        """
+        if not validate_bank_account(normalized):
+            return None
+        # D-08 strict: 无 anchor → 0 hits
+        if not has_bank_account_context(original_text, normalized):
+            return None
+
+        page_rect = self._resolve_page_rect(
+            unit, cand, flat_span, original_text, page,
+        )
+        if page_rect is None:
+            return None
+
+        return self._make_hit(
+            unit=unit,
+            normalized=normalized,
+            flat_span=flat_span,
+            original_text=original_text,
+            entity_type='CN_BANK_ACCOUNT',
+            source=unit.source or 'text',
+            page_rect=page_rect,
+            validator_passed=True,
+            confidence_tier="HIGH",
+        )
 
     # ------------------------------------------------------------------
     # page_rect 解析（B2 / W-A）

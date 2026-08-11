@@ -63,6 +63,10 @@ def iter_candidate_strings(text: str) -> Iterator[Tuple[str, Tuple[int, int], st
         yield m.group(0), m.span(), "CN_EMAIL"
     for m in _USCC_RE.finditer(text):
         yield m.group(0), m.span(), "CN_USCC"
+    # 02-02 (D-09 双 type 契约): 同一 18-位 USCC regex 第二次 yield，标志为 CN_TAXPAYER_ID。
+    # engine._check_taxpayer_id 复用 validate_uscc，mask_strategy 与 CN_USCC 一致。
+    for m in _USCC_RE.finditer(text):
+        yield m.group(0), m.span(), "CN_TAXPAYER_ID"
     for m in _VAT_INVOICE_8_RE.finditer(text):
         yield m.group(0), m.span(), "CN_VAT_INVOICE"
     for m in _VAT_INVOICE_20_RE.finditer(text):

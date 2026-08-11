@@ -1,4 +1,4 @@
-"""PrivacyGuard PII 验证器子包（NUM-01/02/03 + Phase 2 NUM-04/05/FIN-01 纯函数实现）。"""
+"""PrivacyGuard PII 验证器子包（NUM-01/02/03 + Phase 2 NUM-04/05/FIN-01..04 纯函数实现）。"""
 from importlib import import_module
 
 
@@ -26,6 +26,12 @@ __all__ = [
     'EMAIL_RE',
     'EMAIL_PUBLIC_SUFFIXES',
     'BANK_CARD_BIN_WHITELIST',
+    # Phase 2 (02-02-engine-expansion) 新增 — FIN-02/03/04
+    'validate_taxpayer_id_15',
+    'has_vat_invoice_context',
+    'has_bank_account_context',
+    'VAT_INVOICE_CONTEXTS',
+    'BANK_ACCOUNT_CONTEXTS',
 ]
 
 
@@ -53,6 +59,12 @@ _LAZY_IMPORTS = {
     'is_public_suffix_email':   ('privacyguard.pii.validators.email', 'is_public_suffix_email'),
     'EMAIL_RE':                 ('privacyguard.pii.validators.email', 'EMAIL_RE'),
     'EMAIL_PUBLIC_SUFFIXES':    ('privacyguard.pii.validators.email', 'EMAIL_PUBLIC_SUFFIXES'),
+    # Phase 2 (02-02-engine-expansion) — 3 new validators / context helpers / constants
+    'validate_taxpayer_id_15':  ('privacyguard.pii.validators.taxpayer_id', 'validate_taxpayer_id_15'),
+    'has_vat_invoice_context':  ('privacyguard.pii.validators.vat_invoice', 'has_vat_invoice_context'),
+    'has_bank_account_context': ('privacyguard.pii.validators.bank_account', 'has_bank_account_context'),
+    'VAT_INVOICE_CONTEXTS':     ('privacyguard.pii.validators.vat_invoice', 'VAT_INVOICE_CONTEXTS'),
+    'BANK_ACCOUNT_CONTEXTS':    ('privacyguard.pii.validators.bank_account', 'BANK_ACCOUNT_CONTEXTS'),
 }
 
 
