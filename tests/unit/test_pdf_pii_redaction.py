@@ -246,11 +246,11 @@ class TestPartialMaskWritesMaskText(unittest.TestCase):
             # 反向提取
             with fitz.open(out_pdf) as out_doc:
                 out_text = "".join(p.get_text() for p in out_doc)
-            # 原文前 6 位应被销毁
+            # 原文完整 18 字符串应被销毁（D-01 真删除）
             self.assertNotIn(
-                uscc[:6],
+                uscc,
                 out_text,
-                f"USCC 前 6 位仍可提取: {uscc[:6]} in {out_text!r}",
+                f"USCC 完整字符串仍可提取: {uscc} in {out_text!r}",
             )
             # mask_strategy 应保留（白字写在色块上 — PyMuPDF 可被 get_text 提取）
             self.assertIn(
@@ -289,7 +289,8 @@ class TestPartialMaskWritesMaskText(unittest.TestCase):
 
             with fitz.open(out_pdf) as out_doc:
                 out_text = "".join(p.get_text() for p in out_doc)
-            self.assertNotIn(uscc[:6], out_text, "blackout 模式未销毁原文")
+            # blackout 模式：完整原文 + mask 文字都不应在输出中
+            self.assertNotIn(uscc, out_text, "blackout 模式未销毁原文")
             self.assertNotIn(mask_text, out_text, "blackout 模式不应写 mask 文字")
 
     def test_partial_mask_id_card_also_visible(self):

@@ -57,17 +57,30 @@ class TestPdfMetadataCleared(unittest.TestCase):
                     )
 
     def test_metadata_creation_date_preserved(self):
-        """CreationDate / ModDate 不应被 clear_pdf_metadata 清空（D-14 锁定）。"""
+        """CreationDate / ModDate 不应被 clear_pdf_metadata 清空（D-14 锁定）。
+
+        测试策略：先显式设置 CreationDate 为一个固定值，clear 后断言仍保留。
+        PyMuPDF set_metadata 不会清空未在 dict 中列出的字段（D-14 锁定）。
+        """
         from privacyguard.pii.pdf_adapter import clear_pdf_metadata
         with tempfile.TemporaryDirectory() as tmp:
-            in_pdf = os.path.join(tmp, "in_creation.pdf")
+            step1_pdf = os.path.join(tmp, "step1.pdf")
+            step2_pdf = os.path.join(tmp, "step2.pdf")
             out_pdf = os.path.join(tmp, "out_creation.pdf")
-            self._build_pdf_with_metadata(in_pdf)
+            self._build_pdf_with_metadata(step1_pdf)
 
-            doc = fitz.open(in_pdf)
+            # Step 1: 显式设置 CreationDate 为固定值（先保存到 step2_pdf，避免同路径）
+            fixed_creation = "D:20260101000000"
+            doc = fitz.open(step1_pdf)
             try:
-                # 记录原始 creationDate（PyMuPDF 通常自动填）
-                original_creation = doc.metadata.get("creationDate", "")
+                doc.set_metadata({"creationDate": fixed_creation})
+                doc.save(step2_pdf, garbage=4, deflate=True, clean=True)
+            finally:
+                doc.close()
+
+            # Step 2: 重新打开并 clear
+            doc = fitz.open(step2_pdf)
+            try:
                 clear_pdf_metadata(doc)
                 doc.save(out_pdf, garbage=4, deflate=True, clean=True)
             finally:
@@ -75,10 +88,15 @@ class TestPdfMetadataCleared(unittest.TestCase):
 
             with fitz.open(out_pdf) as out_doc:
                 meta = out_doc.metadata
-                # creationDate 应保留（非空字符串，通常以 'D:' 前缀）
-                self.assertTrue(
-                    meta.get("creationDate") or meta.get("modDate") or original_creation,
-                    "creationDate/modDate 之一应保留；全空说明误清",
+                # 5 字段已清空
+                for key in ("title", "author", "subject", "producer", "creator"):
+                    self.assertEqual(meta.get(key, ""), "",
+                                     f"元数据 {key} 未清空: {meta.get(key)!r}")
+                # creationDate 应保留（与 5 字段清空独立）
+                creation = meta.get("creationDate", "")
+                self.assertIn(
+                    "2026", creation,
+                    f"creationDate 应保留；实际 = {creation!r}",
                 )
 
     def test_metadata_no_placeholder_strings(self):

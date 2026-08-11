@@ -29,6 +29,12 @@ from privacyguard.pii.validators.id_card import (
     validate_18,
 )
 from privacyguard.pii.validators.phone_segment import is_mobile_segment
+from privacyguard.pii.validators.uscc import validate_uscc
+from privacyguard.pii.validators.bank_card import validate_bank_card
+from privacyguard.pii.validators.email import (
+    is_public_suffix_email,
+    validate_email,
+)
 from privacyguard.pii.normalize import (
     flatten_for_match,
     map_flat_to_original,
@@ -131,14 +137,42 @@ class PIIEngine:
         try:
             for cand, flat_span, entity_hint in iter_candidate_strings(flat):
                 normalized = normalize_digits(cand)
+                # Phase 1 entity hints (preserved)
                 if entity_hint == 'CN_ID_CARD':
                     hit = self._check_id_card(
                         unit, cand, normalized, flat_span, text, page,
                     )
-                else:
+                elif entity_hint == 'CN_PHONE':
                     hit = self._check_phone(
                         unit, cand, normalized, flat_span, text, page,
                     )
+                # Phase 2 (02-01-tracer) — 6 new entity_hints (3 active + 3 stubbed)
+                elif entity_hint == 'CN_BANK_CARD':
+                    hit = self._check_bank_card(
+                        unit, cand, normalized, flat_span, text, page,
+                    )
+                elif entity_hint == 'CN_EMAIL':
+                    hit = self._check_email(
+                        unit, cand, normalized, flat_span, text, page,
+                    )
+                elif entity_hint == 'CN_USCC':
+                    hit = self._check_uscc(
+                        unit, cand, normalized, flat_span, text, page,
+                    )
+                elif entity_hint == 'CN_VAT_INVOICE':
+                    hit = self._check_vat_invoice(
+                        unit, cand, normalized, flat_span, text, page,
+                    )
+                elif entity_hint == 'CN_TAXPAYER_ID_15':
+                    hit = self._check_taxpayer_id_15(
+                        unit, cand, normalized, flat_span, text, page,
+                    )
+                elif entity_hint == 'CN_BANK_ACCOUNT':
+                    hit = self._check_bank_account(
+                        unit, cand, normalized, flat_span, text, page,
+                    )
+                else:
+                    hit = None
                 if hit is not None:
                     hits.append(hit)
         except Exception as exc:
@@ -224,6 +258,148 @@ class PIIEngine:
             validator_passed=True,
             confidence_tier="HIGH",
         )
+
+    # ------------------------------------------------------------------
+    # Phase 2 (02-01-tracer) — 6 new _check_* methods
+    # ------------------------------------------------------------------
+    def _check_bank_card(
+        self,
+        unit: TextUnit,
+        cand: str,
+        normalized: str,
+        flat_span: Tuple[int, int],
+        original_text: str,
+        page: Any,
+    ) -> Optional[PIIHit]:
+        """NUM-04: 银行卡 — Luhn + 6 位 BIN 白名单。
+
+        当 BIN 词典为空时 validate_bank_card 返回 False（safe-fail）。
+        测试用例需通过 `set_bin_whitelist_for_test()` 注入临时白名单。
+        """
+        if not validate_bank_card(normalized):
+            return None
+
+        page_rect = self._resolve_page_rect(
+            unit, cand, flat_span, original_text, page,
+        )
+        if page_rect is None:
+            return None
+
+        return self._make_hit(
+            unit=unit,
+            normalized=normalized,
+            flat_span=flat_span,
+            original_text=original_text,
+            entity_type='CN_BANK_CARD',
+            source=unit.source or 'text',
+            page_rect=page_rect,
+            validator_passed=True,
+            confidence_tier="HIGH",
+        )
+
+    def _check_email(
+        self,
+        unit: TextUnit,
+        cand: str,
+        normalized: str,
+        flat_span: Tuple[int, int],
+        original_text: str,
+        page: Any,
+    ) -> Optional[PIIHit]:
+        """NUM-05: 邮箱 — RFC 5322 简化版正则 + 公共域名后缀 confidence 提升。"""
+        if not validate_email(normalized):
+            return None
+
+        # D-10: 公共域名后缀 → HIGH；其他 → MEDIUM
+        confidence_tier = "HIGH" if is_public_suffix_email(normalized) else "MEDIUM"
+
+        page_rect = self._resolve_page_rect(
+            unit, cand, flat_span, original_text, page,
+        )
+        if page_rect is None:
+            return None
+
+        return self._make_hit(
+            unit=unit,
+            normalized=normalized,
+            flat_span=flat_span,
+            original_text=original_text,
+            entity_type='CN_EMAIL',
+            source=unit.source or 'text',
+            page_rect=page_rect,
+            validator_passed=True,
+            confidence_tier=confidence_tier,
+        )
+
+    def _check_uscc(
+        self,
+        unit: TextUnit,
+        cand: str,
+        normalized: str,
+        flat_span: Tuple[int, int],
+        original_text: str,
+        page: Any,
+    ) -> Optional[PIIHit]:
+        """FIN-01: USCC — 18 位 mod-31-3 + 类别码白名单。"""
+        if not validate_uscc(normalized):
+            return None
+
+        page_rect = self._resolve_page_rect(
+            unit, cand, flat_span, original_text, page,
+        )
+        if page_rect is None:
+            return None
+
+        return self._make_hit(
+            unit=unit,
+            normalized=normalized,
+            flat_span=flat_span,
+            original_text=original_text,
+            entity_type='CN_USCC',
+            source=unit.source or 'text',
+            page_rect=page_rect,
+            validator_passed=True,
+            confidence_tier="HIGH",
+        )
+
+    def _check_vat_invoice(
+        self,
+        unit: TextUnit,
+        cand: str,
+        normalized: str,
+        flat_span: Tuple[int, int],
+        original_text: str,
+        page: Any,
+    ) -> Optional[PIIHit]:
+        """FIN-02: VAT 发票号 — 8 位 / 20 位双格式（02-02 完整实现）。"""
+        # 02-01 占位：返回 None（不发射）。02-02 落地完整实现。
+        return None
+
+    def _check_taxpayer_id_15(
+        self,
+        unit: TextUnit,
+        cand: str,
+        normalized: str,
+        flat_span: Tuple[int, int],
+        original_text: str,
+        page: Any,
+    ) -> Optional[PIIHit]:
+        """FIN-03: 15 位旧版纳税人识别号（02-02 完整实现）。"""
+        # 02-01 占位：返回 None（不发射）。02-02 落地完整实现。
+        return None
+
+    def _check_bank_account(
+        self,
+        unit: TextUnit,
+        cand: str,
+        normalized: str,
+        flat_span: Tuple[int, int],
+        original_text: str,
+        page: Any,
+    ) -> Optional[PIIHit]:
+        """FIN-04: 银行账号 — 9-21 位 + 上下文锥点（02-02 完整实现）。"""
+        # 02-01 占位：返回 None（不发射）。02-02 落地完整实现。
+        return None
 
     # ------------------------------------------------------------------
     # page_rect 解析（B2 / W-A）

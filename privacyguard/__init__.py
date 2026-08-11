@@ -14,7 +14,7 @@ def _read_version():
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except OSError:
-        return "37.7.6"
+        return "1.0.0"
 
 
 __version__ = _read_version()
@@ -65,6 +65,19 @@ __all__ = [
     'is_mobile_segment',
     'apply_pii_redactions',
     'collect_pii_rects',
+    # Phase 2 (02-01-tracer) — partial mask + metadata clear + new validators
+    'validate_uscc',
+    'validate_bank_card',
+    'validate_email',
+    'is_public_suffix_email',
+    'partial_mask_uscc',
+    'partial_mask_bank_card',
+    'partial_mask_email',
+    'partial_mask_vat_invoice',
+    'partial_mask_taxpayer_id_15',
+    'partial_mask_bank_account',
+    'write_partial_masks',
+    'clear_pdf_metadata',
 ]
 
 _LAZY_IMPORTS = {
@@ -83,6 +96,19 @@ _LAZY_IMPORTS = {
     'is_mobile_segment': ('privacyguard.pii.validators', 'is_mobile_segment'),
     'apply_pii_redactions': ('privacyguard.pii.pdf_adapter', 'apply_pii_redactions'),
     'collect_pii_rects': ('privacyguard.pii.pdf_adapter', 'collect_pii_rects'),
+    # Phase 2 (02-01-tracer) — top-level forwards
+    'validate_uscc': ('privacyguard.pii', 'validate_uscc'),
+    'validate_bank_card': ('privacyguard.pii', 'validate_bank_card'),
+    'validate_email': ('privacyguard.pii', 'validate_email'),
+    'is_public_suffix_email': ('privacyguard.pii', 'is_public_suffix_email'),
+    'partial_mask_uscc': ('privacyguard.pii', 'partial_mask_uscc'),
+    'partial_mask_bank_card': ('privacyguard.pii', 'partial_mask_bank_card'),
+    'partial_mask_email': ('privacyguard.pii', 'partial_mask_email'),
+    'partial_mask_vat_invoice': ('privacyguard.pii', 'partial_mask_vat_invoice'),
+    'partial_mask_taxpayer_id_15': ('privacyguard.pii', 'partial_mask_taxpayer_id_15'),
+    'partial_mask_bank_account': ('privacyguard.pii', 'partial_mask_bank_account'),
+    'write_partial_masks': ('privacyguard.pii', 'write_partial_masks'),
+    'clear_pdf_metadata': ('privacyguard.pii', 'clear_pdf_metadata'),
 }
 
 

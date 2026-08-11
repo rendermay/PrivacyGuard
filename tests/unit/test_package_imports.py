@@ -107,3 +107,70 @@ class TestPrivacyGuardImports(unittest.TestCase):
                 self.assertIn("privacyguard.pii.engine", sys.modules)
         finally:
             self._restore_privacyguard_modules(cached)
+
+    # ------------------------------------------------------------------
+    # Phase 2 (02-01-tracer) — 3 new lazy-load assertions
+    # ------------------------------------------------------------------
+
+    def test_import_privacyguard_does_not_load_new_validators(self):
+        """OPS-03 扩展：import privacyguard 不应触发 3 个新 validator 子模块加载。"""
+        cached = self._snapshot_privacyguard_modules()
+        for name in list(cached):
+            sys.modules.pop(name, None)
+        try:
+            module = importlib.import_module("privacyguard")
+            # 触发 Phase 1 已有的导出（不应触发新 validator 子模块）
+            _ = module.validate_safe_path
+            self.assertNotIn(
+                "privacyguard.pii.validators.uscc",
+                sys.modules,
+                "import privacyguard 不得触发 privacyguard.pii.validators.uscc",
+            )
+            self.assertNotIn(
+                "privacyguard.pii.validators.bank_card",
+                sys.modules,
+                "import privacyguard 不得触发 privacyguard.pii.validators.bank_card",
+            )
+            self.assertNotIn(
+                "privacyguard.pii.validators.email",
+                sys.modules,
+                "import privacyguard 不得触发 privacyguard.pii.validators.email",
+            )
+        finally:
+            self._restore_privacyguard_modules(cached)
+
+    def test_partial_masks_loads_on_demand(self):
+        """主动访问 write_partial_masks 触发 pdf_adapter 懒加载。"""
+        cached = self._snapshot_privacyguard_modules()
+        for name in list(cached):
+            sys.modules.pop(name, None)
+        try:
+            module = importlib.import_module("privacyguard")
+            self.assertNotIn("privacyguard.pii.pdf_adapter", sys.modules)
+            # 访问 write_partial_masks 触发 _LAZY_IMPORTS
+            _ = module.write_partial_masks
+            self.assertIn(
+                "privacyguard.pii.pdf_adapter",
+                sys.modules,
+                "访问 privacyguard.write_partial_masks 后 privacyguard.pii.pdf_adapter 应被加载",
+            )
+        finally:
+            self._restore_privacyguard_modules(cached)
+
+    def test_clear_pdf_metadata_loads_on_demand(self):
+        """主动访问 clear_pdf_metadata 触发 pdf_adapter 懒加载。"""
+        cached = self._snapshot_privacyguard_modules()
+        for name in list(cached):
+            sys.modules.pop(name, None)
+        try:
+            module = importlib.import_module("privacyguard")
+            self.assertNotIn("privacyguard.pii.pdf_adapter", sys.modules)
+            # 访问 clear_pdf_metadata 触发 _LAZY_IMPORTS
+            _ = module.clear_pdf_metadata
+            self.assertIn(
+                "privacyguard.pii.pdf_adapter",
+                sys.modules,
+                "访问 privacyguard.clear_pdf_metadata 后 privacyguard.pii.pdf_adapter 应被加载",
+            )
+        finally:
+            self._restore_privacyguard_modules(cached)

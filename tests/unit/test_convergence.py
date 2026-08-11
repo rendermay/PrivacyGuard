@@ -217,6 +217,55 @@ class TestPiiConvergence(unittest.TestCase):
         self.assertEqual(names[:7], expected,
                          f"PIIHit 前 7 字段顺序应为 {expected}，实际为 {names[:7]}")
 
+    # ------------------------------------------------------------------
+    # Phase 2 (02-01-tracer) — convergence 扩展
+    # ------------------------------------------------------------------
+
+    def test_main_py_does_not_inline_new_validators(self):
+        """Phase 2: main.py 不应包含内联 USCC / 银行卡 / 邮箱 / partial mask / metadata clear 函数。"""
+        source = MAIN_PY.read_text(encoding="utf-8")
+        forbidden_patterns = [
+            "def validate_uscc(",
+            "def validate_bank_card(",
+            "def validate_email(",
+            "def write_partial_masks(",
+            "def clear_pdf_metadata(",
+        ]
+        for pat in forbidden_patterns:
+            self.assertNotIn(
+                pat, source,
+                f"main.py 不应保留内联 {pat} 实现（v37.7.6 收敛原则）",
+            )
+
+    def test_pii_package_no_inline_partial_mask_writer(self):
+        """Phase 2: write_partial_masks + clear_pdf_metadata 必须在 pdf_adapter.py。"""
+        from pathlib import Path as _Path
+        pdf_adapter_path = _Path(__file__).resolve().parents[2] / "privacyguard" / "pii" / "pdf_adapter.py"
+        source = pdf_adapter_path.read_text(encoding="utf-8")
+        self.assertIn(
+            "def write_partial_masks(", source,
+            "write_partial_masks 必须在 pdf_adapter.py",
+        )
+        self.assertIn(
+            "def clear_pdf_metadata(", source,
+            "clear_pdf_metadata 必须在 pdf_adapter.py",
+        )
+        # 扫描 pii 子包其他 .py 文件 — write_partial_masks / clear_pdf_metadata 不应被定义在其他文件
+        pii_dir = _Path(__file__).resolve().parents[2] / "privacyguard" / "pii"
+        for py_file in pii_dir.rglob("*.py"):
+            if py_file.name == "pdf_adapter.py":
+                continue
+            # 跳过 __init__.py 的 lazy import 注册条目
+            other_source = py_file.read_text(encoding="utf-8")
+            self.assertNotIn(
+                "def write_partial_masks(", other_source,
+                f"{py_file.relative_to(pii_dir.parent.parent)} 不应定义 write_partial_masks",
+            )
+            self.assertNotIn(
+                "def clear_pdf_metadata(", other_source,
+                f"{py_file.relative_to(pii_dir.parent.parent)} 不应定义 clear_pdf_metadata",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
