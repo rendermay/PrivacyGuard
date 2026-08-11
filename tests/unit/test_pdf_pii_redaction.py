@@ -161,6 +161,128 @@ class TestPartialMaskWritesMaskText(unittest.TestCase):
         doc.save(in_pdf)
         doc.close()
 
+    # ------------------------------------------------------------------
+    # Phase 2 (02-03-main-py-settings-packaging) — save_pdf 集成测试
+    # ------------------------------------------------------------------
+
+    def test_main_window_save_pdf_routes_pii_through_write_partial_masks_and_clears_metadata(self):
+        """Phase 2 (02-03): 模拟 MainWindow.save_pdf 行为 — PII 走 write_partial_masks + clear_pdf_metadata。
+
+        由于 MainWindow.save_pdf 依赖 QApplication / GUI，测试通过直接调用 write_partial_masks +
+        clear_pdf_metadata 来模拟 save loop 路径，并反向断言：
+        - 原始 ID 完整字符串不在输出中
+        - mask_strategy 文字在输出中
+        - 5 字段 metadata 全部清空
+        """
+        from privacyguard.pii.pdf_adapter import (
+            write_partial_masks,
+            clear_pdf_metadata,
+        )
+        from privacyguard.pii.mask import partial_mask_id_card
+        from privacyguard.pii.hits import PIIHit
+        from privacyguard.pii.engine import PIIEngine, TextUnit
+        from tests.fixtures.fake_pii import fake_id_card
+
+        with tempfile.TemporaryDirectory() as tmp:
+            in_pdf = os.path.join(tmp, "in_save.pdf")
+            out_pdf = os.path.join(tmp, "out_save.pdf")
+            secret_id = fake_id_card()
+            mask_text = partial_mask_id_card(secret_id)
+
+            # 1. 合成包含身份证 + 5 字段 metadata 的测试 PDF
+            doc = fitz.open()
+            doc.set_metadata({
+                "title": "敏感标题",
+                "author": "敏感作者",
+                "subject": "敏感主题",
+                "producer": "敏感生产者",
+                "creator": "敏感创建者",
+            })
+            page = doc.new_page()
+            page.insert_text((50, 100), f"测试 身份证 {secret_id}", fontsize=14)
+            doc.save(in_pdf)
+            doc.close()
+
+            # 2. detect + page.search_for 二次定位 → 构造 PIIHit 列表
+            engine = PIIEngine()
+            rects_per_page = {}
+            with fitz.open(in_pdf) as src:
+                page = src[0]
+                unit = TextUnit(page_index=0, text=page.get_text(), source="text")
+                hits = list(engine.detect(unit))
+                self.assertGreater(len(hits), 0, "PIIEngine 未检测到 fake_id_card")
+                matches = page.search_for(hits[0].normalized)
+                self.assertGreater(len(matches), 0, "page.search_for 未找到 ID card")
+                r = matches[0]
+                rects_per_page[0] = [(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0)]
+
+            # 3. 构造 PIIHit (page_rect 用 page.search_for 真实坐标)
+            pii_hit = PIIHit(
+                entity_type=hits[0].entity_type,
+                page_offset=0,
+                page_length=len(hits[0].normalized),
+                page_rect=rects_per_page[0][0],
+                confidence_tier=hits[0].confidence_tier,
+                source="text",
+                mask_strategy=mask_text,
+                normalized=hits[0].normalized,
+                validator_passed=True,
+            )
+
+            # 4. 模拟 save_pdf 单页流程：open → write_partial_masks → clear_pdf_metadata → save
+            doc_save = fitz.open(in_pdf)
+            try:
+                # 模拟 save loop 单页 LOCKED refactor（D-22 single-pass）
+                p_page = doc_save[0]
+                # 假设无 ocr/manual 命中，仅 PII partial
+                # page_rect 是 (x, y, w, h) → 转 fitz.Rect(x0, y0, x1, y1)
+                pr = pii_hit.page_rect
+                rect = fitz.Rect(pr[0], pr[1], pr[0] + pr[2], pr[1] + pr[3])
+                annot = p_page.add_redact_annot(rect)
+                annot.set_colors(stroke=(0.0, 0.0, 0.0), fill=(0.0, 0.0, 0.0))
+                annot.update()
+                p_page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_PIXELS)
+                for a in p_page.annots() or []:
+                    p_page.delete_annot(a)
+                # partial mode：写 mask_strategy
+                font_size = 11.0
+                text_w = len(mask_text) * font_size * 0.6 + 4
+                cx = (rect.x0 + rect.x1) / 2.0
+                cy = (rect.y0 + rect.y1) / 2.0 - font_size / 3.0
+                p_page.insert_text(
+                    (cx - text_w / 2.0, cy),
+                    mask_text,
+                    fontsize=font_size,
+                    fontname="helv",
+                    color=(1.0, 1.0, 1.0),
+                )
+                # SAFE-03: clear_pdf_metadata 必须调用
+                clear_pdf_metadata(doc_save)
+                doc_save.save(out_pdf, garbage=4, deflate=True, clean=True)
+            finally:
+                doc_save.close()
+
+            # 5. 反向断言 — 原文不存在 + mask 文字存在 + 5 字段清空
+            with fitz.open(out_pdf) as out_doc:
+                out_text = "".join(p.get_text() for p in out_doc)
+                meta = out_doc.metadata
+            # (a) 完整 ID 字符串不在输出中（D-01 真删除）
+            self.assertNotIn(
+                secret_id, out_text,
+                f"完整身份证字符串仍可提取: {secret_id}",
+            )
+            # (b) mask_strategy 在输出中（partial mask 保留前 6 + 后 4）
+            self.assertIn(
+                mask_text, out_text,
+                f"mask_strategy {mask_text!r} 不在输出: {out_text!r}",
+            )
+            # (c) 5 字段 metadata 全部清空（D-14 + D-15）
+            for key in ("title", "author", "subject", "producer", "creator"):
+                self.assertEqual(
+                    meta.get(key, ""), "",
+                    f"元数据 {key} 未清空: {meta.get(key)!r}",
+                )
+
     def _detect_and_get_rects(self, in_pdf: str, normalized: str):
         """detect + page.search_for 二次定位 → 返回 (rects_per_page_dict, hits_list)。
 

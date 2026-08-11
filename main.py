@@ -5892,6 +5892,14 @@ class MainWindow(QMainWindow):
         self.cb_dual.setCheckable(True)
         self.toolbar_pdf_layout.addWidget(self.cb_dual)
 
+        # Phase 2 (02-03-main-py-settings-packaging): D-12 文档级 override toggle
+        self.btn_mask_override = self.create_btn("本文件全遮蔽", self._toggle_mask_override_this_doc, style="toggle")
+        self.btn_mask_override.setObjectName("toolbarToggleButton")
+        self.btn_mask_override.setCheckable(True)
+        self.btn_mask_override.setChecked(False)
+        self.btn_mask_override.setToolTip("勾选后，当前 PDF 临时覆盖全局 per_entity 设置，强制全部 entity 走全遮蔽。切换状态随当前 PDF 生命周期，不持久化到 config.json（D-12 锁定）。")
+        self.toolbar_pdf_layout.addWidget(self.btn_mask_override)
+
         self.btn_fit = self.create_btn("适应", self.fit_page, style="secondary")
         self.toolbar_pdf_layout.addWidget(self.btn_fit)
         self.btn_fit.hide()
@@ -8770,6 +8778,24 @@ class MainWindow(QMainWindow):
         self._refresh_toolbar_responsiveness()
         self._refresh_workbench_context()
 
+    def _toggle_mask_override_this_doc(self, checked: bool):
+        """D-12: 工具栏「本文件全遮蔽」toggle handler — 临时覆盖全局 per_entity 设置。
+
+        状态写入 self.page_data[0]["mask_override_this_doc"] = "blackout" | None。
+        仅在内存存活，不写入 config.json（D-12 锁定）；打开新 PDF 时由 _open_pdf_file 重置。
+        """
+        # 兜底：page_data 尚未初始化时不写入（main_window 启动期态）
+        if not isinstance(getattr(self, "page_data", None), dict):
+            return
+        if not self.page_data:
+            self.page_data = {0: {}}
+        if 0 not in self.page_data:
+            self.page_data[0] = {}
+        self.page_data[0]["mask_override_this_doc"] = "blackout" if checked else None
+        if DEBUG_MODE:
+            print(f"[PII OVERRIDE] page_data[0] mask_override_this_doc = "
+                  f"{self.page_data[0].get('mask_override_this_doc')}")
+
     def _refresh_toolbar_responsiveness(self):
         """根据窗口宽度做工具栏响应式降级，保证缩放时仍可读。"""
         if not hasattr(self, "toolbar"):
@@ -10723,6 +10749,14 @@ class MainWindow(QMainWindow):
         self.doc_type = 'pdf'
         total = len(self.doc)
         self.page_data = {i: {'ocr': [], 'manual': [], 'pii': []} for i in range(total)}
+        # Phase 2 (02-03): D-12 重置 mask_override_this_doc 到 None（不持久化到 config.json）
+        if 0 in self.page_data:
+            self.page_data[0]["mask_override_this_doc"] = None
+        # 同步工具栏 toggle 按钮状态（确保打开新 PDF 时按钮回到未勾选态）
+        if hasattr(self, "btn_mask_override"):
+            self.btn_mask_override.blockSignals(True)
+            self.btn_mask_override.setChecked(False)
+            self.btn_mask_override.blockSignals(False)
         self.current_page = 0
         self.word_doc = None
         self.word_data = {}
@@ -12575,6 +12609,24 @@ sudo dnf install antiword
                     doc_save = fitz.open(self.file_path)
                     fill_col = (0, 0, 0) if self.current_color.name() == "#000000" else (1, 1, 1)
 
+                    # Phase 2 (02-03-main-py-settings-packaging): 文档级 override + per-entity 默认（D-12 + D-13）
+                    # 锁定：mask_override_this_doc 仅在 page_data[0] 内存中存活；不持久化到 config.json
+                    override = None
+                    if 0 in self.page_data:
+                        override = self.page_data[0].get("mask_override_this_doc")
+                    per_entity_default = {}
+                    if self.config:
+                        loaded = self.config.get("pii_settings.per_entity_default", {}) or {}
+                        if isinstance(loaded, dict):
+                            per_entity_default = dict(loaded)
+
+                    # Phase 2 (02-03-main-py-settings-packaging): 懒加载 partial mask + metadata clear helper
+                    # 在 save loop 入口处一次性导入；hot path 不重复 import
+                    from privacyguard.pii.pdf_adapter import (
+                        write_partial_masks,
+                        clear_pdf_metadata,
+                    )
+
                     for i in range(len(doc_save)):
                         page = doc_save[i]
 
@@ -12585,30 +12637,86 @@ sudo dnf install antiword
                         manual_list = self.page_data[i].get('manual', [])
                         pii_list = self.page_data[i].get('pii', [])
 
-                        # 1. 添加脱敏注释
-                        # v37.3.1: 重建 QRectF 确保不修改原始对象
+                        # ------------------------------------------------------------------
+                        # Phase 2 LOCKED REFACTOR — single-pass unified redaction（D-22）
+                        # ------------------------------------------------------------------
+                        # 关键不变式（warning #3 fix）：
+                        # - PyMuPDF `page.apply_redactions()` 是 one-shot per page；每页只能调用一次
+                        # - 调用两次会抛 RuntimeError
+                        # - 因此 OCR + manual + PII partial + PII blackout **必须** 合并到同一次 add_redact_annot + apply_redactions
+                        # - partial mode 的 mask text 通过 page.insert_text 在色块销毁后追加
+                        # ------------------------------------------------------------------
+
+                        # Phase 1: 收集所有命中 (item, mode) 元组 — mode 仅用于 partial mask insert_text 步骤
+                        all_pi_items = []  # list of (item, mode) — item 是 QRectF 或 PIIHit
+                        # OCR / manual 路径保持 Phase 1 既有行为（全遮蔽，不做 partial mask）
                         for r in ocr_list + manual_list:
-                            # 从 QRectF 提取坐标并重建，避免引用问题
-                            x, y, w, h = r.x(), r.y(), r.width(), r.height()
+                            all_pi_items.append((r, "blackout"))
+                        # PII 路径按 per_entity_default + mask_override_this_doc 决策 mode
+                        for hit in pii_list:
+                            if override == "blackout":
+                                all_pi_items.append((hit, "blackout"))
+                            elif per_entity_default.get(hit.entity_type, "partial") == "partial":
+                                all_pi_items.append((hit, "partial"))
+                            else:
+                                all_pi_items.append((hit, "blackout"))
+
+                        # First pass: add_redact_annot for ALL items（OCR + manual + PII）
+                        # collect 收齐 rect / item / mode 供 partial text 步骤使用
+                        rects_for_partial = []  # list of (rect, item, mode)
+                        for item, mode in all_pi_items:
+                            if hasattr(item, "page_rect"):  # PIIHit dataclass
+                                x, y, w, h = item.page_rect
+                            else:  # QRectF (ocr/manual)
+                                x, y, w, h = item.x(), item.y(), item.width(), item.height()
                             rect = fitz.Rect(x, y, x + w, y + h)
                             annot = page.add_redact_annot(rect)
                             annot.set_colors(stroke=fill_col, fill=fill_col)
                             annot.update()
+                            rects_for_partial.append((rect, item, mode))
 
-                        # Phase 1: pii 命中用 page_rect tuple 路径（D-04 + SAFE-01）
-                        for hit in pii_list:
-                            pr = hit.page_rect
-                            rect = fitz.Rect(pr[0], pr[1], pr[0] + pr[2], pr[1] + pr[3])
-                            annot = page.add_redact_annot(rect)
-                            annot.set_colors(stroke=fill_col, fill=fill_col)
-                            annot.update()
-
-                        # v37.3: 安全加固 - 修改图像像素，彻底销毁原始内容
+                        # 真删除：销毁底层文本 + 像素（一次性；多次调用会抛 RuntimeError）
                         page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_PIXELS)
 
-                        # v37.3: 安全加固 - 删除所有注释对象，防止被 PDF 编辑器修改
-                        for annot in page.annots():
+                        # v37.3: 删除所有注释对象，防止被 PDF 编辑器修改
+                        for annot in page.annots() or []:
                             page.delete_annot(annot)
+
+                        # Second pass: partial mode 在新色块上写 mask_strategy 文字
+                        for rect, item, mode in rects_for_partial:
+                            if mode != "partial":
+                                continue
+                            # PIIHit 提供 mask_strategy；OCR / manual 永不 partial
+                            mask_text = getattr(item, "mask_strategy", "") or ""
+                            if not mask_text:
+                                continue
+                            # 字号优先从 page.get_text("dict") 取最近 span；fallback 到 11.0
+                            font_size = 11.0
+                            try:
+                                text_dict = page.get_text("dict")
+                                for block in text_dict.get("blocks", []):
+                                    for line in block.get("lines", []):
+                                        for span in line.get("spans", []):
+                                            if span.get("text") and "mask" not in span.get("text", "").lower():
+                                                font_size = float(span.get("size", 11.0))
+                                                break
+                            except Exception:
+                                pass
+                            avg_char_w = font_size * 0.6
+                            text_w = len(mask_text) * avg_char_w + 4
+                            cx = (rect.x0 + rect.x1) / 2.0
+                            cy = (rect.y0 + rect.y1) / 2.0 - font_size / 3.0
+                            page.insert_text(
+                                (cx - text_w / 2.0, cy),
+                                mask_text,
+                                fontsize=font_size,
+                                fontname="helv",
+                                color=(1.0, 1.0, 1.0),
+                            )
+
+                    # Phase 2 (02-03-main-py-settings-packaging): SAFE-03 元数据清除（D-14 + D-15 + D-16）
+                    # 仅清 5 字段；写空字符串；不写占位字符串
+                    clear_pdf_metadata(doc_save)
 
                     # v37.3: 安全加固 - 使用垃圾回收和压缩彻底删除未引用对象
                     doc_save.save(

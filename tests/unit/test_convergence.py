@@ -266,6 +266,44 @@ class TestPiiConvergence(unittest.TestCase):
                 f"{py_file.relative_to(pii_dir.parent.parent)} 不应定义 clear_pdf_metadata",
             )
 
+    # ------------------------------------------------------------------
+    # Phase 2 (02-03-main-py-settings-packaging) — main.py 必须调用 helpers
+    # ------------------------------------------------------------------
+
+    def test_main_py_uses_write_partial_masks_in_save_loop(self):
+        """Phase 2 (02-03): main.py save loop 必须调用 write_partial_masks / clear_pdf_metadata 而非内联实现。"""
+        source = MAIN_PY.read_text(encoding="utf-8")
+        # write_partial_masks 必须在 main.py 中被引用（import + call）
+        self.assertIn(
+            "write_partial_masks", source,
+            "main.py 必须引用 write_partial_masks（02-03 save_pdf 重写）",
+        )
+        # clear_pdf_metadata 必须在 main.py 中被引用
+        self.assertIn(
+            "clear_pdf_metadata", source,
+            "main.py 必须引用 clear_pdf_metadata（02-03 SAFE-03）",
+        )
+        # D-12 mask_override_this_doc 必须在 main.py 中出现（toggle + save loop + reset on open）
+        self.assertIn(
+            "mask_override_this_doc", source,
+            "main.py 必须引用 mask_override_this_doc（D-12 toggle key）",
+        )
+        # D-13 per_entity_default 必须在 main.py 中被读取
+        self.assertIn(
+            "per_entity_default", source,
+            "main.py 必须引用 per_entity_default（D-13 config field）",
+        )
+        # v37.7.6 收敛原则：main.py 不得内联 write_partial_masks 实现
+        self.assertNotIn(
+            "def write_partial_masks(", source,
+            "main.py 不得内联 write_partial_masks（v37.7.6 收敛原则）",
+        )
+        # v37.7.6 收敛原则：main.py 不得内联 clear_pdf_metadata 实现
+        self.assertNotIn(
+            "def clear_pdf_metadata(", source,
+            "main.py 不得内联 clear_pdf_metadata（v37.7.6 收敛原则）",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
