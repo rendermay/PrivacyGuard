@@ -113,6 +113,10 @@ Plans:
 
 - [x] 03-04-save-and-packaging-PLAN.md — Wave 3 Production: _save_word 接入 apply_pii_replacements_to_docx 真脱敏 + _word_mask_override_this_doc 字段 + toggle 双路径 + PyInstaller 跨平台 hiddenimports 同步 + reverse-extraction 端到端测试
 
+**Wave 4 (Gap Closure)** *(blocked on Wave 3 completion)*
+
+- [x] 03-G1-01-auto-scan-and-pii-compare-PLAN.md — Gap Closure: _open_word_docx 自动启动 WordWorker (Gap 1) + _has_word_replacement_candidates 纳入 PII (Gap 2) + _build_word_replaced_preview_html 注入 pii_matches (Gap 3) + 3 新 TestClass (12 测试方法)
+
 ---
 
 ### Phase 4: Excel 工作簿支持（全表散点扫描 + 11 隐藏通道 + 列名驱动升级）

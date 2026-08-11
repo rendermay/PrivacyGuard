@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v37.7.6
 milestone_name: milestone
 status: shipped
-stopped_at: Completed 03-04-save-and-packaging-PLAN.md
-last_updated: "2026-08-11T14:59:49.081Z"
+stopped_at: Completed 03-G1-01-auto-scan-and-pii-compare-PLAN.md
+last_updated: "2026-08-11T23:42:00.000Z"
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 12
+  completed_plans: 12
 current_phase_name: Word 文档接入识别引擎
 ---
 
@@ -41,7 +41,8 @@ current_phase_name: Word 文档接入识别引擎
 
 **Phase**: 2 shipped + 02-04 gap closure complete (2026-08-11)
 **Cross-platform packaging verification**: complete (2026-08-11)
-**Next action**: `/gsd-plan-phase 3` produces detailed PLAN.md files for Phase 3 (Word 文档接入识别引擎)
+**Phase 3 Gap Closure (G1)**: G1-01 (auto-scan + pii compare + pii full reload) shipped (2026-08-11)
+**Next action**: `/gsd-plan-phase 3` continues Phase 3 verification + Phase 4+ planning
 
 **Progress**: 25% — 2 phases complete out of 8 planned.
 
@@ -55,7 +56,7 @@ current_phase_name: Word 文档接入识别引擎
 | Phases complete | 2 | 8 |
 | Requirements mapped | 50 | 50 |
 | Requirements coverage | 100% | 100% |
-| Test baseline | 272/272 pass | 79/79+ pass (now 272/272) |
+| Test baseline | 348/348 pass | 79/79+ pass (now 348/348) |
 | Build artifacts | Windows + macOS (spec parity verified) | Windows + macOS (must include PII modules + dictionaries) |
 | Active config path | `SimpleConfig` (`main.py`) | unchanged |
 | Lazy-loading compliance | OPS-03 strict preserved | unchanged |
@@ -67,6 +68,7 @@ current_phase_name: Word 文档接入识别引擎
 |------|----------|-------|-------|
 | Phase 01-pdf P01-02 | 45 | 3 tasks | 6 files |
 | Phase 03 P04 | 28 | 4 tasks | 5 files |
+| Phase 03 G1-01 | 15 | 3 tasks | 2 files (main.py + test) |
 
 ## Accumulated Context
 
@@ -129,9 +131,10 @@ None — awaiting user approval of drafted roadmap to begin Phase 1 planning.
 
 ### Phase 3: Word 文档接入识别引擎
 
-- **Status**: Not started
-- **Plans**: 0 / TBD
+- **Status**: 🚧 In progress (3 plans shipped: 03-01 → 03-04, plus G1-01 gap closure)
+- **Plans**: 5 / 5 (03-01 word-adapter, 03-02 worker-pii-integration, 03-03 merge-and-preview, 03-04 save-and-packaging, 03-G1-01 auto-scan-and-pii-compare)
 - **Depends on**: Phase 1, Phase 2 (now complete)
+- **VERIFICATION**: gaps_found (Gap 1/2/3 closed by G1-01; Gap 4 core_properties sanitization + Gap 5 candidate review UI remain — Gap 4 deferred to Phase 7/8, Gap 5 explicitly deferred to Phase 7)
 
 ### Phase 3: Word 文档接入识别引擎
 
@@ -193,13 +196,14 @@ None — awaiting user approval of drafted roadmap to begin Phase 1 planning.
 
 ## Session Continuity
 
-**Last session:** 2026-08-11T14:59:49.056Z
-**Stopped at:** Completed 03-04-save-and-packaging-PLAN.md
+**Last session:** 2026-08-11T23:42:00.000Z
+**Stopped at:** Completed 03-G1-01-auto-scan-and-pii-compare-PLAN.md
 **Resume file:** None
 
-**Last session**: 2026-08-11 — Phase 2 (4 plans) + 02-04 gap closure + 08 cross-platform packaging verification shipped.
-**Last action**: `fd994ae` docs(08): cross-platform packaging verification; `8804f68` fix(02-04): CR-01 + WR-01 + WR-03 + WR-04 closed; `a8ab75d` ... `068cca3` Phase 2 (01/02/03 + gap closure) shipped.
-**Resume instructions**: `/gsd-plan-phase 3` to begin Phase 3 (Word 文档接入识别引擎) planning.
+**Last session**: 2026-08-11 — Phase 3 G1-01 gap closure shipped (Gap 1/2/3 closed).
+**Last action**: `ef4b1f1` fix(03-G1-01): inject pii_matches in _build_word_replaced_preview_html (Gap 3) + tests; `9e152bd` fix(03-G1-01): include PII in _has_word_replacement_candidates (Gap 2); `4471968` fix(03-G1-01): auto-start WordWorker PII scan on _open_word_docx (Gap 1).
+**Test baseline**: 348/348 pass (was 336, +12 new tests in TestAutoPiiScanOnOpen / TestPiiOnlyDocumentEntersCompareMode / TestPiiFullReloadPreviewContainsMask).
+**Resume instructions**: `/gsd-verify-work 3` to re-verify Phase 3 with G1 gaps closed, or `/gsd-plan-phase 4` for Excel support.
 
 ---
 
