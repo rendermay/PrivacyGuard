@@ -80,3 +80,40 @@ class TestAppConfig(unittest.TestCase):
             )
         finally:
             os.remove(temp_path)
+
+    def test_simple_config_pii_settings_default(self):
+        """Phase 1: SimpleConfig 未设置 pii_settings.* 时 get() 返回 None（默认值由 MainWindow 提供）。"""
+        fd, temp_path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        try:
+            with open(temp_path, "w", encoding="utf-8") as handle:
+                json.dump({}, handle)
+
+            config = SimpleConfig(temp_path)
+            # 缺失时返回 None（MainWindow 应用自己的 fallback）
+            self.assertIsNone(config.get("pii_settings.engine_enabled"))
+            self.assertIsNone(config.get("pii_settings.auto_redact"))
+            self.assertIsNone(config.get("pii_settings.require_confirmation"))
+        finally:
+            os.remove(temp_path)
+
+    def test_simple_config_pii_settings_round_trip(self):
+        """Phase 1: SimpleConfig pii_settings.* 三键 set + save + reload 完整往返。"""
+        fd, temp_path = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        try:
+            with open(temp_path, "w", encoding="utf-8") as handle:
+                json.dump({}, handle)
+
+            config = SimpleConfig(temp_path)
+            config.set("pii_settings.engine_enabled", True, persist=False)
+            config.set("pii_settings.auto_redact", False, persist=False)
+            config.set("pii_settings.require_confirmation", True, persist=False)
+            self.assertTrue(config.save())
+
+            reloaded = SimpleConfig(temp_path)
+            self.assertEqual(reloaded.get("pii_settings.engine_enabled"), True)
+            self.assertEqual(reloaded.get("pii_settings.auto_redact"), False)
+            self.assertEqual(reloaded.get("pii_settings.require_confirmation"), True)
+        finally:
+            os.remove(temp_path)

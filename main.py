@@ -1598,6 +1598,69 @@ class SettingsDialog(QDialog):
         v_ocr.addWidget(adjust_card)
         layout.addWidget(box_ocr)
 
+        # v38.x: Phase 1 — 5. 隐私识别（PIID-08 锁定，新增第五 tab）
+        box_pii = QFrame()
+        box_pii.setObjectName("settingsSectionCard")
+        v_pii = QVBoxLayout(box_pii)
+        v_pii.setContentsMargins(16, 16, 16, 16)
+        v_pii.setSpacing(12)
+        pii_lead = QLabel("打开 PDF 后自动扫描身份证号与手机号，并在保存时真脱敏。所有匹配纯本地完成。")
+        pii_lead.setObjectName("settingsSectionLead")
+        pii_lead.setWordWrap(True)
+        self.lbl_pii_summary = QLabel("")
+        self.lbl_pii_summary.setObjectName("settingsSectionSummary")
+        self.lbl_pii_summary.setWordWrap(True)
+        v_pii.addWidget(self._create_settings_section_header("5. 隐私识别", pii_lead, self.lbl_pii_summary))
+
+        # 读取当前 pii_settings
+        pii_settings_cur = {}
+        if self.config:
+            pii_settings_cur = {
+                "engine_enabled": self.config.get("pii_settings.engine_enabled", True),
+                "auto_redact": self.config.get("pii_settings.auto_redact", True),
+                "require_confirmation": self.config.get("pii_settings.require_confirmation", False),
+            }
+        else:
+            pii_settings_cur = {
+                "engine_enabled": True,
+                "auto_redact": True,
+                "require_confirmation": False,
+            }
+
+        # 三个 QCheckBox（UI-SPEC 锁定标签与 tooltip）
+        self.cb_pii_engine_enabled = QCheckBox("启用隐私识别引擎")
+        self.cb_pii_engine_enabled.setChecked(pii_settings_cur["engine_enabled"])
+        self.cb_pii_engine_enabled.setToolTip("关闭后，PDF 打开时不再扫描敏感项。仅影响 PII 自动识别，不影响现有 OCR 与手动框选。")
+        v_pii.addWidget(self.cb_pii_engine_enabled)
+
+        self.cb_pii_auto_redact = QCheckBox("扫描后自动真脱敏")
+        self.cb_pii_auto_redact.setChecked(pii_settings_cur["auto_redact"])
+        self.cb_pii_auto_redact.setToolTip("HIGH 档命中直接进入脱敏列表，保存 PDF 时一次性真删除。关闭后命中仅高亮，需手动确认。")
+        v_pii.addWidget(self.cb_pii_auto_redact)
+
+        self.cb_pii_require_confirm = QCheckBox("HIGH 档命中需手动确认")
+        self.cb_pii_require_confirm.setChecked(pii_settings_cur["require_confirmation"])
+        self.cb_pii_require_confirm.setToolTip("开启后，HIGH 档命中弹出确认对话框，由您决定每条是否脱敏。仅在该确认路径下生效。")
+        v_pii.addWidget(self.cb_pii_require_confirm)
+
+        v_pii.addSpacing(14)
+
+        # 只读范围标签（UI-SPEC §E1）
+        lbl_scope = QLabel("扫描范围（只读）：身份证号 / 手机号")
+        lbl_scope.setObjectName("settingsFieldNote")
+        v_pii.addWidget(lbl_scope)
+
+        # 同步：engine_enabled OFF → 后两个不可点
+        def _sync_pii_toggle_state():
+            enabled = self.cb_pii_engine_enabled.isChecked()
+            self.cb_pii_auto_redact.setEnabled(enabled)
+            self.cb_pii_require_confirm.setEnabled(enabled)
+
+        self.cb_pii_engine_enabled.toggled.connect(lambda _checked: _sync_pii_toggle_state())
+        _sync_pii_toggle_state()
+
+        layout.addWidget(box_pii)
+
         layout.addStretch(1)
         content_scroll.setWidget(content_widget)
         body_layout.addWidget(content_scroll, stretch=1)
@@ -1634,7 +1697,7 @@ class SettingsDialog(QDialog):
         footer_actions.addWidget(btn_ok)
         footer_layout.addLayout(footer_actions)
         outer_layout.addWidget(footer)
-        self._settings_sections = [box_rules, box_custom, box_enhance, box_ocr]
+        self._settings_sections = [box_rules, box_custom, box_enhance, box_ocr, box_pii]
         self._settings_nav_syncing = False
         self.settings_nav.currentRowChanged.connect(self._scroll_to_settings_section)
         self.content_scroll.verticalScrollBar().valueChanged.connect(self._sync_settings_nav_from_scroll)
@@ -2625,6 +2688,10 @@ class SettingsDialog(QDialog):
                 self.config.set("redaction.custom_keywords", self.custom_keywords, persist=False)
                 self.config.set("redaction.replacement_text", self.replacement_text, persist=False)
                 self.config.set("ocr.box_adjust_ratio", self.box_adjust_ratio, persist=False)
+                # v38.x: Phase 1 PII 引擎设置持久化
+                self.config.set("pii_settings.engine_enabled", self.cb_pii_engine_enabled.isChecked(), persist=False)
+                self.config.set("pii_settings.auto_redact", self.cb_pii_auto_redact.isChecked(), persist=False)
+                self.config.set("pii_settings.require_confirmation", self.cb_pii_require_confirm.isChecked(), persist=False)
                 self.config.save()
             except Exception as e:
                 print(f"[设置] 保存配置失败: {e}")
@@ -4006,7 +4073,7 @@ class SinglePageCanvas(QLabel):
     zoom_request = pyqtSignal(float)
     page_change_request = pyqtSignal(int)  # 翻页请求信号：正值=下一页，负值=上一页
 
-    def __init__(self, page_index=0, parent=None):
+    def __init__(self, page_index=0, parent=None, main_window=None):
         super().__init__(parent)
         # 完全复制 v7.0 的初始化
         self.setMouseTracking(True)
@@ -4018,6 +4085,9 @@ class SinglePageCanvas(QLabel):
         self.rects_ocr = []
         self.rects_manual = []
         self.mask_color = QColor(0, 0, 0)
+
+        # v38.x: Plan 01-03 — Phase 1 接入 PII 画布渲染（C5）
+        self.main_window = main_window  # 用于访问 page_data['pii']
 
         self.drawing = False
         self.start_point = QPointF()
@@ -4098,7 +4168,7 @@ class SinglePageCanvas(QLabel):
         return base_rect.adjusted(-2, -2, 2, 2)
 
     def paintEvent(self, event):
-        """v7.0 实现"""
+        """v7.0 实现 + Phase 1 PII 第四绘制循环"""
         super().paintEvent(event)
         if not self.pixmap(): return
 
@@ -4124,6 +4194,36 @@ class SinglePageCanvas(QLabel):
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(self.current_rect)
+
+        # 4. Phase 1: 绘制 PII 自动识别命中（深红 danger 颜色 + 标签）
+        # 仅当 main_window 已注入；未注入时跳过（防御性 — C5）
+        main_window = getattr(self, 'main_window', None)
+        if main_window is None:
+            return
+        page_pii = main_window.page_data.get(self.page_index, {}).get('pii', [])
+        if not page_pii:
+            return
+        pii_pen = QPen(QColor("#D64545"), 2)
+        pii_brush = QColor("#D64545")
+        pii_brush.setAlphaF(0.18)
+        painter.setPen(pii_pen)
+        painter.setBrush(pii_brush)
+        for hit in page_pii:
+            try:
+                pr = hit.page_rect
+            except Exception:
+                continue
+            r = QRectF(pr[0], pr[1], pr[2], pr[3])
+            sr = self.pdf_to_screen(r)
+            painter.drawRect(sr)
+            # 标签徽章
+            entity_type = getattr(hit, 'entity_type', '') or ''
+            label = "ID" if entity_type == "CN_ID_CARD" else "PHONE"
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor("#D64545"))
+            painter.drawRect(QRectF(sr.x() - 2, sr.y() - 18, len(label) * 8 + 8, 16))
+            painter.setPen(QColor("#FFFFFF"))
+            painter.drawText(QPointF(sr.x() + 2, sr.y() - 5), label)
 
     def mouseMoveEvent(self, event):
         """v7.0 实现"""
@@ -4189,15 +4289,21 @@ class SinglePageCanvas(QLabel):
 # === OCR 线程 ===
 # v37.7.6: 改为使用模块化 OCRWorker，自动注入 box_adjust_ratio
 class OCRWorker(_ModularOCRWorker):
-    """OCR 处理线程（兼容层：自动注入 config 中的 box_adjust_ratio）"""
+    """OCR 处理线程（兼容层：自动注入 config 中的 box_adjust_ratio）
+
+    v38.x: Plan 01-03 — 扩展 pii_engine_enabled / pii_settings kwargs（B6）
+    """
 
     def __init__(self, pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
-                 use_char_level_ocr: bool = False, seal_detection_enabled: bool = False):
+                 use_char_level_ocr: bool = False, seal_detection_enabled: bool = False,
+                 pii_engine_enabled: bool = False, pii_settings: dict = None):
         box_adjust_ratio = config.get("ocr.box_adjust_ratio", 0.0) if config else 0.0
         super().__init__(pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
                          use_char_level_ocr=use_char_level_ocr,
                          seal_detection_enabled=seal_detection_enabled,
-                         box_adjust_ratio=box_adjust_ratio)
+                         box_adjust_ratio=box_adjust_ratio,
+                         pii_engine_enabled=pii_engine_enabled,
+                         pii_settings=pii_settings)
 
 # === WebView Bridge：Python 与 JavaScript 通信 ===
 class WebViewBridge(QObject):
@@ -4889,6 +4995,7 @@ class MainWindow(QMainWindow):
 
         # v37.0: 从配置读取窗口尺寸，失败时使用硬编码后备
         # v37.2.0: 读取 OCR 引擎配置
+        # v38.x: Phase 1 接入 PII 引擎 — 读取 pii_settings 块
         if config:
             min_width = config.get("app.window.min_width", 900)
             min_height = config.get("app.window.min_height", 600)
@@ -4899,6 +5006,12 @@ class MainWindow(QMainWindow):
             self.offset_x = config.get("redaction.offset.default_x", 0)
             self.offset_w = config.get("redaction.offset.default_w", 0)
             self.custom_keywords = config.get("redaction.custom_keywords", "")
+            # Phase 1: PII 引擎设置
+            self.pii_settings = {
+                "engine_enabled": config.get("pii_settings.engine_enabled", True),
+                "auto_redact": config.get("pii_settings.auto_redact", True),
+                "require_confirmation": config.get("pii_settings.require_confirmation", False),
+            }
             # v37.4.0: 移除 OCR 引擎配置，只使用 RapidOCR
         else:
             min_width, min_height = 900, 600
@@ -4908,6 +5021,15 @@ class MainWindow(QMainWindow):
             self.offset_x = 0
             self.offset_w = 0
             self.custom_keywords = ""
+            # Phase 1: PII 引擎设置（无 config 时的 fallback）
+            self.pii_settings = {
+                "engine_enabled": True,
+                "auto_redact": True,
+                "require_confirmation": False,
+            }
+
+        # Phase 1: PII 数据锁（保护 page_data[page]["pii"] 写入）
+        self._pii_data_lock = QMutex()
 
         # 窗口尺寸设置：最小尺寸 + 默认尺寸
         self.setMinimumSize(min_width, min_height)
@@ -5739,8 +5861,9 @@ class MainWindow(QMainWindow):
         )
 
         # v22.9: 使用固定的 canvas_container，通过隐藏/显示实现单/双页切换
-        self.canvas_left = SinglePageCanvas(0)
-        self.canvas_right = SinglePageCanvas(1)
+        # v38.x: Plan 01-03 — 传 main_window=self 让画布可读 page_data['pii']（C5）
+        self.canvas_left = SinglePageCanvas(0, main_window=self)
+        self.canvas_right = SinglePageCanvas(1, main_window=self)
 
         # 容器始终作为 scroll 的 widget
         self.canvas_container = QWidget()
@@ -10518,7 +10641,7 @@ class MainWindow(QMainWindow):
         self.doc = fitz.open(fname)
         self.doc_type = 'pdf'
         total = len(self.doc)
-        self.page_data = {i: {'ocr': [], 'manual': []} for i in range(total)}
+        self.page_data = {i: {'ocr': [], 'manual': [], 'pii': []} for i in range(total)}
         self.current_page = 0
         self.word_doc = None
         self.word_data = {}
@@ -11127,15 +11250,20 @@ sudo dnf install antiword
             print(f"[OCR] 印章检测启用: {seal_detection_enabled}")
             self._ocr_processed_pages = set()
             # v37.4.0: 只使用 RapidOCR，移除 use_char_level_ocr 参数
+            # v38.x: Phase 1 接入 PII 引擎 — pii_engine_enabled / pii_settings
             self.worker = OCRWorker(self.file_path, self.active_rules, self.use_enhance, self.custom_keywords,
                                     self.scan_level, self.offset_x, self.offset_w,
-                                    seal_detection_enabled=seal_detection_enabled)
+                                    seal_detection_enabled=seal_detection_enabled,
+                                    pii_engine_enabled=self.pii_settings.get("engine_enabled", True),
+                                    pii_settings=self.pii_settings)
             self.active_worker = self.worker  # 追踪线程
             self.worker.progress_signal.connect(self.progress.setValue)
             # v36.4: 使用线程安全的逐页结果信号
             self.worker.page_result_signal.connect(self._on_ocr_page_result)
             # v37.0.5: 连接错误信号
             self.worker.error_signal.connect(self._on_ocr_error)
+            # Phase 1: 连接 PII 信号（D-04 wire）
+            self.worker.pii_signal.connect(self._on_pii_page_result)
             # 先连接原有的完成处理，再连接清理
             self.worker.finished_signal.connect(self._on_ocr_finished_safe)
             self.worker.finished_signal.connect(self._on_worker_finished)
@@ -11261,6 +11389,21 @@ sudo dnf install antiword
             self.page_data[page_num]['ocr'] = deduped
             if DEBUG_MODE and len(rects) != len(deduped):
                 print(f"[DEBUG] 页面{page_num}: 去重前{len(rects)}个矩形, 去重后{len(deduped)}个")
+
+    def _on_pii_page_result(self, page_num: int, pii_hits: list):
+        """Phase 1: PII 命中写入 page_data[page_num]['pii']（D-04 wire）。
+
+        反序列化 worker 发出的 dict 列表为 PIIHit 对象；写入受 _pii_data_lock 保护；
+        当前页时调用 render_view() 触发画布重绘。
+        """
+        if page_num not in self.page_data:
+            return
+        # lazy import inside slot — 避免 import-time 拉起 PII 引擎
+        from privacyguard.pii.hits import PIIHit
+        with QMutexLocker(self._pii_data_lock):
+            self.page_data[page_num]['pii'] = [PIIHit(**h) for h in pii_hits]
+        if self.current_page == page_num:
+            self.render_view()
 
     def _on_ocr_finished_safe(self, _):
         """v36.4: 线程安全 - OCR 完成处理（在主线程执行）
@@ -12356,8 +12499,10 @@ sudo dnf install antiword
 
                         # v37.3.1: 修复内部编辑功能 - 使用副本避免修改原始数据
                         # 从 page_data 中获取脱敏区域列表
+                        # v38.x: Phase 1 加入 pii_list（与 ocr_list + manual_list 合并后一次性 apply）
                         ocr_list = self.page_data[i].get('ocr', [])
                         manual_list = self.page_data[i].get('manual', [])
+                        pii_list = self.page_data[i].get('pii', [])
 
                         # 1. 添加脱敏注释
                         # v37.3.1: 重建 QRectF 确保不修改原始对象
@@ -12365,6 +12510,14 @@ sudo dnf install antiword
                             # 从 QRectF 提取坐标并重建，避免引用问题
                             x, y, w, h = r.x(), r.y(), r.width(), r.height()
                             rect = fitz.Rect(x, y, x + w, y + h)
+                            annot = page.add_redact_annot(rect)
+                            annot.set_colors(stroke=fill_col, fill=fill_col)
+                            annot.update()
+
+                        # Phase 1: pii 命中用 page_rect tuple 路径（D-04 + SAFE-01）
+                        for hit in pii_list:
+                            pr = hit.page_rect
+                            rect = fitz.Rect(pr[0], pr[1], pr[0] + pr[2], pr[1] + pr[3])
                             annot = page.add_redact_annot(rect)
                             annot.set_colors(stroke=fill_col, fill=fill_col)
                             annot.update()

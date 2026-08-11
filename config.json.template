@@ -79,6 +79,16 @@
       "min_circularity": 0.5
     }
   },
+  "pii_settings": {
+    "engine_enabled": true,
+    "auto_redact": true,
+    "require_confirmation": false,
+    "scan_scope": [
+      "CN_ID_CARD",
+      "CN_PHONE"
+    ],
+    "_comment": "Phase 1 隐私识别引擎设置；D-08 锁定"
+  },
   "ocr": {
     "min_rect_width": 5,
     "progress_update_interval": 0.05,
