@@ -45,6 +45,35 @@ class TestPdfPiiRedaction(unittest.TestCase):
         doc.close()
         return secret_id, secret_phone
 
+    def _detect_with_search_for(self, in_pdf):
+        """detect + 用 page.search_for 取得精确坐标。
+
+        引擎返回的 page_rect 在 text-layer path 是占位 (0, 0, w, h)，
+        不能直接用于 redaction（会画到页面左上角）。这里基于 normalized
+        文本二次查询 page.search_for 取真实坐标。
+        """
+        engine = PIIEngine()
+        rects_per_page = {}
+        all_hits = []
+        with fitz.open(in_pdf) as src:
+            for i, page in enumerate(src):
+                unit = TextUnit(page_index=i, text=page.get_text(), source="text")
+                page_hits = []
+                for hit in engine.detect(unit):
+                    all_hits.append(hit)
+                    matches = page.search_for(hit.normalized)
+                    if matches:
+                        # 取第一个匹配；同一字符串多次匹配走 overlap.resolve
+                        r = matches[0]
+                        page_hits.append(fitz.Rect(r.x0, r.y0, r.x1, r.y1))
+                    else:
+                        # 兜底使用 hit 自带 rect（占位）
+                        rp = hit.page_rect
+                        page_hits.append(fitz.Rect(rp[0], rp[1], rp[0] + rp[2], rp[1] + rp[3]))
+                if page_hits:
+                    rects_per_page[i] = page_hits
+        return rects_per_page, all_hits
+
     def test_redacted_text_not_extractable(self):
         """完整 spine：synth PDF -> PIIEngine.detect -> apply_pii_redactions ->
         fitz.open(out).get_text() -> 断言敏感前 10/7 位消失。
@@ -54,24 +83,12 @@ class TestPdfPiiRedaction(unittest.TestCase):
             out_pdf = os.path.join(tmp, "out.pdf")
             secret_id, secret_phone = self._build_pii_pdf(in_pdf)
 
-            # 1. detect
-            engine = PIIEngine()
-            rects_per_page = {}
-            with fitz.open(in_pdf) as src:
-                for i, page in enumerate(src):
-                    unit = TextUnit(page_index=i, text=page.get_text(), source="text")
-                    page_hits = []
-                    for hit in engine.detect(unit):
-                        r = hit.page_rect
-                        page_hits.append(
-                            fitz.Rect(r[0], r[1], r[0] + r[2], r[1] + r[3])
-                        )
-                    if page_hits:
-                        rects_per_page[i] = page_hits
+            # 1. detect + 二次定位
+            rects_per_page, hits = self._detect_with_search_for(in_pdf)
 
             # Pre-condition: 引擎必须检测到至少一个 hit（否则测试无意义）。
             self.assertGreater(
-                len(rects_per_page.get(0, [])),
+                len(hits),
                 0,
                 "PIIEngine 未检测到任何命中；测试失败（不应平凡通过）",
             )
@@ -106,22 +123,10 @@ class TestPdfPiiRedaction(unittest.TestCase):
             doc.save(in_pdf)
             doc.close()
 
-            engine = PIIEngine()
-            rects_per_page = {}
-            with fitz.open(in_pdf) as src:
-                for i, p in enumerate(src):
-                    unit = TextUnit(page_index=i, text=p.get_text(), source="text")
-                    page_hits = []
-                    for hit in engine.detect(unit):
-                        r = hit.page_rect
-                        page_hits.append(
-                            fitz.Rect(r[0], r[1], r[0] + r[2], r[1] + r[3])
-                        )
-                    if page_hits:
-                        rects_per_page[i] = page_hits
+            rects_per_page, hits = self._detect_with_search_for(in_pdf)
 
             self.assertGreater(
-                len(rects_per_page.get(0, [])),
+                len(hits),
                 0,
                 "PIIEngine 未检测到 GB 11643 标准样本 53010219200508011X",
             )
