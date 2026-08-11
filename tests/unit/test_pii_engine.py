@@ -715,5 +715,230 @@ class TestEngineEmail(unittest.TestCase):
         self.assertEqual(len(email_hits), 1)
 
 
+# ----------------------------------------------------------------------
+# Phase 2 (02-02-engine-expansion) — VAT / 银行账号 / 15 位税号 / 18 位税号引擎层
+# ----------------------------------------------------------------------
+
+class TestEngineVatInvoice(unittest.TestCase):
+    """FIN-02: PIIEngine 命中 VAT 发票号路径（D-07 上下文锥点 + 8/20 位）。"""
+
+    def setUp(self):
+        self.engine = PIIEngine()
+
+    def test_detects_8_digit_with_zh_context(self):
+        """8 位 VAT + 中文上下文 → 命中 CN_VAT_INVOICE + HIGH。"""
+        from tests.fixtures.fake_pii import fake_vat_invoice_8
+        unit = TextUnit(
+            page_index=0,
+            text=f"发票号码 {fake_vat_invoice_8()}",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        vat_hits = [h for h in hits if h.entity_type == "CN_VAT_INVOICE"]
+        self.assertGreaterEqual(len(vat_hits), 1)
+        hit = vat_hits[0]
+        self.assertEqual(hit.confidence_tier, "HIGH")
+        self.assertTrue(hit.validator_passed)
+
+    def test_detects_20_digit_with_full_context(self):
+        """20 位 VAT (全电发票) + 中文上下文 → 命中 CN_VAT_INVOICE + HIGH。"""
+        from tests.fixtures.fake_pii import fake_vat_invoice_20
+        unit = TextUnit(
+            page_index=0,
+            text=f"全电发票号码 {fake_vat_invoice_20()}",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        vat_hits = [h for h in hits if h.entity_type == "CN_VAT_INVOICE"]
+        self.assertGreaterEqual(len(vat_hits), 1)
+        hit = vat_hits[0]
+        self.assertEqual(hit.confidence_tier, "HIGH")
+        self.assertTrue(hit.validator_passed)
+        # mask_strategy = 前 2 + *... + 后 2 (20 位)
+        self.assertTrue(hit.mask_strategy.startswith("23"))
+        self.assertTrue(hit.mask_strategy.endswith("90"))
+
+    def test_detects_20_digit_without_context_still_high(self):
+        """20 位无 anchor → 命中 CN_VAT_INVOICE + HIGH（结构上唯一性）。"""
+        from tests.fixtures.fake_pii import fake_vat_invoice_20
+        unit = TextUnit(
+            page_index=0,
+            text=f"{fake_vat_invoice_20()}",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        vat_hits = [h for h in hits if h.entity_type == "CN_VAT_INVOICE"]
+        self.assertGreaterEqual(len(vat_hits), 1)
+        self.assertEqual(vat_hits[0].confidence_tier, "HIGH")
+
+    def test_detects_8_digit_without_context_as_medium(self):
+        """8 位无 anchor → 命中 CN_VAT_INVOICE 但 tier=MEDIUM（D-07 锁定）。"""
+        from tests.fixtures.fake_pii import fake_vat_invoice_8
+        unit = TextUnit(
+            page_index=0,
+            text=f"{fake_vat_invoice_8()}",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        vat_hits = [h for h in hits if h.entity_type == "CN_VAT_INVOICE"]
+        if vat_hits:
+            self.assertEqual(vat_hits[0].confidence_tier, "MEDIUM")
+            self.assertTrue(vat_hits[0].validator_passed)
+
+
+class TestEngineTaxpayerId18(unittest.TestCase):
+    """D-09 双 type 契约：18 位 USCC 路径同时产出 CN_USCC + CN_TAXPAYER_ID。"""
+
+    def setUp(self):
+        self.engine = PIIEngine()
+
+    def test_detects_18_digit_as_cn_taxpayer_id(self):
+        """18 位 USCC 文本 → 命中 CN_TAXPAYER_ID + HIGH。"""
+        from tests.fixtures.fake_pii import fake_uscc
+        uscc = fake_uscc()
+        unit = TextUnit(
+            page_index=0,
+            text=f"三证合一 {uscc}",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        taxpayer_hits = [h for h in hits if h.entity_type == "CN_TAXPAYER_ID"]
+        self.assertGreaterEqual(len(taxpayer_hits), 1)
+        hit = taxpayer_hits[0]
+        self.assertEqual(hit.confidence_tier, "HIGH")
+        self.assertTrue(hit.validator_passed)
+        # mask_strategy = 前 6 + 8 * + 后 4（与 USCC 一致，D-09）
+        self.assertEqual(hit.mask_strategy, uscc[:6] + "*" * 8 + uscc[-4:])
+
+    def test_cn_uscc_and_cn_taxpayer_id_both_emitted(self):
+        """D-09 双 type：18 位 USCC 同时有 CN_USCC + CN_TAXPAYER_ID 命中。"""
+        from tests.fixtures.fake_pii import fake_uscc
+        uscc = fake_uscc()
+        unit = TextUnit(
+            page_index=0,
+            text=f"{uscc}",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        uscc_hits = [h for h in hits if h.entity_type == "CN_USCC"]
+        taxpayer_hits = [h for h in hits if h.entity_type == "CN_TAXPAYER_ID"]
+        self.assertGreaterEqual(len(uscc_hits), 1)
+        self.assertGreaterEqual(len(taxpayer_hits), 1)
+        # 两类命中 mask_strategy 一致（D-09 共享 18 位 mask 形态）
+        self.assertEqual(uscc_hits[0].mask_strategy, taxpayer_hits[0].mask_strategy)
+
+
+class TestEngineTaxpayerId15(unittest.TestCase):
+    """FIN-03: 15 位旧版纳税人识别号 — confidence=MEDIUM（D-09 无强校验位）。"""
+
+    def setUp(self):
+        self.engine = PIIEngine()
+
+    def test_detects_15_digit_with_admin_prefix(self):
+        from tests.fixtures.fake_pii import fake_taxpayer_id_15
+        unit = TextUnit(
+            page_index=0,
+            text=f"旧版税号 {fake_taxpayer_id_15()}",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        hits15 = [h for h in hits if h.entity_type == "CN_TAXPAYER_ID_15"]
+        self.assertEqual(len(hits15), 1)
+        hit = hits15[0]
+        # D-09: 15 位无强校验位 → MEDIUM
+        self.assertEqual(hit.confidence_tier, "MEDIUM")
+        self.assertTrue(hit.validator_passed)
+        # mask_strategy = 前 6 + 后 4
+        self.assertEqual(hit.mask_strategy, hit.normalized[:6] + "*****" + hit.normalized[-4:])
+
+    def test_rejects_invalid_admin_prefix(self):
+        """admin prefix '99' → 0 命中。"""
+        unit = TextUnit(
+            page_index=0,
+            text="旧版税号 990101800101001",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        hits15 = [h for h in hits if h.entity_type == "CN_TAXPAYER_ID_15"]
+        self.assertEqual(len(hits15), 0)
+
+
+class TestEngineBankAccount(unittest.TestCase):
+    """FIN-04: 银行账号 — D-08 必查上下文锥点。"""
+
+    def setUp(self):
+        self.engine = PIIEngine()
+
+    def test_detects_with_zh_context(self):
+        from tests.fixtures.fake_pii import fake_bank_account
+        acct = fake_bank_account()
+        unit = TextUnit(
+            page_index=0,
+            text=f"银行账号 {acct}",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        acct_hits = [h for h in hits if h.entity_type == "CN_BANK_ACCOUNT"]
+        self.assertEqual(len(acct_hits), 1)
+        self.assertEqual(acct_hits[0].confidence_tier, "HIGH")
+        self.assertTrue(acct_hits[0].validator_passed)
+        # mask_strategy = 前 4 + *... + 后 4
+        self.assertTrue(acct_hits[0].mask_strategy.startswith(acct[:4]))
+        self.assertTrue(acct_hits[0].mask_strategy.endswith(acct[-4:]))
+
+    def test_rejects_without_context(self):
+        """无 context anchor → 0 hits（D-08 strict）。"""
+        from tests.fixtures.fake_pii import fake_bank_account
+        unit = TextUnit(
+            page_index=0,
+            text=f"数字 {fake_bank_account()}",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        acct_hits = [h for h in hits if h.entity_type == "CN_BANK_ACCOUNT"]
+        self.assertEqual(len(acct_hits), 0)
+
+    def test_rejects_short_account_even_with_context(self):
+        """短账号即使有 context 也应拒绝（9-min length gate）。"""
+        unit = TextUnit(
+            page_index=0,
+            text="账号 12345678",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        acct_hits = [h for h in hits if h.entity_type == "CN_BANK_ACCOUNT"]
+        self.assertEqual(len(acct_hits), 0)
+
+    def test_detects_with_bank_name_context(self):
+        """银行名 anchor（'工商银行'）→ 命中 CN_BANK_ACCOUNT。"""
+        from tests.fixtures.fake_pii import fake_bank_account
+        acct = fake_bank_account()
+        unit = TextUnit(
+            page_index=0,
+            text=f"工商银行 {acct}",
+            source="text",
+        )
+        hits = self.engine.detect(unit)
+        acct_hits = [h for h in hits if h.entity_type == "CN_BANK_ACCOUNT"]
+        self.assertEqual(len(acct_hits), 1)
+
+
+class TestEngineBankAccountNoContextRejected(unittest.TestCase):
+    """D-08 strict: bare 银行账号（无 anchor）→ 0 hits。"""
+
+    def test_bare_account_no_anchor_returns_zero_hits(self):
+        """复合测试：所有 entity 一次性放入无 anchor 文本 → 仅 CN_BANK_ACCOUNT 被 reject。"""
+        from tests.fixtures.fake_pii import fake_bank_account
+        engine = PIIEngine()
+        unit = TextUnit(
+            page_index=0,
+            text=f"random prefix {fake_bank_account()}",
+            source="text",
+        )
+        hits = engine.detect(unit)
+        acct_hits = [h for h in hits if h.entity_type == "CN_BANK_ACCOUNT"]
+        self.assertEqual(len(acct_hits), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

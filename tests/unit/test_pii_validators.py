@@ -429,5 +429,200 @@ class TestUsccCategory(unittest.TestCase):
             self.assertIn(code, USCC_CATEGORY_CODES)
 
 
+# ----------------------------------------------------------------------
+# Phase 2 (02-02-engine-expansion) — VAT 发票号 / 银行账号 / 15 位税号 validator
+# ----------------------------------------------------------------------
+
+class TestVatInvoice(unittest.TestCase):
+    """FIN-02: 增值税发票号 8 位 / 20 位双格式 + 上下文锥点。"""
+
+    def test_8_digit_passes(self):
+        from privacyguard.pii.validators.vat_invoice import validate_vat_invoice_8
+        self.assertTrue(validate_vat_invoice_8('12345678'))
+
+    def test_8_digit_with_letters_rejected(self):
+        from privacyguard.pii.validators.vat_invoice import validate_vat_invoice_8
+        self.assertFalse(validate_vat_invoice_8('1234567a'))
+
+    def test_20_digit_passes(self):
+        from privacyguard.pii.validators.vat_invoice import validate_vat_invoice_20
+        self.assertTrue(validate_vat_invoice_20('12345678901234567890'))
+
+    def test_20_digit_with_hyphens_accepted(self):
+        """20 位含横线/年份分隔 → 剥离后 → True。"""
+        from privacyguard.pii.validators.vat_invoice import validate_vat_invoice_20
+        self.assertTrue(validate_vat_invoice_20('1234-5678-9012-3456-7890'))
+
+    def test_20_digit_wrong_length_rejected(self):
+        from privacyguard.pii.validators.vat_invoice import validate_vat_invoice_20
+        self.assertFalse(validate_vat_invoice_20('1234567890'))
+
+    def test_non_string_rejected(self):
+        from privacyguard.pii.validators.vat_invoice import validate_vat_invoice_8
+        self.assertFalse(validate_vat_invoice_8(None))  # type: ignore[arg-type]
+        self.assertFalse(validate_vat_invoice_8(12345678))  # type: ignore[arg-type]
+
+
+class TestVatInvoiceContextAnchor(unittest.TestCase):
+    """FIN-02: VAT 上下文锥点 window ±20 chars 检测。"""
+
+    def test_context_anchor_zh(self):
+        from privacyguard.pii.validators.vat_invoice import has_vat_invoice_context
+        self.assertTrue(has_vat_invoice_context('发票号码 12345678', '12345678'))
+
+    def test_context_anchor_en(self):
+        from privacyguard.pii.validators.vat_invoice import has_vat_invoice_context
+        self.assertTrue(has_vat_invoice_context('invoice number 12345678', '12345678'))
+
+    def test_no_context_anchor_rejected(self):
+        from privacyguard.pii.validators.vat_invoice import has_vat_invoice_context
+        self.assertFalse(has_vat_invoice_context('random text 12345678', '12345678'))
+
+    def test_context_anchor_full_width_dianzi_fapiao(self):
+        """电子发票 anchor（覆盖中文 / 全数字混合）。"""
+        from privacyguard.pii.validators.vat_invoice import has_vat_invoice_context
+        self.assertTrue(has_vat_invoice_context('增值税电子发票 12345678', '12345678'))
+
+    def test_context_window_boundary(self):
+        """目标 anchor 距离 target > 20 chars 应判 False。"""
+        from privacyguard.pii.validators.vat_invoice import has_vat_invoice_context
+        long_padding = 'x' * 25
+        self.assertFalse(has_vat_invoice_context(f'发票号码 {long_padding}12345678', '12345678'))
+
+
+class TestTaxpayerId15(unittest.TestCase):
+    """FIN-03: 15 位旧版纳税人识别号 — 无强校验位，仅格式 + 行政区划前缀白名单。"""
+
+    def test_valid_15_with_admin_prefix(self):
+        from privacyguard.pii.validators.taxpayer_id import validate_taxpayer_id_15
+        self.assertTrue(validate_taxpayer_id_15('110101800101001'))
+
+    def test_invalid_admin_prefix_rejected(self):
+        """99 不在白名单 → False。"""
+        from privacyguard.pii.validators.taxpayer_id import validate_taxpayer_id_15
+        self.assertFalse(validate_taxpayer_id_15('990101800101001'))
+
+    def test_short_id_rejected(self):
+        from privacyguard.pii.validators.taxpayer_id import validate_taxpayer_id_15
+        self.assertFalse(validate_taxpayer_id_15('123'))
+
+    def test_with_hyphens_stripped(self):
+        """含横线/年份分隔 → 剥离后 → True。"""
+        from privacyguard.pii.validators.taxpayer_id import validate_taxpayer_id_15
+        self.assertTrue(validate_taxpayer_id_15('110101-800101-001'))
+
+    def test_does_not_use_uscc_checksum(self):
+        """18 位 USCC 不能通过 15 位路径（D-09 双 type 防御误判）。"""
+        from privacyguard.pii.validators.taxpayer_id import validate_taxpayer_id_15
+        # '91110000600037341L' 是 18 位 USCC（含末尾 L 校验位）
+        self.assertFalse(validate_taxpayer_id_15('91110000600037341L'))
+
+    def test_non_string_rejected(self):
+        from privacyguard.pii.validators.taxpayer_id import validate_taxpayer_id_15
+        self.assertFalse(validate_taxpayer_id_15(None))  # type: ignore[arg-type]
+
+    def test_all_33_admin_prefixes_accepted(self):
+        """33 province 编码全部接受 prefix-only 9 位（前置 sanity check）。"""
+        from privacyguard.pii.validators.taxpayer_id import (
+            _TAXPAYER_15_ADMIN_PREFIX,
+            validate_taxpayer_id_15,
+        )
+        # 33 个省份 2 位前缀
+        expected = {
+            '11', '12', '13', '14', '15',
+            '21', '22', '23',
+            '31', '32', '33', '34', '35', '36', '37',
+            '41', '42', '43', '44', '45', '46',
+            '50', '51', '52', '53', '54',
+            '61', '62', '63', '64', '65',
+            '71', '81', '82',
+        }
+        self.assertEqual(len(_TAXPAYER_15_ADMIN_PREFIX), 34)
+        for prefix in expected:
+            self.assertIn(prefix, _TAXPAYER_15_ADMIN_PREFIX)
+        # 构造一个 admin prefix + 13 位 0 → validate 应通过
+        for prefix in sorted(_TAXPAYER_15_ADMIN_PREFIX):
+            candidate = prefix + '0' * 13
+            self.assertTrue(
+                validate_taxpayer_id_15(candidate),
+                f"admin prefix {prefix} 应被接受，但 validate_taxpayer_id_15({candidate}) 返回 False",
+            )
+
+
+class TestBankAccount(unittest.TestCase):
+    """FIN-04: 银行账号 — 9-21 位 + 必查上下文锥点。"""
+
+    def test_18_digit_passes(self):
+        from privacyguard.pii.validators.bank_account import validate_bank_account
+        self.assertTrue(validate_bank_account('622202123456789012'))
+
+    def test_short_account_rejected(self):
+        """8 位低于 9-min → False。"""
+        from privacyguard.pii.validators.bank_account import validate_bank_account
+        self.assertFalse(validate_bank_account('12345678'))
+
+    def test_long_account_rejected(self):
+        """22 位高于 21-max → False。"""
+        from privacyguard.pii.validators.bank_account import validate_bank_account
+        self.assertFalse(validate_bank_account('1' * 22))
+
+    def test_non_digit_rejected(self):
+        from privacyguard.pii.validators.bank_account import validate_bank_account
+        self.assertFalse(validate_bank_account('6222021234567890a'))
+
+    def test_with_spaces_stripped(self):
+        """含空格 → 剥离后 → 18 位 → True。"""
+        from privacyguard.pii.validators.bank_account import validate_bank_account
+        self.assertTrue(validate_bank_account('6222 0212 3456 7890 12'))
+
+    def test_non_string_rejected(self):
+        from privacyguard.pii.validators.bank_account import validate_bank_account
+        self.assertFalse(validate_bank_account(None))  # type: ignore[arg-type]
+
+
+class TestBankAccountContextAnchor(unittest.TestCase):
+    """FIN-04: 银行账号上下文锥点 — D-08 必查。"""
+
+    def test_context_anchor_zh_recognized(self):
+        from privacyguard.pii.validators.bank_account import has_bank_account_context
+        self.assertTrue(has_bank_account_context('账号 622202123456789012', '622202123456789012'))
+
+    def test_context_anchor_bank_name_recognized(self):
+        from privacyguard.pii.validators.bank_account import has_bank_account_context
+        self.assertTrue(has_bank_account_context('工商银行 622202', '622202'))
+
+    def test_no_context_anchor_rejected(self):
+        from privacyguard.pii.validators.bank_account import has_bank_account_context
+        self.assertFalse(has_bank_account_context('random 622202123456789012', '622202123456789012'))
+
+    def test_all_context_keywords_present(self):
+        """BANK_ACCOUNT_CONTEXTS 包含 4 generic + 至少 12 银行名关键词（≥17）。"""
+        from privacyguard.pii.validators.bank_account import BANK_ACCOUNT_CONTEXTS
+        generic = {'账号', '账户', '银行账号', '银行账户'}
+        bank_names = {
+            '工商银行', '农行', '中行', '建行', '邮储',
+            '招行', '交通银行', '中信', '浦发', '兴业', '民生', '平安', '上海银行',
+        }
+        for kw in generic:
+            self.assertIn(kw, BANK_ACCOUNT_CONTEXTS, f"BANK_ACCOUNT_CONTEXTS 缺少 generic {kw}")
+        # 17 关键词（D-08 + Claude's Discretion 扩展）
+        self.assertGreaterEqual(
+            len(BANK_ACCOUNT_CONTEXTS), 17,
+            f"BANK_ACCOUNT_CONTEXTS 仅 {len(BANK_ACCOUNT_CONTEXTS)} 条，需 ≥17",
+        )
+        for kw in bank_names:
+            self.assertIn(kw, BANK_ACCOUNT_CONTEXTS, f"BANK_ACCOUNT_CONTEXTS 缺少 {kw}")
+
+
+class TestVatInvoiceContextConstants(unittest.TestCase):
+    """FIN-02: VAT_INVOICE_CONTEXTS 包含必要关键词。"""
+
+    def test_vat_invoice_contexts_includes_common_keywords(self):
+        from privacyguard.pii.validators.vat_invoice import VAT_INVOICE_CONTEXTS
+        for kw in ('发票', '号码', '票号', 'invoice', 'INVOICE', 'Invoice',
+                   '增值税', '电子发票', '全电发票', '号码:', '号:'):
+            self.assertIn(kw, VAT_INVOICE_CONTEXTS, f"VAT_INVOICE_CONTEXTS 缺少 {kw}")
+
+
 if __name__ == "__main__":
     unittest.main()
