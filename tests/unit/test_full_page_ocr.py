@@ -109,8 +109,12 @@ class TestCollectFullPageOcrHits(unittest.TestCase):
         import fitz
         doc = fitz.open()
         page = doc.new_page(width=200, height=200)
-        fake_page = MagicMock()
-        fake_page.rect = page.rect
+
+        # 注入一个真实可用的 render_fn，返回一个 100x100x3 的 BGR ndarray
+        fake_img = np.zeros((100, 100, 3), dtype=np.uint8)
+
+        def render_fn(_page, _scale):
+            return fake_img
 
         # 模拟一个 OCR 行：box 是 [[x1,y1],...,[x4,y4]]，text 是字符串
         ocr_results = [
@@ -125,10 +129,11 @@ class TestCollectFullPageOcrHits(unittest.TestCase):
             return (10.0, 5.0, 30.0, 15.0)
 
         result = collect_full_page_ocr_hits(
-            page=fake_page,
+            page=page,
             scan_scale=1.0,
             recognize_fn=recognize_fn,
             calculate_rect_fn=calculate_rect_fn,
+            render_fn=render_fn,
         )
         self.assertIsInstance(result, list)
         self.assertGreater(len(result), 0)
@@ -144,10 +149,12 @@ class TestCollectFullPageOcrHits(unittest.TestCase):
         import fitz
         doc = fitz.open()
         page = doc.new_page(width=200, height=200)
-        fake_page = MagicMock()
-        fake_page.rect = page.rect
 
         called = []
+        fake_img = np.zeros((100, 100, 3), dtype=np.uint8)
+
+        def render_fn(_page, _scale):
+            return fake_img
 
         def recognize_fn(_img):
             return [([[0, 0], [50, 0], [50, 20], [0, 20]], "")]
@@ -157,10 +164,11 @@ class TestCollectFullPageOcrHits(unittest.TestCase):
             return (10.0, 5.0, 30.0, 15.0)
 
         result = collect_full_page_ocr_hits(
-            page=fake_page,
+            page=page,
             scan_scale=1.0,
             recognize_fn=recognize_fn,
             calculate_rect_fn=calculate_rect_fn,
+            render_fn=render_fn,
         )
         self.assertEqual(result, [])
         self.assertEqual(len(called), 0)
