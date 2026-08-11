@@ -198,6 +198,7 @@ class TestPrivacyGuardImports(unittest.TestCase):
         # LICENSE 归属声明（D-27 + CC BY-SA 4.0 强制）
         license_path = os.path.join(os.path.dirname(json_path), "bin_prefixes.json.LICENSE")
         self.assertTrue(os.path.exists(license_path), f"LICENSE 文件不存在：{license_path}")
-        license_text = open(license_path, "r", encoding="utf-8").read()
+        with open(license_path, "r", encoding="utf-8") as fh:
+            license_text = fh.read()
         self.assertIn("CC BY-SA", license_text, "LICENSE 必须包含 'CC BY-SA' 归属声明")
         self.assertIn("Wikipedia", license_text, "LICENSE 必须包含 'Wikipedia' 来源声明")
