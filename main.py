@@ -10853,6 +10853,22 @@ class MainWindow(QMainWindow):
             # 显示 HTML 预览
             self.render_word_preview()
 
+            # Phase 3 (G1 Gap 1): 打开 .docx 后自动启动 WordWorker PII 扫描, 无需用户手动点击扫描按钮
+            # VERIFICATION.md Gap 1: WordWorker not started on _open_word_docx
+            # 复用 Phase 1 既有 start_ocr() 路径, 该路径已正确启动 OCRWorker + WordWorker (含 Plan 02 落地的 D-12 PII 扫描)
+            try:
+                if hasattr(self, "start_ocr"):
+                    self.start_ocr()
+            except Exception as _gap1_exc:
+                # 自动启动失败不阻塞 UI 打开 (PII 扫描降级为手动点击); 记录但不弹出
+                try:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "auto PII scan on _open_word_docx failed: %s", _gap1_exc
+                    )
+                except Exception:
+                    pass
+
             self._clear_info_bar_message()
 
         except (IOError, OSError, ValueError, KeyError) as e:
