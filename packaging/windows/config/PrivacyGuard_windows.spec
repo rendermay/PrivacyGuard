@@ -169,6 +169,8 @@ privacyguard_hiddenimports.extend([
     'privacyguard.pii.validators.vat_invoice',
     'privacyguard.pii.validators.bank_account',
     'privacyguard.pii.validators.taxpayer_id',
+    # Phase 3 (03-word): word_adapter 三函数模块 (D-14)
+    'privacyguard.pii.word_adapter',
 ])
 
 # 去重

@@ -66,7 +66,9 @@ if [ ! -f "$CONFIG_DIR/PrivacyGuard.spec" ]; then
     echo "[ERROR] PyInstaller spec 文件不存在!"
     exit 1
 fi
-# 检查 create-dmg 是否安装
+# Phase 3 (03-word): privacyguard.pii.word_adapter hiddenimport 由
+# packaging/macos/config/PrivacyGuard.spec 显式声明。
+# 与 Windows spec 保持 parity，避免 lazy-loader 在 frozen 包中漏收集。
 if ! command -v create-dmg &> /dev/null; then
     echo "[WARN] create-dmg 未安装，将回退到 hdiutil 创建标准 DMG"
     echo "       安装: brew install create-dmg"

@@ -106,6 +106,8 @@ a = Analysis(
         'privacyguard.pii.validators.vat_invoice',
         'privacyguard.pii.validators.bank_account',
         'privacyguard.pii.validators.taxpayer_id',
+        # Phase 3 (03-word): word_adapter 三函数模块 (D-14)
+        'privacyguard.pii.word_adapter',
     ] + onnx_hiddenimports + rapid_hiddenimports + bs4_hiddenimports + soupsieve_hiddenimports + lxml_hiddenimports + privacyguard_hiddenimports,
     hookspath=[],
     hooksconfig={},
