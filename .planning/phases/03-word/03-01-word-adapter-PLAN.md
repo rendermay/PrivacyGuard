@@ -39,6 +39,7 @@ must_haves:
     - privacyguard.pii.word_adapter.apply_pii_replacements_to_docx → privacyguard.pii.mask.mask_for_entity （D-03 mask 分派沿用）
     - privacyguard.pii.__init__._LAZY_IMPORTS['collect_pii_word_hits'] → privacyguard.pii.word_adapter.collect_pii_word_hits （OPS-03 懒加载入口）
     - tests/unit/test_package_imports.py::test_import_privacyguard_does_not_load_word_adapter — 守住 OPS-03 懒加载纪律回归
+---
 
 # Phase 3 — Plan 1: word_adapter 三函数 + 懒加载注册 (Wave 1 Foundation)
 

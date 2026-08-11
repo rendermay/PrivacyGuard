@@ -37,6 +37,7 @@ must_haves:
     - _ModularWordWorker.run() → privacyguard.pii.word_adapter.collect_pii_word_hits(text, self._pii_engine) → privacyguard.pii.engine.PIIEngine.detect
     - _ModularWordWorker.run() → privacyguard.pii.word_adapter.collect_pii_word_hits 走 __init__.py _LAZY_IMPORTS 懒加载入口, 首次访问拉起 word_adapter 模块
     - main.py:_open_word_docx → self.word_data[key]["pii"] = [] 与 worker 写入路径配对, 防止 KeyError (Pitfall 4)
+---
 
 # Phase 3 — Plan 2: _ModularWordWorker 接入 PII + word_data 字段 (Wave 1 Pipeline)
 

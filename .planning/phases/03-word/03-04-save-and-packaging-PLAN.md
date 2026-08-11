@@ -25,8 +25,9 @@ estimate:
 
 must_haves:
   truths:
-    - main.py::_save_word 真脱敏阶段对每个段落 / 表格 cell 调 locate_pii_hits_in_paragraph 拿 (hit, char_offset) 列表, 调 apply_pii_replacements_to_docx(doc, hit_locations_per_key, mode) 真脱敏; 产物 .docx 用 python-docx 重新打开后, 原始敏感字符串不存在 (D-04 + SAFE-02 反向提取验证)
-    - apply_pii_replacements_to_docx partial 模式产物含 partial_mask 字符串 (如 "110101********1234"); blackout 模式产物含 "[已脱敏]" (D-03)
+    - main.py::_save_word 真脱敏阶段对每个段落 / 表格 cell 调 locate_pii_hits_in_paragraph 拿 (hit, char_offset) 列表, 调 apply_pii_replacements_to_docx(doc, hit_locations_per_key, mode) 真脱敏; 产物 .docx 用 python-docx 重新打开后, 原始敏感字符串不存在 (D-04 + D-06 + SAFE-02 反向提取验证)
+    - apply_pii_replacements_to_docx partial 模式产物含 partial_mask 字符串 (如 "110101********1234"); blackout 模式产物含 "[已脱敏]" (D-03 + D-06)
+    - privacyguard/pii/word_adapter.py 不 import python-docx; apply_pii_replacements_to_docx 接收 Document 对象由调用方持有; 字脱敏路径走"生成文本 + 外部调 Python-docx" (D-06 + D-11)
     - main.py::_toggle_mask_override_this_doc 同时写 PDF + Word 路径: self.page_data[0]["mask_override_this_doc"] + self._word_mask_override_this_doc (D-05)
     - self._word_mask_override_this_doc 是 MainWindow 独立 instance attr (不污染 word_data 业务键空间, Pitfall 6 + RESEARCH Open Q #1); _save_word 读 getattr(self, "_word_mask_override_this_doc", None); "blackout" 模式覆盖 per_entity_default
     - _open_word_docx 重置 self._word_mask_override_this_doc = None (新文档加载复位)
@@ -45,6 +46,7 @@ must_haves:
     - main.py::_toggle_mask_override_this_doc → self._word_mask_override_this_doc (Mode 字段) → main.py::_save_word 读取 → mode 形参 (D-05)
     - _open_word_docx → self._word_mask_override_this_doc = None (生命周期重置)
     - PrivacyGuard_windows.spec → privacyguard.pii.word_adapter hiddenimports → PyInstaller frozen 启动 (cp30 回归预防)
+---
 
 # Phase 3 — Plan 4: _save_word 真脱敏 + 文档级 override + PyInstaller 同步 (Wave 3 Production)
 

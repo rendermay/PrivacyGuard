@@ -42,6 +42,7 @@ must_haves:
     - merge_word_matches_with_priority(text, rules, default, manual=..., ocr=..., pii=...) → _append_candidates([pii_dict], "pii") → _range_overlaps 守 PII 胜出 (D-02)
     - _build_word_original_panel_updates → merge_word_matches_with_priority(..., pii_matches=word_data[key]["pii"]) → _build_word_original_preview_fragment → build_highlight_preview_segments → segments 渲染 pii-highlight mark
     - test_convergence → AST 扫描 main.py 源码: 不得含 "def collect_pii_word_hits(" / "def locate_pii_hits_in_paragraph(" / "def apply_pii_replacements_to_docx(" 三函数定义
+---
 
 # Phase 3 — Plan 3: merge_word_matches_with_priority 扩展 + 双栏预览 PII 高亮 (Wave 2 UX)
 

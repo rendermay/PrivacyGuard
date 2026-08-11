@@ -75,6 +75,7 @@ Plans:
 **UI hint**: no
 
 Plans:
+
 - [x] 02-01-tracer-PLAN.md — Tracer: USCC validator + partial mask write + metadata clear end-to-end (Wave 1)
 - [x] 02-02-engine-expansion-PLAN.md — Engine expansion: VAT invoice + bank account + 15-digit taxpayer ID validators + 9-entity engine coverage (Wave 2)
 - [x] 02-03-main-py-settings-packaging-PLAN.md — Ship bin dictionary (CC BY-SA 4.0) + SettingsDialog 9-row per-entity table + toolbar mask_override toggle + save_pdf wiring + PyInstaller parity (Wave 3)
@@ -99,9 +100,17 @@ Plans:
 **UI hint**: yes
 
 Plans:
+**Wave 1**
+
 - [ ] 03-01-word-adapter-PLAN.md — Wave 1 Foundation: privacyguard/pii/word_adapter.py 三函数 + _LAZY_IMPORTS 注册 + 三函数纯函数测试 + test_package_imports 懒加载守卫扩展
 - [ ] 03-02-worker-pii-integration-PLAN.md — Wave 1 Pipeline: _ModularWordWorker.run() 接入 collect_pii_word_hits + word_data["pii"] 字段扩展 + worker PII 端到端测试 (批量入口显式 skip)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 03-03-merge-and-preview-PLAN.md — Wave 2 UX: merge_word_matches_with_priority pii_matches 形参 + 双栏预览 pii-highlight 渲染 + test_convergence inline 守卫扩展 + DOM patch 边界守护
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 03-04-save-and-packaging-PLAN.md — Wave 3 Production: _save_word 接入 apply_pii_replacements_to_docx 真脱敏 + _word_mask_override_this_doc 字段 + toggle 双路径 + PyInstaller 跨平台 hiddenimports 同步 + reverse-extraction 端到端测试
 
 ---
