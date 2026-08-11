@@ -116,6 +116,7 @@ Plans:
 **Wave 4 (Gap Closure)** *(blocked on Wave 3 completion)*
 
 - [x] 03-G1-01-auto-scan-and-pii-compare-PLAN.md — Gap Closure: _open_word_docx 自动启动 WordWorker (Gap 1) + _has_word_replacement_candidates 纳入 PII (Gap 2) + _build_word_replaced_preview_html 注入 pii_matches (Gap 3) + 3 新 TestClass (12 测试方法)
+- [x] 03-G2-01-clear-core-properties-PLAN.md — Gap Closure (Gap 4): privacyguard/utils/word_props.py 5 字段清空 helper + _save_word 在 new_doc.save(fname) 之前接入 + PyInstaller hiddenimports 静态 parity (cp30 防回归) + 6 TestClass (11 测试方法)
 
 ---
 

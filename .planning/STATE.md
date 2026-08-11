@@ -132,9 +132,9 @@ None — awaiting user approval of drafted roadmap to begin Phase 1 planning.
 ### Phase 3: Word 文档接入识别引擎
 
 - **Status**: 🚧 In progress (3 plans shipped: 03-01 → 03-04, plus G1-01 gap closure)
-- **Plans**: 5 / 5 (03-01 word-adapter, 03-02 worker-pii-integration, 03-03 merge-and-preview, 03-04 save-and-packaging, 03-G1-01 auto-scan-and-pii-compare)
+- **Plans**: 6 / 6 (03-01 word-adapter, 03-02 worker-pii-integration, 03-03 merge-and-preview, 03-04 save-and-packaging, 03-G1-01 auto-scan-and-pii-compare, 03-G2-01 clear-core-properties)
 - **Depends on**: Phase 1, Phase 2 (now complete)
-- **VERIFICATION**: gaps_found (Gap 1/2/3 closed by G1-01; Gap 4 core_properties sanitization + Gap 5 candidate review UI remain — Gap 4 deferred to Phase 7/8, Gap 5 explicitly deferred to Phase 7)
+- **VERIFICATION**: gaps_found (Gap 1/2/3 closed by G1-01; Gap 4 core_properties sanitization closed by G2-01 (2026-08-12); Gap 5 candidate review UI remains — explicitly deferred to Phase 7)
 
 ### Phase 3: Word 文档接入识别引擎
 
