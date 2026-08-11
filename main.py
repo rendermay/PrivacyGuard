@@ -5912,8 +5912,10 @@ class MainWindow(QMainWindow):
         self.btn_mask_override.setObjectName("toolbarToggleButton")
         self.btn_mask_override.setCheckable(True)
         self.btn_mask_override.setChecked(False)
-        self.btn_mask_override.setToolTip("勾选后，当前 PDF 临时覆盖全局 per_entity 设置，强制全部 entity 走全遮蔽。切换状态随当前 PDF 生命周期，不持久化到 config.json（D-12 锁定）。")
+        self.btn_mask_override.setToolTip("勾选后，当前 PDF/Word 临时覆盖全局 per_entity 设置，强制全部 entity 走全遮蔽。切换状态随当前文档生命周期，不持久化到 config.json（D-12 锁定）。")
         self.toolbar_pdf_layout.addWidget(self.btn_mask_override)
+        # Phase 3 (03-04): Word 文档级 mask_override 独立于 word_data 业务键空间。
+        self._word_mask_override_this_doc = None
 
         self.btn_fit = self.create_btn("适应", self.fit_page, style="secondary")
         self.toolbar_pdf_layout.addWidget(self.btn_fit)
@@ -8807,9 +8809,12 @@ class MainWindow(QMainWindow):
         if 0 not in self.page_data:
             self.page_data[0] = {}
         self.page_data[0]["mask_override_this_doc"] = "blackout" if checked else None
+        self._word_mask_override_this_doc = "blackout" if checked else None
         if DEBUG_MODE:
             print(f"[PII OVERRIDE] page_data[0] mask_override_this_doc = "
                   f"{self.page_data[0].get('mask_override_this_doc')}")
+            print(f"[PII OVERRIDE] _word_mask_override_this_doc = "
+                  f"{self._word_mask_override_this_doc}")
 
     def _refresh_toolbar_responsiveness(self):
         """根据窗口宽度做工具栏响应式降级，保证缩放时仍可读。"""
@@ -10806,6 +10811,8 @@ class MainWindow(QMainWindow):
             self.doc_type = 'docx'
             self.doc = None  # 清空 PDF 文档对象
             self.page_data = {}
+            # Phase 3 (03-04): 打开新 Word 文档时复位文档级遮蔽 override。
+            self._word_mask_override_this_doc = None
 
             # 初始化 word_data 结构
             self.word_data = {}
