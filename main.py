@@ -10414,7 +10414,9 @@ class MainWindow(QMainWindow):
                     self.word_replace_rules,
                     self.replacement_text,
                     manual_matches=self.word_data[key].get("manual", []),
-                    ocr_matches=self.word_data[key].get("ocr", [])
+                    ocr_matches=self.word_data[key].get("ocr", []),
+                    # [NEW G1 Gap 3] 全量重载路径同样注入 PII 命中 (与 Plan 03 增量路径 line 12024 对齐)
+                    pii_matches=self.word_data[key].get("pii", []),
                 )
                 if not merged_matches:
                     continue
