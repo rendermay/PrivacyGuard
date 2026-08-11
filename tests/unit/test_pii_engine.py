@@ -755,8 +755,10 @@ class TestEngineVatInvoice(unittest.TestCase):
         self.assertEqual(hit.confidence_tier, "HIGH")
         self.assertTrue(hit.validator_passed)
         # mask_strategy = 前 2 + *... + 后 2 (20 位)
-        self.assertTrue(hit.mask_strategy.startswith("23"))
-        self.assertTrue(hit.mask_strategy.endswith("90"))
+        # 注：fake_vat_invoice_20() 生成全随机数字，不能硬编码开头/结尾
+        full = unit.text.replace("全电发票号码 ", "")
+        self.assertTrue(hit.mask_strategy.startswith(full[:2]))
+        self.assertTrue(hit.mask_strategy.endswith(full[-2:]))
 
     def test_detects_20_digit_without_context_still_high(self):
         """20 位无 anchor → 命中 CN_VAT_INVOICE + HIGH（结构上唯一性）。"""
