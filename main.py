@@ -12762,12 +12762,6 @@ sudo dnf install antiword
                 if key in self.word_data:
                     data = self.word_data[key]
                     source_text = data.get("text", "")
-                    pii_hits = data.get("pii", [])
-                    locations = locate_pii_hits_in_paragraph(pii_hits, source_text)
-                    if locations:
-                        apply_pii_replacements_to_docx(
-                            new_doc, {key: locations}, mode=mode
-                        )
                     merged_matches = merge_word_matches_with_priority(
                         source_text,
                         self.word_replace_rules,
@@ -12782,6 +12776,12 @@ sudo dnf install antiword
                             text_offset=0,
                             fallback_replacement_text=self.replacement_text
                         )
+                    pii_hits = data.get("pii", [])
+                    locations = locate_pii_hits_in_paragraph(pii_hits, para.text)
+                    if locations:
+                        apply_pii_replacements_to_docx(
+                            new_doc, {key: locations}, mode=mode
+                        )
 
             # 遍历表格进行 run 级别的文本替换
             for table_idx, table in enumerate(new_doc.tables):
@@ -12791,21 +12791,6 @@ sudo dnf install antiword
                         if key in self.word_data:
                             data = self.word_data[key]
                             source_text = data.get("text", "")
-                            pii_hits = data.get("pii", [])
-                            for para_idx, para in enumerate(cell.paragraphs):
-                                para_locations = locate_pii_hits_in_paragraph(
-                                    pii_hits, para.text
-                                )
-                                if not para_locations:
-                                    continue
-                                paragraph_key = (
-                                    f"table_{table_idx}_row_{row_idx}_cell_{cell_idx}_p_{para_idx}"
-                                )
-                                apply_pii_replacements_to_docx(
-                                    new_doc,
-                                    {paragraph_key: para_locations},
-                                    mode=mode,
-                                )
                             merged_matches = merge_word_matches_with_priority(
                                 source_text,
                                 self.word_replace_rules,
@@ -12830,6 +12815,23 @@ sudo dnf install antiword
                                     if idx < len(paragraphs) - 1:
                                         # python-docx 的 cell.text 使用换行拼接段落
                                         para_offset += 1
+
+                            # 规则/手动/OCR 替换可能改变文本长度，PII 必须基于当前段文本重新定位。
+                            pii_hits = data.get("pii", [])
+                            for para_idx, para in enumerate(cell.paragraphs):
+                                para_locations = locate_pii_hits_in_paragraph(
+                                    pii_hits, para.text
+                                )
+                                if not para_locations:
+                                    continue
+                                paragraph_key = (
+                                    f"table_{table_idx}_row_{row_idx}_cell_{cell_idx}_p_{para_idx}"
+                                )
+                                apply_pii_replacements_to_docx(
+                                    new_doc,
+                                    {paragraph_key: para_locations},
+                                    mode=mode,
+                                )
 
             # 保存文档
             new_doc.save(fname)
