@@ -546,5 +546,61 @@ class TestEngineWithoutPage(unittest.TestCase):
         self.assertGreater(w, 0.0)
 
 
+# ----------------------------------------------------------------------
+# 顶层包 lazy 导入烟雾测试（防止 _LAZY_IMPORTS 表被误删）
+# ----------------------------------------------------------------------
+class TestLazyExportSurface(unittest.TestCase):
+    """OPS-03: 顶层 privacyguard 包的 PII 导出表必须稳定可访问。"""
+
+    def test_top_level_lazy_exports_resolve(self):
+        # 显式访问每个 _LAZY_IMPORTS 条目，确认不抛 AttributeError
+        from privacyguard import (
+            PIIEngine,
+            PIIHit,
+            TextUnit,
+            validate_18_id,
+            is_mobile_segment,
+            apply_pii_redactions,
+            collect_pii_rects,
+        )
+        self.assertTrue(callable(PIIEngine))
+        self.assertTrue(callable(PIIHit))
+        self.assertTrue(callable(TextUnit))
+        self.assertTrue(callable(validate_18_id))
+        self.assertTrue(callable(is_mobile_segment))
+        self.assertTrue(callable(apply_pii_redactions))
+        self.assertTrue(callable(collect_pii_rects))
+
+
+# ----------------------------------------------------------------------
+# Engine hardening: rules_version classmethod + last_error / error_log
+# ----------------------------------------------------------------------
+class TestEngineHardening(unittest.TestCase):
+    """PIIEngine 类级硬化：rules_version + last_error + error_log + unresolved_hits。"""
+
+    def test_rules_version_returns_unknown_when_empty(self):
+        self.assertEqual(PIIEngine.rules_version({}), "unknown")
+
+    def test_rules_version_returns_unknown_when_none(self):
+        self.assertEqual(PIIEngine.rules_version(None), "unknown")
+
+    def test_rules_version_reads_next_review(self):
+        rules = {"phone_segment": {"next_review": "2026-Q3"}}
+        self.assertEqual(PIIEngine.rules_version(rules), "2026-Q3")
+
+    def test_rules_version_fallback_when_no_phone_segment(self):
+        self.assertEqual(PIIEngine.rules_version({"id_card": {}}), "unknown")
+
+    def test_engine_init_initializes_error_log_and_unresolved(self):
+        engine = PIIEngine()
+        self.assertIsNone(engine.last_error)
+        self.assertEqual(engine.error_log, [])
+        self.assertEqual(engine.unresolved_hits, [])
+
+    def test_rules_version_default_constant(self):
+        from privacyguard.pii import RULES_VERSION_DEFAULT
+        self.assertEqual(RULES_VERSION_DEFAULT, "2026-Q1")
+
+
 if __name__ == "__main__":
     unittest.main()
