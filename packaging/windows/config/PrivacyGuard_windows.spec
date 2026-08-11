@@ -162,6 +162,13 @@ privacyguard_hiddenimports.extend([
     'privacyguard.pii.validators.id_card',
     'privacyguard.pii.validators.phone_segment',
     'privacyguard.pii.pdf_adapter',
+    # Phase 2 (02-03): 6 new validator submodules (B5 parity with macOS spec)
+    'privacyguard.pii.validators.bank_card',
+    'privacyguard.pii.validators.email',
+    'privacyguard.pii.validators.uscc',
+    'privacyguard.pii.validators.vat_invoice',
+    'privacyguard.pii.validators.bank_account',
+    'privacyguard.pii.validators.taxpayer_id',
 ])
 
 # 去重
@@ -264,6 +271,13 @@ a = Analysis(
         'privacyguard.pii.validators.id_card',
         'privacyguard.pii.validators.phone_segment',
         'privacyguard.pii.pdf_adapter',
+        # Phase 2 (02-03): 6 new validator submodules (B5 parity with macOS spec)
+        'privacyguard.pii.validators.bank_card',
+        'privacyguard.pii.validators.email',
+        'privacyguard.pii.validators.uscc',
+        'privacyguard.pii.validators.vat_invoice',
+        'privacyguard.pii.validators.bank_account',
+        'privacyguard.pii.validators.taxpayer_id',
     ] + onnx_hiddenimports + rapid_hiddenimports + numpy_hiddenimports + bs4_hiddenimports + privacyguard_hiddenimports,
     hookspath=[current_dir],  # 包含 hook-privacyguard.py
     hooksconfig={},

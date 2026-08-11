@@ -99,6 +99,13 @@ a = Analysis(
         'privacyguard.pii.validators.id_card',
         'privacyguard.pii.validators.phone_segment',
         'privacyguard.pii.pdf_adapter',
+        # Phase 2 (02-03): 6 new validator submodules (B5 parity with Windows spec)
+        'privacyguard.pii.validators.bank_card',
+        'privacyguard.pii.validators.email',
+        'privacyguard.pii.validators.uscc',
+        'privacyguard.pii.validators.vat_invoice',
+        'privacyguard.pii.validators.bank_account',
+        'privacyguard.pii.validators.taxpayer_id',
     ] + onnx_hiddenimports + rapid_hiddenimports + bs4_hiddenimports + soupsieve_hiddenimports + lxml_hiddenimports + privacyguard_hiddenimports,
     hookspath=[],
     hooksconfig={},

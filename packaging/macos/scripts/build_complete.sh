@@ -147,6 +147,25 @@ else
     exit 1
 fi
 
+# Phase 2 (02-03): bin_prefixes.json 数据文件校验（D-26 + D-27）
+# 银行卡 validator 必须在 frozen 包能找到 BIN 词典，否则 BIN 词典缺失导致 safe-fail 全 False
+if [ -f "$APP_PATH/Contents/Resources/privacyguard/pii/data/bin_prefixes.json" ]; then
+    echo "  [OK] privacyguard/pii/data/bin_prefixes.json 存在"
+else
+    echo "  [FAIL] privacyguard/pii/data/bin_prefixes.json 缺失（02-03 回归）"
+    echo "  [FAIL] 银行卡 validator 在 frozen 包中无法加载 BIN 词典，命中将静默失败"
+    exit 1
+fi
+
+# Phase 2 (02-03): bin_prefixes.json.LICENSE CC BY-SA 4.0 归属声明校验（D-27）
+if [ -f "$APP_PATH/Contents/Resources/privacyguard/pii/data/bin_prefixes.json.LICENSE" ]; then
+    echo "  [OK] privacyguard/pii/data/bin_prefixes.json.LICENSE 存在"
+else
+    echo "  [FAIL] privacyguard/pii/data/bin_prefixes.json.LICENSE 缺失（CC BY-SA 4.0 违规）"
+    echo "  [FAIL] Wikipedia 来源归属声明未随 frozen 包发布"
+    exit 1
+fi
+
 echo "[OK] 验证通过"
 echo ""
 
