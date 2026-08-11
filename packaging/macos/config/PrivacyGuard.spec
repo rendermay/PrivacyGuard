@@ -42,6 +42,8 @@ a = Analysis(
         (os.path.join(project_root, 'config.json'), '.'),
         # 包含 assets 目录（二维码图片等）
         (os.path.join(project_root, 'assets'), 'assets'),
+        # v38.x: Phase 1 PII 引擎数据文件（cp30 防回归 — rules.json 必须随 frozen 包发布）
+        (os.path.join(project_root, 'privacyguard', 'pii', 'data'), 'privacyguard/pii/data'),
     ] + onnx_datas + rapid_datas + bs4_datas + soupsieve_datas + lxml_datas,
     hiddenimports=[
         # PyQt6 相关
@@ -89,6 +91,14 @@ a = Analysis(
         'privacyguard.workers.image_merge',
         'privacyguard.core',
         'privacyguard.ui',
+        # v38.x: Phase 1 PII 引擎 hiddenimports（cp30 防回归 — frozen 启动必须能找到 rules.json）
+        'privacyguard.pii',
+        'privacyguard.pii.engine',
+        'privacyguard.pii.hits',
+        'privacyguard.pii.validators',
+        'privacyguard.pii.validators.id_card',
+        'privacyguard.pii.validators.phone_segment',
+        'privacyguard.pii.pdf_adapter',
     ] + onnx_hiddenimports + rapid_hiddenimports + bs4_hiddenimports + soupsieve_hiddenimports + lxml_hiddenimports + privacyguard_hiddenimports,
     hookspath=[],
     hooksconfig={},

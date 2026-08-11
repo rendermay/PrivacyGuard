@@ -137,6 +137,16 @@ else
     echo "  [WARN] assets/donate_qrcode.png 不存在 (打赏功能将不可用)"
 fi
 
+# v38.x: Phase 1 PII 引擎数据文件校验（cp30 防回归）
+# PyInstaller spec 必须包含 privacyguard/pii/data 目录，否则 frozen 启动报 FileNotFoundError
+if [ -f "$APP_PATH/Contents/Resources/privacyguard/pii/data/rules.json" ]; then
+    echo "  [OK] privacyguard/pii/data/rules.json 存在"
+else
+    echo "  [FAIL] privacyguard/pii/data/rules.json 缺失（cp30 回归）"
+    echo "  [FAIL] PII 引擎在 frozen 包中无法加载规则，手机号检测将静默失败"
+    exit 1
+fi
+
 echo "[OK] 验证通过"
 echo ""
 
