@@ -93,7 +93,7 @@ def read_app_version():
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except OSError:
-        return "37.7.6"
+        return "1.0.0"
 
 class SimpleConfig:
     """简化配置管理器 - 直接从 config.json 读取"""
@@ -174,7 +174,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 # v37.0: 从配置读取，失败时使用硬编码后备
 APP_NAME = config.get("app.name", "PrivacyGuard 脱敏卫士") if config else "PrivacyGuard 脱敏卫士"
 APP_VERSION = read_app_version()
-VERSION = f"{APP_VERSION} - Engineering Remediation"
+VERSION = APP_VERSION
 PREVIEW_FONT_STACK = '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif'
 WORD_PREVIEW_IMAGE_EXTENSION_MAP = {
     "image/png": ".png",
@@ -197,6 +197,20 @@ PROGRESS_UPDATE_INTERVAL = config.get("ocr.progress_update_interval", 0.05) if c
 ZOOM_MIN = config.get("ocr.zoom_min", 0.5) if config else 0.5
 ZOOM_MAX = config.get("ocr.zoom_max", 4.0) if config else 4.0
 DEBUG_MODE = os.getenv('PRIVACYGUARD_DEBUG', 'False').lower() == 'true' if not config else config.get("advanced.debug_mode", False)
+
+# Phase 2 (02-03): per-entity partial/blackout 默认矩阵（D-13 字段命名锁）
+# 顺序锁定：CN_TAXPAYER_ID 在 CN_TAXPAYER_ID_15 之前（18 位先于 15 位）
+PHASE2_ENTITY_MODE_ROWS = [
+    ("CN_ID_CARD", "身份证号"),
+    ("CN_PHONE", "手机号"),
+    ("CN_BANK_CARD", "银行卡"),
+    ("CN_EMAIL", "邮箱"),
+    ("CN_USCC", "统一社会信用代码"),
+    ("CN_TAXPAYER_ID", "纳税人识别号 (18位)"),
+    ("CN_TAXPAYER_ID_15", "纳税人识别号 (15位)"),
+    ("CN_VAT_INVOICE", "增值税发票号"),
+    ("CN_BANK_ACCOUNT", "银行账号"),
+]
 
 # === 默认规则库 ===
 # v37.0: 从配置读取，支持新旧两种格式
@@ -1645,8 +1659,45 @@ class SettingsDialog(QDialog):
 
         v_pii.addSpacing(14)
 
-        # 只读范围标签（UI-SPEC §E1）
-        lbl_scope = QLabel("扫描范围（只读）：身份证号 / 手机号")
+        # Phase 2 (02-03-main-py-settings-packaging): per-entity partial/blackout 表（D-11 + D-13）
+        lbl_mode = QLabel("脱敏方式（每个实体类型独立设置）：")
+        lbl_mode.setObjectName("settingsFieldLabel")
+        v_pii.addWidget(lbl_mode)
+        # 从 config 读取 per_entity_default；缺失则全部默认 "partial"
+        per_entity_default = {}
+        if self.config:
+            loaded = self.config.get("pii_settings.per_entity_default", {}) or {}
+            if isinstance(loaded, dict):
+                per_entity_default = dict(loaded)
+        self.entity_mode_widgets = {}
+        for entity_type, label in PHASE2_ENTITY_MODE_ROWS:
+            row = QHBoxLayout()
+            cb = QCheckBox(f"启用 {label}")
+            cb.setChecked(per_entity_default.get(f"{entity_type}_enabled", True))
+            combo = QComboBox()
+            combo.addItems(["部分掩码", "全遮蔽"])
+            combo.setCurrentText("部分掩码" if per_entity_default.get(entity_type, "partial") == "partial" else "全遮蔽")
+            combo.setEnabled(cb.isChecked())
+            cb.toggled.connect(lambda checked, c=combo: c.setEnabled(checked))
+            row.addWidget(cb)
+            row.addWidget(combo, stretch=1)
+            v_pii.addLayout(row)
+            self.entity_mode_widgets[entity_type] = (cb, combo)
+        v_pii.addSpacing(10)
+        btn_bulk_layout = QHBoxLayout()
+        btn_all_blackout = QPushButton("全部设为全遮蔽")
+        btn_all_blackout.setObjectName("settingsSecondaryButton")
+        btn_all_blackout.clicked.connect(self._bulk_set_entity_mode_blackout)
+        btn_all_partial = QPushButton("全部设为部分掩码")
+        btn_all_partial.setObjectName("settingsSecondaryButton")
+        btn_all_partial.clicked.connect(self._bulk_set_entity_mode_partial)
+        btn_bulk_layout.addWidget(btn_all_blackout)
+        btn_bulk_layout.addWidget(btn_all_partial)
+        btn_bulk_layout.addStretch(1)
+        v_pii.addLayout(btn_bulk_layout)
+
+        # 只读范围标签（UI-SPEC §E1）— Phase 2 扩展为 9 类实体
+        lbl_scope = QLabel("扫描范围：9 类实体（身份证 / 手机 / 银行卡 / 邮箱 / USCC / 纳税人识别号 / VAT 发票号 / 银行账号）")
         lbl_scope.setObjectName("settingsFieldNote")
         v_pii.addWidget(lbl_scope)
 
@@ -1658,6 +1709,9 @@ class SettingsDialog(QDialog):
 
         self.cb_pii_engine_enabled.toggled.connect(lambda _checked: _sync_pii_toggle_state())
         _sync_pii_toggle_state()
+
+        # Phase 2 (02-03-main-py-settings-packaging): engine_enabled 关闭 → per-entity 行不可点
+        self.cb_pii_engine_enabled.toggled.connect(self._sync_per_entity_widgets_state)
 
         layout.addWidget(box_pii)
 
@@ -2661,6 +2715,45 @@ class SettingsDialog(QDialog):
         self.input_replacement_text.setText(dlg.default_replacement_text)
         self._refresh_word_rule_summary()
 
+    # ----------------------------------------------------------------------
+    # Phase 2 (02-03-main-py-settings-packaging): per-entity partial/blackout 表（D-11 + D-13）
+    # ----------------------------------------------------------------------
+
+    def _sync_per_entity_widgets_state(self, enabled: bool):
+        """Phase 2: engine_enabled OFF → 所有 per-entity 行不可点。"""
+        if not hasattr(self, "entity_mode_widgets"):
+            return
+        for _entity_type, (cb, combo) in self.entity_mode_widgets.items():
+            cb.setEnabled(enabled)
+            combo.setEnabled(enabled and cb.isChecked())
+
+    def _load_per_entity_default(self) -> dict:
+        """Phase 2: 从 self.config 读 pii_settings.per_entity_default；缺失字段用 'partial' 兜底。"""
+        if not self.config:
+            return {entity: "partial" for entity, _ in PHASE2_ENTITY_MODE_ROWS}
+        loaded = self.config.get("pii_settings.per_entity_default", {}) or {}
+        if not isinstance(loaded, dict):
+            loaded = {}
+        # 9 个 key 全部列出（缺失 → 'partial' 兜底）
+        return {entity: (loaded.get(entity, "partial") if loaded.get(entity, "partial") in ("partial", "blackout") else "partial")
+                for entity, _ in PHASE2_ENTITY_MODE_ROWS}
+
+    def _bulk_set_entity_mode_blackout(self):
+        """Phase 2: 「全部设为全遮蔽」按钮 handler — 9 行同时勾选 + 全遮蔽。"""
+        if not hasattr(self, "entity_mode_widgets"):
+            return
+        for _entity_type, (cb, combo) in self.entity_mode_widgets.items():
+            cb.setChecked(True)
+            combo.setCurrentText("全遮蔽")
+
+    def _bulk_set_entity_mode_partial(self):
+        """Phase 2: 「全部设为部分掩码」按钮 handler — 9 行同时勾选 + 部分掩码。"""
+        if not hasattr(self, "entity_mode_widgets"):
+            return
+        for _entity_type, (cb, combo) in self.entity_mode_widgets.items():
+            cb.setChecked(True)
+            combo.setCurrentText("部分掩码")
+
     def save_settings(self):
         self.selected_rules = [DEFAULT_RULES[name] for name, cb in self.checks.items() if cb.isChecked()]
         # v37.5.0: 添加调试输出
@@ -2692,6 +2785,13 @@ class SettingsDialog(QDialog):
                 self.config.set("pii_settings.engine_enabled", self.cb_pii_engine_enabled.isChecked(), persist=False)
                 self.config.set("pii_settings.auto_redact", self.cb_pii_auto_redact.isChecked(), persist=False)
                 self.config.set("pii_settings.require_confirmation", self.cb_pii_require_confirm.isChecked(), persist=False)
+                # Phase 2 (02-03-main-py-settings-packaging): per-entity partial/blackout 默认矩阵持久化（D-13 字段命名锁）
+                per_entity_default_new = {}
+                if hasattr(self, "entity_mode_widgets"):
+                    for entity_type, (cb, combo) in self.entity_mode_widgets.items():
+                        # 整行未勾选 → "blackout"（关掉 entity 默认行为更安全；与 enabled 默认 True 一致：用户主动关掉表示不要 partial mask）
+                        per_entity_default_new[entity_type] = "blackout" if combo.currentText() == "全遮蔽" or not cb.isChecked() else "partial"
+                self.config.set("pii_settings.per_entity_default", per_entity_default_new, persist=False)
                 self.config.save()
             except Exception as e:
                 print(f"[设置] 保存配置失败: {e}")
@@ -4991,7 +5091,7 @@ _INTERACTIVE_JS_CODE = r"""
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"{APP_NAME} v{VERSION} - Powered by li (汪立律师)")
+        self.setWindowTitle(f"{APP_NAME} v{VERSION}")
 
         # v37.0: 从配置读取窗口尺寸，失败时使用硬编码后备
         # v37.2.0: 读取 OCR 引擎配置
@@ -6037,20 +6137,6 @@ class MainWindow(QMainWindow):
         idle_support_layout = QVBoxLayout(self.idle_support_card)
         idle_support_layout.setContentsMargins(18, 16, 18, 16)
         idle_support_layout.setSpacing(8)
-        self.lbl_idle_support_title = QLabel("开发者与支持")
-        self.lbl_idle_support_title.setObjectName("idleSupportTitle")
-        self.lbl_idle_support_text = QLabel("汪立 · 安徽始信律师事务所执业律师")
-        self.lbl_idle_support_text.setObjectName("idleSupportText")
-        self.lbl_idle_support_text.setWordWrap(True)
-        self.lbl_idle_support_meta = QLabel("全栈律师｜前教师｜退伍军人")
-        self.lbl_idle_support_meta.setObjectName("idleSupportMeta")
-        self.lbl_idle_support_email = QLabel("<a href='mailto:491445490@qq.com'>491445490@qq.com</a>")
-        self.lbl_idle_support_email.setObjectName("idleSupportEmail")
-        self.lbl_idle_support_email.setTextFormat(Qt.TextFormat.RichText)
-        self.lbl_idle_support_email.setOpenExternalLinks(True)
-        self.lbl_idle_support_note = QLabel("遇到问题、想看手册或支持更新，都可以直接从这里进入。")
-        self.lbl_idle_support_note.setObjectName("idleSupportNote")
-        self.lbl_idle_support_note.setWordWrap(True)
         idle_support_actions_layout = QGridLayout()
         idle_support_actions_layout.setContentsMargins(0, 0, 0, 0)
         idle_support_actions_layout.setHorizontalSpacing(10)
@@ -6071,11 +6157,6 @@ class MainWindow(QMainWindow):
         self.btn_idle_donate.setObjectName("idleDonateActionButton")
         self.btn_idle_donate.setProperty("btn_style", "success")
         self.btn_idle_donate.setStyleSheet(self._get_button_style("success"))
-        idle_support_layout.addWidget(self.lbl_idle_support_title)
-        idle_support_layout.addWidget(self.lbl_idle_support_text)
-        idle_support_layout.addWidget(self.lbl_idle_support_meta)
-        idle_support_layout.addWidget(self.lbl_idle_support_email)
-        idle_support_layout.addWidget(self.lbl_idle_support_note)
         idle_support_layout.addStretch(1)
         idle_support_layout.addLayout(idle_support_actions_layout)
         idle_action_buttons_layout.addWidget(self.idle_start_card, 0, 0)
@@ -6125,9 +6206,9 @@ class MainWindow(QMainWindow):
         idle_section_header_layout.setSpacing(8)
         self.idle_section_header_layout = idle_section_header_layout
 
-        self.lbl_idle_section = QLabel("四大功能")
+        self.lbl_idle_section = QLabel("核心能力")
         self.lbl_idle_section.setObjectName("idleSectionLabel")
-        self.lbl_idle_section_hint = QLabel("按文件类型自动进入")
+        self.lbl_idle_section_hint = QLabel("覆盖脱敏全流程")
         self.lbl_idle_section_hint.setObjectName("idleSectionHint")
         idle_section_header_layout.addWidget(self.lbl_idle_section)
         idle_section_header_layout.addStretch()
@@ -6135,10 +6216,10 @@ class MainWindow(QMainWindow):
         idle_section_layout.addLayout(idle_section_header_layout)
 
         route_specs = [
-            ("PDF 脱敏", "单文档", "打开 PDF，智能脱敏或手动画框。", "pdf"),
-            ("Word 替换", "单文档", "打开 Word，替换并对比预览。", "word"),
-            ("批量 Word", "批量处理", "导入多份 Word，确认规则后批量执行。", "batch"),
-            ("图片合并 PDF", "图片工具", "导入图片，排序后生成 PDF。", "image"),
+            ("智能识别", "自动扫描", "文本层与正则规则自动匹配敏感字段，命中后一键打码。", "pdf"),
+            ("OCR 扫描", "扫描件识别", "图片型 PDF / 扫描件自动 OCR 后再识别敏感内容。", "image"),
+            ("手动框选", "精准控制", "在预览页直接画框，圈选任意区域做精准脱敏。", "word"),
+            ("批量处理", "一次多份", "一套规则同时处理多份文档，结果按原目录输出。", "batch"),
         ]
 
         idle_routes_container = QWidget()
