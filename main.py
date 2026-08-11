@@ -861,10 +861,12 @@ def resolve_settings_density_mode(width, height=0, scale=1.0):
 
 
 def merge_word_matches_with_priority(text, rules, default_replacement_text,
-                                     manual_matches=None, ocr_matches=None):
-    """合并规则替换、手动脱敏、OCR 脱敏区间，优先级：规则 > 手动 > OCR。"""
+                                     manual_matches=None, ocr_matches=None,
+                                     pii_matches=None):
+    """合并规则替换、手动脱敏、OCR 脱敏、PII 区间，优先级：规则 > 手动 > (OCR ∪ PII)，PII 校验位质量高于 OCR 文本层。"""
     manual_matches = manual_matches or []
     ocr_matches = ocr_matches or []
+    pii_matches = pii_matches or []  # [NEW D-01] PII 命中并入"ocr ∪ pii"层
     text_len = len(text) if isinstance(text, str) else 0
     fallback_text = default_replacement_text if isinstance(default_replacement_text, str) and default_replacement_text else "[已脱敏]"
 
@@ -901,6 +903,19 @@ def merge_word_matches_with_priority(text, rules, default_replacement_text,
 
     _append_candidates(build_word_rule_matches(text, rules, fallback_text), "rule")
     _append_candidates(manual_matches, "manual")
+    # [NEW D-01/D-02] PII 命中并入"ocr ∪ pii"层; PII 后追加, 因 _append_candidates 去重
+    # (后追加胜出), PII 校验位质量 > OCR 文本层 (D-02)
+    # D-10: PIIHit.page_offset / page_length 字段在 Word 端复用作 char_offset / char_length
+    pii_as_match_dicts = [{
+        "start": int(getattr(h, "page_offset", 0) or 0),
+        "end": int((getattr(h, "page_offset", 0) or 0) + (getattr(h, "page_length", 0) or 0)),
+        "text": getattr(h, "text", None),
+        "replacement": getattr(h, "mask_strategy", None) or fallback_text,
+        "source": "pii",
+        "mode": "partial",
+        "rule_name": getattr(h, "entity_type", "PII"),
+    } for h in pii_matches]
+    _append_candidates(pii_as_match_dicts, "pii")
     _append_candidates(ocr_matches, "ocr")
     merged.sort(key=lambda item: item["start"])
     return merged
