@@ -14,7 +14,7 @@
 ## Phases
 
 - [x] **Phase 1: PDF 自动识别身份证号与手机号并真脱敏** - 首个端到端垂直切片（PDF + 号码类 + true redaction） (completed 2026-08-11)
-- [ ] **Phase 2: PDF 增加银行卡/邮箱/财税实体识别与部分掩码** - 扩展 PDF 检测覆盖 + 按实体定制部分掩码
+- [x] **Phase 2: PDF 增加银行卡/邮箱/财税实体识别与部分掩码** - 扩展 PDF 检测覆盖 + 按实体定制部分掩码 (completed 2026-08-11)
 - [ ] **Phase 3: Word 文档接入识别引擎（双栏对比预览自动高亮）** - Word 格式垂直切片
 - [ ] **Phase 4: Excel 工作簿支持（全表散点扫描 + 11 隐藏通道 + 列名驱动升级）** - Excel 格式垂直切片
 - [ ] **Phase 5: 独立图片文件支持（OCR + 像素级重绘 + EXIF 清除 + re-OCR 验证）** - 图片文件垂直切片
@@ -71,13 +71,14 @@ Plans:
   3. User can switch between partial masking and full blackout per entity type or per document
   4. Exported PDF has no original sensitive content in the text layer; document metadata (`Title` / `Author` / `Subject` / `Producer` / `Creator`) is cleared
 
-**Plans**: 3/3 plans drafted
+**Plans**: 4/4 plans executed (01 / 02 / 03 / 04-gap-closure)
 **UI hint**: no
 
 Plans:
 - [x] 02-01-tracer-PLAN.md — Tracer: USCC validator + partial mask write + metadata clear end-to-end (Wave 1)
 - [x] 02-02-engine-expansion-PLAN.md — Engine expansion: VAT invoice + bank account + 15-digit taxpayer ID validators + 9-entity engine coverage (Wave 2)
 - [x] 02-03-main-py-settings-packaging-PLAN.md — Ship bin dictionary (CC BY-SA 4.0) + SettingsDialog 9-row per-entity table + toolbar mask_override toggle + save_pdf wiring + PyInstaller parity (Wave 3)
+- [x] 02-04-gap-closure-PLAN.md — Gap closure: CR-01 (main.py inline write_partial_masks → single delegation) + WR-01 (engine eager doc) + WR-03 (AST convergence gate) + WR-04 (bank_account multi-occurrence)
 
 ---
 
@@ -198,7 +199,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. PDF 自动识别身份证号与手机号并真脱敏 | 3/3 | Complete    | 2026-08-11 |
-| 2. PDF 增加银行卡/邮箱/财税实体识别与部分掩码 | 0/3 | Plans drafted | - |
+| 2. PDF 增加银行卡/邮箱/财税实体识别与部分掩码 | 4/4 | Complete    | 2026-08-11 |
 | 3. Word 文档接入识别引擎 | 0/TBD | Not started | - |
 | 4. Excel 工作簿支持 | 0/TBD | Not started | - |
 | 5. 独立图片文件支持 | 0/TBD | Not started | - |

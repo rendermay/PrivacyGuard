@@ -3,21 +3,21 @@ gsd_state_version: 1.0
 milestone: v37.7.6
 milestone_name: milestone
 status: shipped
-stopped_at: Phase 2 context gathered
-last_updated: "2026-08-11T04:04:40.602Z"
+stopped_at: Phase 2 shipped + cross-platform packaging verified
+last_updated: "2026-08-11T18:30:00.000Z"
 progress:
-  total_phases: 2
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-current_phase_name: PDF 增加银行卡/邮箱/财税实体识别与部分掩码
+  total_phases: 8
+  completed_phases: 2
+  total_plans: 7
+  completed_plans: 7
+current_phase_name: Word 文档接入识别引擎
 ---
 
 # PrivacyGuard v38.x — Project State
 
 **Project:** PrivacyGuard 脱敏卫士
 **Milestone:** v38.x — Pure-local Chinese PII Recognition + Excel/Image Support
-**Updated:** 2026-08-10
+**Updated:** 2026-08-11
 
 ---
 
@@ -39,12 +39,11 @@ current_phase_name: PDF 增加银行卡/邮箱/财税实体识别与部分掩码
 
 ## Current Position
 
-**Phase**: 1 (UI-SPEC approved; awaiting /gsd-plan-phase)
-**Plan**: TBD
-**Status**: Phase 1 CONTEXT gathered + UI-SPEC approved → ready for `/gsd-plan-phase 1`
-**Next action**: `/gsd-plan-phase 1` produces detailed PLAN.md files for Phase 1
+**Phase**: 2 shipped + 02-04 gap closure complete (2026-08-11)
+**Cross-platform packaging verification**: complete (2026-08-11)
+**Next action**: `/gsd-plan-phase 3` produces detailed PLAN.md files for Phase 3 (Word 文档接入识别引擎)
 
-**Progress**: 0% — 0 phases complete out of 8 planned. UI-SPEC 1/1 approved.
+**Progress**: 25% — 2 phases complete out of 8 planned.
 
 ---
 
@@ -53,13 +52,13 @@ current_phase_name: PDF 增加银行卡/邮箱/财税实体识别与部分掩码
 | Metric | Current | Target |
 |--------|---------|--------|
 | Phases planned | 8 | 8 |
-| Phases complete | 0 | 8 |
+| Phases complete | 2 | 8 |
 | Requirements mapped | 50 | 50 |
 | Requirements coverage | 100% | 100% |
-| Test baseline (v37.7.6) | 79/79 pass | 79/79+ pass |
-| Build artifacts | Windows + macOS | Windows + macOS (must include PII modules + dictionaries) |
+| Test baseline | 272/272 pass | 79/79+ pass (now 272/272) |
+| Build artifacts | Windows + macOS (spec parity verified) | Windows + macOS (must include PII modules + dictionaries) |
 | Active config path | `SimpleConfig` (`main.py`) | unchanged |
-| Lazy-loading compliance | enforced (cp30) | unchanged |
+| Lazy-loading compliance | OPS-03 strict preserved | unchanged |
 
 ---
 **Per-Plan Metrics:**
@@ -111,17 +110,24 @@ None — awaiting user approval of drafted roadmap to begin Phase 1 planning.
 
 ### Phase 1: PDF 自动识别身份证号与手机号并真脱敏
 
-- **Status**: UI-SPEC approved (2026-08-10); planning not started
-- **Plans**: 0 / TBD
-- **UI-SPEC**: approved by gsd-ui-checker (5/6 PASS, 1 non-blocking FLAG on Spacing); ui-consideration probe: 20 covered / 2 backstop / 0 unresolved. Path: `.planning/phases/01-pdf/01-UI-SPEC.md`
+- **Status**: ✅ Complete (shipped 2026-08-11)
+- **Plans**: 3/3
 - **Key deliverables**: `privacyguard/pii/` types + Engine + 校验位 + PdfAdapter；PyMuPDF `add_redact_annot + apply_redactions` 真删除；reverse-test 断言
 - **First vertical slice** — proves the whole chain works end-to-end
 
 ### Phase 2: PDF 增加银行卡/邮箱/财税实体识别与部分掩码
 
+- **Status**: ✅ Complete (shipped 2026-08-11) — 4/4 plans + 02-04 gap closure + cross-platform packaging verified
+- **Plans**: 4/4 (02-01 tracer + 02-02 engine expansion + 02-03 main.py/settings/packaging + 02-04 gap closure)
+- **Key deliverables**: 6 new validators (USCC / bank_card / email / VAT_invoice / bank_account / taxpayer_id_15), 9-entity engine, partial mask helper with 4-branch mixed dispatch, SettingsDialog 9-row per-entity table, toolbar mask_override toggle, PDF metadata clearing (5 fields), bin_prefixes.json (19,890 entries, CC BY-SA 4.0)
+- **Test baseline**: 272/272 pass + 10 new from 02-04 = 282 OK
+- **Ship commits**: 068cca3 (02-01) → 0b616a5 (02-02) → 8e48057 (02-03) → 8804f68 (02-04) → fd994ae (08 packaging verification)
+
+### Phase 3: Word 文档接入识别引擎
+
 - **Status**: Not started
 - **Plans**: 0 / TBD
-- **Depends on**: Phase 1
+- **Depends on**: Phase 1, Phase 2 (now complete)
 
 ### Phase 3: Word 文档接入识别引擎
 
@@ -163,21 +169,32 @@ None — awaiting user approval of drafted roadmap to begin Phase 1 planning.
 
 ## Ship Status
 
-**PR:** https://github.com/lizilaywer/PrivacyGuard/pull/3
+**Phase 1 PR:** https://github.com/lizilaywer/PrivacyGuard/pull/3
 **Branch:** `gsd/phase-1-pdf` (fork: rendermay/PrivacyGuard) → `main`
-**Commits on main since Plan 01-01 dispatch:** 17 commits (Plans 01-01/01-02/01-03 + ship-note)
-**Verification:** passed (16/16 must-haves)
-**Date:** 2026-08-11
+**Phase 2 status:** 4 plans + 02-04 gap closure + 08 cross-platform packaging verification complete
+**Latest commits on branch:**
+- `fd994ae` docs(08): cross-platform packaging verification for Phase 2 + 02-04
+- `8804f68` fix(02-04): close CR-01 + WR-01 + WR-03 + WR-04 from 02-VERIFICATION
+- `a8ab75d` docs(02): add phase verification — gaps_found (CR-01 blocker)
+- `4765cbb` feat(02-03): PyInstaller spec parity — 6 new validator hiddenimports + bin_prefixes.json parity check
+- `f04deca` feat(02-03): toolbar btn_mask_override + save_pdf single-pass unified redaction + integration test
+- `00aba9e` feat(02-03): SettingsDialog per-entity table (9 rows) + bulk flip buttons + per_entity_default persist
+- `6e48057` feat(02-03): ship bin_prefixes.json (19,890 BINs) + CC BY-SA LICENSE + validator loadability test
+- `0b616a5` feat(02-02): GREEN — 3 new validators (VAT/bank account/15-digit taxpayer ID) + 4 real _check_* methods + D-09 双 type 契约
+- `068cca3` feat(02-01): engine detect routes 6 new entities + write_partial_masks + clear_pdf_metadata
+- `69d5534` docs(01): ship phase 1 — PR lizilaywer/PrivacyGuard#3 [ci skip]
+
+**Phase 2 ready to push** for review/PR.
 
 ## Session Continuity
 
-**Last session:** 2026-08-11T04:04:40.530Z
-**Stopped at:** Phase 2 context gathered
-**Resume file:** .planning/phases/02-pdf/02-CONTEXT.md
+**Last session:** 2026-08-11T18:30:00.000Z
+**Stopped at:** Phase 2 + 02-04 gap closure + cross-platform packaging verification complete; ready for Phase 3 (Word)
+**Resume file:** .planning/phases/02-pdf/02-04-gap-closure-SUMMARY.md
 
-**Last session**: 2026-08-10 — Phase 1 CONTEXT gathered, UI-SPEC approved.
-**Last action**: Wrote `.planning/phases/01-pdf/01-UI-SPEC.md` (5/6 PASS via gsd-ui-checker; ui-consideration probe resolved 20/20 state categories with 0 unresolved).
-**Resume instructions**: `/gsd-plan-phase 1` to produce detailed PLAN.md files for Phase 1.
+**Last session**: 2026-08-11 — Phase 2 (4 plans) + 02-04 gap closure + 08 cross-platform packaging verification shipped.
+**Last action**: `fd994ae` docs(08): cross-platform packaging verification; `8804f68` fix(02-04): CR-01 + WR-01 + WR-03 + WR-04 closed; `a8ab75d` ... `068cca3` Phase 2 (01/02/03 + gap closure) shipped.
+**Resume instructions**: `/gsd-plan-phase 3` to begin Phase 3 (Word 文档接入识别引擎) planning.
 
 ---
 
