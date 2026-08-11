@@ -12733,6 +12733,10 @@ sudo dnf install antiword
         try:
             import shutil
             from docx import Document
+            from privacyguard.pii import (
+                apply_pii_replacements_to_docx,
+                locate_pii_hits_in_paragraph,
+            )
 
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
@@ -12742,6 +12746,8 @@ sudo dnf install antiword
 
             # 打开副本进行修改
             new_doc = Document(temp_file)
+            override = getattr(self, "_word_mask_override_this_doc", None)
+            mode = override if override in ("partial", "blackout") else "partial"
 
             # 遍历段落进行 run 级别的文本替换
             for para_idx, para in enumerate(new_doc.paragraphs):
@@ -12749,6 +12755,12 @@ sudo dnf install antiword
                 if key in self.word_data:
                     data = self.word_data[key]
                     source_text = data.get("text", "")
+                    pii_hits = data.get("pii", [])
+                    locations = locate_pii_hits_in_paragraph(pii_hits, source_text)
+                    if locations:
+                        apply_pii_replacements_to_docx(
+                            new_doc, {key: locations}, mode=mode
+                        )
                     merged_matches = merge_word_matches_with_priority(
                         source_text,
                         self.word_replace_rules,
@@ -12772,6 +12784,21 @@ sudo dnf install antiword
                         if key in self.word_data:
                             data = self.word_data[key]
                             source_text = data.get("text", "")
+                            pii_hits = data.get("pii", [])
+                            for para_idx, para in enumerate(cell.paragraphs):
+                                para_locations = locate_pii_hits_in_paragraph(
+                                    pii_hits, para.text
+                                )
+                                if not para_locations:
+                                    continue
+                                paragraph_key = (
+                                    f"table_{table_idx}_row_{row_idx}_cell_{cell_idx}_p_{para_idx}"
+                                )
+                                apply_pii_replacements_to_docx(
+                                    new_doc,
+                                    {paragraph_key: para_locations},
+                                    mode=mode,
+                                )
                             merged_matches = merge_word_matches_with_priority(
                                 source_text,
                                 self.word_replace_rules,
