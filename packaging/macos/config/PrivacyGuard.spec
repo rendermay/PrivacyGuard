@@ -108,6 +108,8 @@ a = Analysis(
         'privacyguard.pii.validators.taxpayer_id',
         # Phase 3 (03-word): word_adapter 三函数模块 (D-14)
         'privacyguard.pii.word_adapter',
+        # Phase 3 (03-G2 Gap 4): Word core_properties 清除 helper (cp30 parity 守护)
+        'privacyguard.utils.word_props',
     ] + onnx_hiddenimports + rapid_hiddenimports + bs4_hiddenimports + soupsieve_hiddenimports + lxml_hiddenimports + privacyguard_hiddenimports,
     hookspath=[],
     hooksconfig={},
