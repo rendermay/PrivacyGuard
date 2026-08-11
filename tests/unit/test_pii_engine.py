@@ -222,13 +222,18 @@ class TestEngineDetect(unittest.TestCase):
         self.assertEqual(page.search_calls, ["１１０１０１１９６７０３０７８８１１"])
 
     def test_separator_split_fallback(self):
-        """B2 fallback: 原始 substring 搜不到时按分隔符拆 chunk 并 union。"""
+        """B2 fallback: 原始 substring 搜不到时按分隔符拆 chunk 并 union。
+
+        chunks < 6 字符视为噪声跳过（避免误匹配序列号 "8814"）；
+        本测试中 "110101" 与 "19900307" 都 >= 6 字符 → union bounding rect。
+        """
         page = FakePage(rects_by_text={
             # 原始连字符形式搜索返回空（PyMuPDF 无法匹配跨连字符）
             "110101-19900307-8814": [],
-            # 但 chunked 形式可定位
+            # chunked 形式可定位（仅 >= 6 字符会被实际搜索）
             "110101": [_rect(50.0, 100.0, 110.0, 115.0)],
             "19900307": [_rect(115.0, 100.0, 200.0, 115.0)],
+            # "8814" < 6 字符（噪声阈值），不会被搜索
             "8814": [_rect(205.0, 100.0, 240.0, 115.0)],
         })
         engine = PIIEngine()
@@ -239,12 +244,12 @@ class TestEngineDetect(unittest.TestCase):
         )
         hits = engine.detect(unit, page=page)
         self.assertEqual(len(hits), 1)
-        # union rect: x0=50, y0=100, x1=240, y1=115
+        # union rect (仅 110101 + 19900307): x0=50, y0=100, x1=200, y1=115
         x, y, w, h = hits[0].page_rect
         self.assertAlmostEqual(x, 50.0)
         self.assertAlmostEqual(y, 100.0)
         self.assertGreater(w * h, 0.0)
-        self.assertAlmostEqual(w, 190.0)  # 240 - 50
+        self.assertAlmostEqual(w, 150.0)  # 200 - 50
         self.assertAlmostEqual(h, 15.0)   # 115 - 100
 
     def test_zero_area_rect_records_unresolved_not_emits(self):

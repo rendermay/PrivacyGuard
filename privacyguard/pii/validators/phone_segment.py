@@ -29,17 +29,21 @@ PHONE_EXCLUDED_PREFIX_4: Final = frozenset({
 })
 
 
-def is_mobile_segment(phone11: str) -> bool:
+def is_mobile_segment(phone11) -> bool:
     """中国大陆手机号判定。
 
     返回 True 当且仅当：
     - 长度为 11
     - 全部为数字
     - 以 '1' 开头
-    - 前 4 位不在 excluded_4 集合
-    - 前 3 位不在 excluded_3 集合
+    - 前 4 位不在 excluded_4 集合（卫星 / 数据卡专用）
+    - 前 3 位不在 excluded_3 集合（IoT 物联）
     - 前 3 位在 personal_prefix_3 白名单内
+
+    防御性：非字符串输入 → False（不抛 TypeError）。
     """
+    if not isinstance(phone11, str):
+        return False
     if not phone11 or len(phone11) != 11 or not phone11.isdigit():
         return False
     if not phone11.startswith('1'):

@@ -49,8 +49,14 @@ def compute_check_digit(body17: str) -> str:
     return MAPPING[sum(int(body17[i]) * WEIGHTS[i] for i in range(17)) % 11]
 
 
-def validate_18(id_str: str) -> bool:
-    """18 位身份证 mod-11-2 校验（NUM-01 / NUM-02 大小写 X）。"""
+def validate_18(id_str) -> bool:
+    """18 位身份证 mod-11-2 校验（NUM-01 / NUM-02 大小写 X）。
+
+    防御性：对非字符串输入直接返回 False（不抛 TypeError）；长度 / 字符类型
+    / 末位 [0-9Xx] 三层 gate；最后做 mod-11-2 校验。
+    """
+    if not isinstance(id_str, str):
+        return False
     if not id_str or len(id_str) != 18:
         return False
     if not id_str[:17].isdigit():
@@ -87,8 +93,14 @@ def is_real_calendar_date(yy: int, mm: int, dd: int) -> bool:
     return True
 
 
-def validate_15(id_str: str) -> bool:
-    """15 位身份证验证（升级 + 双门 + 校验位）。"""
+def validate_15(id_str) -> bool:
+    """15 位身份证验证（升级 + 双门 + 校验位）。
+
+    防御性：非字符串输入 → False。
+    流程：长度 / 数字 → upgrade_15_to_18 → 行政区划前缀 → 真实日历日期 → 校验位。
+    """
+    if not isinstance(id_str, str):
+        return False
     if not id_str or len(id_str) != 15 or not id_str.isdigit():
         return False
     upgraded = upgrade_15_to_18(id_str)
