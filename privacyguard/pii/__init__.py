@@ -57,6 +57,12 @@ __all__ = [
     'EMAIL_RE',
     'EMAIL_PUBLIC_SUFFIXES',
     'BANK_CARD_BIN_WHITELIST',
+    # Phase 2 (02-02-engine-expansion) — 3 new validators + 2 context helpers + 2 context whiteslists
+    'validate_taxpayer_id_15',
+    'has_vat_invoice_context',
+    'has_bank_account_context',
+    'VAT_INVOICE_CONTEXTS',
+    'BANK_ACCOUNT_CONTEXTS',
 ]
 
 
@@ -94,6 +100,12 @@ _LAZY_IMPORTS = {
     'partial_mask_bank_account': ('privacyguard.pii.mask', 'partial_mask_bank_account'),
     'write_partial_masks':       ('privacyguard.pii.pdf_adapter', 'write_partial_masks'),
     'clear_pdf_metadata':        ('privacyguard.pii.pdf_adapter', 'clear_pdf_metadata'),
+    # Phase 2 (02-02-engine-expansion) — 5 new lazy exports
+    'validate_taxpayer_id_15':   ('privacyguard.pii.validators', 'validate_taxpayer_id_15'),
+    'has_vat_invoice_context':   ('privacyguard.pii.validators', 'has_vat_invoice_context'),
+    'has_bank_account_context':  ('privacyguard.pii.validators', 'has_bank_account_context'),
+    'VAT_INVOICE_CONTEXTS':      ('privacyguard.pii.validators', 'VAT_INVOICE_CONTEXTS'),
+    'BANK_ACCOUNT_CONTEXTS':     ('privacyguard.pii.validators', 'BANK_ACCOUNT_CONTEXTS'),
 }
 
 

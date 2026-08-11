@@ -78,6 +78,10 @@ __all__ = [
     'partial_mask_bank_account',
     'write_partial_masks',
     'clear_pdf_metadata',
+    # Phase 2 (02-02-engine-expansion) — 3 new top-level forwards
+    'validate_taxpayer_id_15',
+    'has_vat_invoice_context',
+    'has_bank_account_context',
 ]
 
 _LAZY_IMPORTS = {
@@ -109,6 +113,10 @@ _LAZY_IMPORTS = {
     'partial_mask_bank_account': ('privacyguard.pii', 'partial_mask_bank_account'),
     'write_partial_masks': ('privacyguard.pii', 'write_partial_masks'),
     'clear_pdf_metadata': ('privacyguard.pii', 'clear_pdf_metadata'),
+    # Phase 2 (02-02-engine-expansion) — 3 new top-level forwards
+    'validate_taxpayer_id_15': ('privacyguard.pii', 'validate_taxpayer_id_15'),
+    'has_vat_invoice_context': ('privacyguard.pii', 'has_vat_invoice_context'),
+    'has_bank_account_context': ('privacyguard.pii', 'has_bank_account_context'),
 }
 
 
