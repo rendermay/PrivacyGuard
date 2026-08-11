@@ -202,3 +202,42 @@ class TestPrivacyGuardImports(unittest.TestCase):
             license_text = fh.read()
         self.assertIn("CC BY-SA", license_text, "LICENSE 必须包含 'CC BY-SA' 归属声明")
         self.assertIn("Wikipedia", license_text, "LICENSE 必须包含 'Wikipedia' 来源声明")
+
+    # ------------------------------------------------------------------
+    # Phase 3 (03-word) — word_adapter 三函数懒加载纪律
+    # ------------------------------------------------------------------
+
+    def test_import_privacyguard_does_not_load_word_adapter(self):
+        """OPS-03: import privacyguard 不应触发 privacyguard.pii.word_adapter 模块加载。"""
+        cached = self._snapshot_privacyguard_modules()
+        for name in list(cached):
+            sys.modules.pop(name, None)
+        try:
+            module = importlib.import_module("privacyguard")
+            _ = module.validate_safe_path
+            self.assertNotIn(
+                "privacyguard.pii.word_adapter",
+                sys.modules,
+                "import privacyguard 不得触发 privacyguard.pii.word_adapter (OPS-03)",
+            )
+        finally:
+            self._restore_privacyguard_modules(cached)
+
+    def test_collect_pii_word_hits_loads_word_adapter(self):
+        """OPS-03: 通过 privacyguard.pii.collect_pii_word_hits 触发 word_adapter 懒加载。"""
+        cached = self._snapshot_privacyguard_modules()
+        for name in list(cached):
+            sys.modules.pop(name, None)
+        try:
+            module = importlib.import_module("privacyguard")
+            _ = module.validate_safe_path
+            self.assertNotIn("privacyguard.pii.word_adapter", sys.modules)
+            pii_pkg = importlib.import_module("privacyguard.pii")
+            _ = pii_pkg.collect_pii_word_hits
+            self.assertIn(
+                "privacyguard.pii.word_adapter",
+                sys.modules,
+                "通过 privacyguard.pii.collect_pii_word_hits 应触发 word_adapter 加载 (D-13)",
+            )
+        finally:
+            self._restore_privacyguard_modules(cached)
