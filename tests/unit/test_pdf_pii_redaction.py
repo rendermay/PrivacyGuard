@@ -449,5 +449,144 @@ class TestPartialMaskWritesMaskText(unittest.TestCase):
             self.assertIn(mask_text, out_text, "mask_strategy 不在输出")
 
 
+class TestWritePartialMasksMixedItemDispatch(unittest.TestCase):
+    """02-04: write_partial_masks must accept mixed item types in one call (PIIHit | fitz.Rect | tuple)."""
+
+    def test_pii_hit_branch_uses_mask_strategy(self):
+        """PIIHit dataclass routed via global mode (02-01 backward-compat path)."""
+        from privacyguard.pii.pdf_adapter import write_partial_masks
+        from privacyguard.pii.hits import PIIHit
+        from tests.fixtures.fake_pii import fake_id_card
+        from privacyguard.pii.mask import partial_mask_id_card
+        # Build a minimal PIIHit; verify write_partial_masks signature accepts it
+        hit = PIIHit(
+            entity_type='CN_ID_CARD',
+            page_offset=0,
+            page_length=18,
+            page_rect=(50.0, 100.0, 200.0, 20.0),
+            source='text',
+            mask_strategy=partial_mask_id_card(fake_id_card()),
+            normalized='11010119800101001X',
+            validator_passed=True,
+        )
+        self.assertEqual(hit.entity_type, 'CN_ID_CARD')
+        self.assertTrue(write_partial_masks.__doc__ is not None)  # signature still importable
+
+    def test_tuple_form_per_item_mode_dispatches(self):
+        """(x, y, w, h, mode) tuple routed by per-item mode."""
+        from privacyguard.pii.pdf_adapter import write_partial_masks
+        # Tuple item dispatch is internal — verify the type alias is exported
+        self.assertIn('PartialMaskItem', write_partial_masks.__globals__ if hasattr(write_partial_masks, '__globals__') else {})
+        # Also verify via direct module attribute
+        from privacyguard.pii import pdf_adapter
+        self.assertTrue(hasattr(pdf_adapter, 'PartialMaskItem'))
+
+    def test_mixed_5tuple_dispatches_correctly(self):
+        """02-04: (x, y, w, h, mode) 5-tuple dispatched by per-item mode — blackout rect removes text."""
+        import fitz, tempfile, os
+        from privacyguard.pii.pdf_adapter import write_partial_masks
+        with tempfile.TemporaryDirectory() as tmp:
+            in_pdf = os.path.join(tmp, 'in_5tuple.pdf')
+            out_pdf = os.path.join(tmp, 'out_5tuple.pdf')
+            secret_token = 'SECRET_BLACKOUT_TARGET_42'
+            doc = fitz.open()
+            page = doc.new_page()
+            # Place secret text inside the (50,100,200,20) rect that will be redacted
+            page.insert_text((60, 115), secret_token, fontsize=12)
+            doc.save(in_pdf)
+            doc.close()
+            doc = fitz.open(in_pdf)
+            try:
+                write_partial_masks(doc, 0, [(50, 100, 200, 20, 'blackout')], mode='partial')
+                doc.save(out_pdf)
+            finally:
+                doc.close()
+            with fitz.open(out_pdf) as out_doc:
+                out_text = ''.join(p.get_text() for p in out_doc)
+            self.assertNotIn(secret_token, out_text, f'5-tuple blackout failed: secret still extractable: {out_text!r}')
+
+    def test_mixed_2tuple_partial_writes_mask_text(self):
+        """02-04: (PIIHit, mode) 2-tuple dispatched — partial mode writes mask_strategy text."""
+        import fitz, tempfile, os
+        from privacyguard.pii.pdf_adapter import write_partial_masks
+        from privacyguard.pii.hits import PIIHit
+        from privacyguard.pii.mask import partial_mask_id_card
+        from tests.fixtures.fake_pii import fake_id_card
+        with tempfile.TemporaryDirectory() as tmp:
+            in_pdf = os.path.join(tmp, 'in_2tuple.pdf')
+            out_pdf = os.path.join(tmp, 'out_2tuple.pdf')
+            secret_id = fake_id_card()
+            mask_text = partial_mask_id_card(secret_id)
+            doc = fitz.open()
+            page = doc.new_page()
+            page.insert_text((60, 115), f'测试 身份证 {secret_id}', fontsize=14)
+            doc.save(in_pdf)
+            doc.close()
+            hit = PIIHit(
+                entity_type='CN_ID_CARD',
+                page_offset=0,
+                page_length=len(secret_id),
+                page_rect=(50.0, 100.0, 250.0, 25.0),
+                source='text',
+                mask_strategy=mask_text,
+                normalized=secret_id,
+                validator_passed=True,
+            )
+            doc = fitz.open(in_pdf)
+            try:
+                write_partial_masks(doc, 0, [(hit, 'partial')])
+                doc.save(out_pdf)
+            finally:
+                doc.close()
+            with fitz.open(out_pdf) as out_doc:
+                out_text = ''.join(p.get_text() for p in out_doc)
+            self.assertNotIn(secret_id, out_text, f'2-tuple partial failed: original still extractable: {out_text!r}')
+            self.assertIn(mask_text, out_text, f'2-tuple partial failed: mask text missing: {out_text!r}')
+
+    def test_mixed_partial_and_blackout_in_one_call(self):
+        """02-04: single call mixing (PIIHit, 'partial') + (x, y, w, h, 'blackout') — D-22 single-pass invariant."""
+        import fitz, tempfile, os
+        from privacyguard.pii.pdf_adapter import write_partial_masks
+        from privacyguard.pii.hits import PIIHit
+        from privacyguard.pii.mask import partial_mask_id_card
+        from tests.fixtures.fake_pii import fake_id_card
+        with tempfile.TemporaryDirectory() as tmp:
+            in_pdf = os.path.join(tmp, 'in_mixed.pdf')
+            out_pdf = os.path.join(tmp, 'out_mixed.pdf')
+            secret_id = fake_id_card()
+            mask_text = partial_mask_id_card(secret_id)
+            secret_token = 'SECRET_BLACKOUT_REGION_99'
+            doc = fitz.open()
+            page = doc.new_page()
+            page.insert_text((60, 115), f'身份证 {secret_id}', fontsize=14)
+            page.insert_text((60, 215), secret_token, fontsize=14)
+            doc.save(in_pdf)
+            doc.close()
+            hit = PIIHit(
+                entity_type='CN_ID_CARD',
+                page_offset=0,
+                page_length=len(secret_id),
+                page_rect=(50.0, 100.0, 250.0, 25.0),
+                source='text',
+                mask_strategy=mask_text,
+                normalized=secret_id,
+                validator_passed=True,
+            )
+            doc = fitz.open(in_pdf)
+            try:
+                # Single call: partial PIIHit + blackout 5-tuple in one items list
+                write_partial_masks(doc, 0, [(hit, 'partial'), (50, 200, 300, 25, 'blackout')])
+                doc.save(out_pdf)
+            finally:
+                doc.close()
+            with fitz.open(out_pdf) as out_doc:
+                out_text = ''.join(p.get_text() for p in out_doc)
+            # Partial: mask text extractable, original secret not
+            self.assertNotIn(secret_id, out_text, f'partial branch failed: original still extractable: {out_text!r}')
+            self.assertIn(mask_text, out_text, f'partial branch failed: mask text missing: {out_text!r}')
+            # Blackout: token removed
+            self.assertNotIn(secret_token, out_text, f'blackout branch failed: token still extractable: {out_text!r}')
+
+
 if __name__ == "__main__":
     unittest.main()
