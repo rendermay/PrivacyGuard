@@ -176,6 +176,44 @@ class TestPrivacyGuardImports(unittest.TestCase):
             self._restore_privacyguard_modules(cached)
 
     # ------------------------------------------------------------------
+    # Phase 3 (03-word) — OPS-03 懒加载纪律扩展
+    # ------------------------------------------------------------------
+
+    def test_import_privacyguard_does_not_load_word_submodules(self):
+        """Phase 3 (03-word) — OPS-03 懒加载纪律扩展：import privacyguard 不拉起 privacyguard.word.* 子模块。
+
+        5 个 word 子模块：privacyguard.word.adapter / .worker / .redact /
+        .clear_doc_props / .candidate_dialog 必须均不在 sys.modules 中
+        （直到具体使用时才 import）。
+        """
+        cached = self._snapshot_privacyguard_modules()
+        for name in list(cached):
+            sys.modules.pop(name, None)
+        try:
+            importlib.import_module("privacyguard")
+
+            for mod_name in (
+                "privacyguard.word.adapter",
+                "privacyguard.word.worker",
+                "privacyguard.word.redact",
+                "privacyguard.word.clear_doc_props",
+                "privacyguard.word.candidate_dialog",
+            ):
+                self.assertNotIn(
+                    mod_name,
+                    sys.modules,
+                    f"{mod_name} should NOT be loaded after import privacyguard (OPS-03 lazy-load)",
+                )
+
+            # 触发 lazy forward 应正确加载
+            from privacyguard.word import WordAdapter
+
+            self.assertIn("privacyguard.word.adapter", sys.modules)
+            self.assertTrue(callable(WordAdapter.collect_units))
+        finally:
+            self._restore_privacyguard_modules(cached)
+
+    # ------------------------------------------------------------------
     # Phase 2 (02-03-main-py-settings-packaging) — bin_prefixes.json + LICENSE
     # ------------------------------------------------------------------
 

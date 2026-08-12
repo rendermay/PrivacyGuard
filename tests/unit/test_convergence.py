@@ -320,6 +320,72 @@ class TestPiiConvergence(unittest.TestCase):
         self.assertNotIn("def write_partial_masks(", source, "main.py must not inline write_partial_masks")
         self.assertNotIn("def clear_pdf_metadata(", source, "main.py must not inline clear_pdf_metadata")
 
+    # ------------------------------------------------------------------
+    # Phase 3 (03-word) — D-05 v37.7.6 收敛原则扩展
+    # ------------------------------------------------------------------
+
+    def test_no_word_adapter_in_main_py(self):
+        """Phase 3 (03-word) — D-05 v37.7.6 收敛原则扩展：main.py 不含 inline Word adapter /
+        redact / clear_doc_props 实现。所有这些实现必须位于 privacyguard/word/* 子包。
+
+        AST 解析 main.py；扫描 7 个目标函数体内是否含 forbidden_literals 字符串字面量
+        或内嵌函数定义（'redact_word_docx' / 'clear_word_doc_props_docx' / 'collect_word_units'）。
+        允许 ast.ImportFrom / ast.Import / ast.Call 节点。
+        """
+        source = MAIN_PY.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(MAIN_PY))
+
+        functions = {
+            node.name: node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef)
+        }
+
+        target_functions = [
+            "_open_word_docx",
+            "_save_word",
+            "_on_word_pii_page_result",
+            "_on_word_candidate_dialog_accept",
+            "_apply_word_pii_panel_updates",
+            "_build_pii_block_fragment",
+            "_build_pii_mask_block_fragment",
+        ]
+
+        forbidden_literals = [
+            "redact_word_docx",
+            "clear_word_doc_props_docx",
+            "collect_word_units",
+        ]
+
+        violations = []
+        for func_name in target_functions:
+            func_node = functions.get(func_name)
+            if func_node is None:
+                continue
+            for node in ast.walk(func_node):
+                if (
+                    isinstance(node, ast.Constant)
+                    and isinstance(node.value, str)
+                    and node.value in forbidden_literals
+                ):
+                    violations.append(
+                        f"{func_name} at line {node.lineno}: forbidden literal \"{node.value}\""
+                    )
+                if (
+                    isinstance(node, ast.FunctionDef)
+                    and node.name in forbidden_literals
+                ):
+                    violations.append(
+                        f"{func_name} at line {node.lineno}: forbidden inline def {node.name}"
+                    )
+
+        self.assertEqual(
+            violations,
+            [],
+            f"main.py contains inline Word adapter/redact/clear_doc_props implementations: {violations}. "
+            f"All such implementations MUST live in privacyguard/word/* (D-05 v37.7.6 convergence).",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
