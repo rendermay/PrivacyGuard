@@ -12638,20 +12638,19 @@ sudo dnf install antiword
                         pii_list = self.page_data[i].get('pii', [])
 
                         # ------------------------------------------------------------------
-                        # Phase 2 LOCKED REFACTOR — single-pass unified redaction（D-22）
+                        # Phase 2 (02-04-gap-closure) — CR-01 fix: single delegation call
                         # ------------------------------------------------------------------
-                        # 关键不变式（warning #3 fix）：
-                        # - PyMuPDF `page.apply_redactions()` 是 one-shot per page；每页只能调用一次
-                        # - 调用两次会抛 RuntimeError
-                        # - 因此 OCR + manual + PII partial + PII blackout **必须** 合并到同一次 add_redact_annot + apply_redactions
-                        # - partial mode 的 mask text 通过 page.insert_text 在色块销毁后追加
+                        # 关键不变式（D-22）：PyMuPDF page.apply_redactions() 是 one-shot per page；
+                        # 必须 OCR + manual + PII partial + PII blackout 合并到同一次 add_redact_annot
+                        # + apply_redactions。partial mode 的 mask text 在 apply_redactions 销毁底层
+                        # 文本后通过 page.insert_text 在色块上追加。
                         # ------------------------------------------------------------------
 
-                        # Phase 1: 收集所有命中 (item, mode) 元组 — mode 仅用于 partial mask insert_text 步骤
-                        all_pi_items = []  # list of (item, mode) — item 是 QRectF 或 PIIHit
-                        # OCR / manual 路径保持 Phase 1 既有行为（全遮蔽，不做 partial mask）
+                        # 收集所有 item（OCR / manual / PII）到统一列表
+                        # OCR / manual → (QRectF, "blackout") 2-tuple via PIIHit form → 实际转为 rect 元组
+                        all_pi_items = []
                         for r in ocr_list + manual_list:
-                            all_pi_items.append((r, "blackout"))
+                            all_pi_items.append((r.x(), r.y(), r.width(), r.height(), "blackout"))
                         # PII 路径按 per_entity_default + mask_override_this_doc 决策 mode
                         for hit in pii_list:
                             if override == "blackout":
@@ -12661,58 +12660,10 @@ sudo dnf install antiword
                             else:
                                 all_pi_items.append((hit, "blackout"))
 
-                        # First pass: add_redact_annot for ALL items（OCR + manual + PII）
-                        # collect 收齐 rect / item / mode 供 partial text 步骤使用
-                        rects_for_partial = []  # list of (rect, item, mode)
-                        for item, mode in all_pi_items:
-                            if hasattr(item, "page_rect"):  # PIIHit dataclass
-                                x, y, w, h = item.page_rect
-                            else:  # QRectF (ocr/manual)
-                                x, y, w, h = item.x(), item.y(), item.width(), item.height()
-                            rect = fitz.Rect(x, y, x + w, y + h)
-                            annot = page.add_redact_annot(rect)
-                            annot.set_colors(stroke=fill_col, fill=fill_col)
-                            annot.update()
-                            rects_for_partial.append((rect, item, mode))
-
-                        # 真删除：销毁底层文本 + 像素（一次性；多次调用会抛 RuntimeError）
-                        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_PIXELS)
-
-                        # v37.3: 删除所有注释对象，防止被 PDF 编辑器修改
-                        for annot in page.annots() or []:
-                            page.delete_annot(annot)
-
-                        # Second pass: partial mode 在新色块上写 mask_strategy 文字
-                        for rect, item, mode in rects_for_partial:
-                            if mode != "partial":
-                                continue
-                            # PIIHit 提供 mask_strategy；OCR / manual 永不 partial
-                            mask_text = getattr(item, "mask_strategy", "") or ""
-                            if not mask_text:
-                                continue
-                            # 字号优先从 page.get_text("dict") 取最近 span；fallback 到 11.0
-                            font_size = 11.0
-                            try:
-                                text_dict = page.get_text("dict")
-                                for block in text_dict.get("blocks", []):
-                                    for line in block.get("lines", []):
-                                        for span in line.get("spans", []):
-                                            if span.get("text") and "mask" not in span.get("text", "").lower():
-                                                font_size = float(span.get("size", 11.0))
-                                                break
-                            except Exception:
-                                pass
-                            avg_char_w = font_size * 0.6
-                            text_w = len(mask_text) * avg_char_w + 4
-                            cx = (rect.x0 + rect.x1) / 2.0
-                            cy = (rect.y0 + rect.y1) / 2.0 - font_size / 3.0
-                            page.insert_text(
-                                (cx - text_w / 2.0, cy),
-                                mask_text,
-                                fontsize=font_size,
-                                fontname="helv",
-                                color=(1.0, 1.0, 1.0),
-                            )
+                        # CR-01 fix: 单次委托调用（write_partial_masks 内部统一处理）
+                        # 替代之前 60+ 行 inline add_redact_annot + apply_redactions +
+                        # delete_annot + insert_text 重复实现（v37.7.6 收敛原则）。
+                        write_partial_masks(doc_save, i, all_pi_items)
 
                     # Phase 2 (02-03-main-py-settings-packaging): SAFE-03 元数据清除（D-14 + D-15 + D-16）
                     # 仅清 5 字段；写空字符串；不写占位字符串
