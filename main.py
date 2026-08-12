@@ -33,6 +33,7 @@ from privacyguard.workers.image_merge import ImageMergeWorker
 from privacyguard.workers.word_worker import WordWorker as _ModularWordWorker
 from privacyguard.workers.ocr_worker import OCRWorker as _ModularOCRWorker
 from privacyguard.utils.doc_converter import convert_doc_to_docx as _shared_convert_doc_to_docx
+from privacyguard.pii.hits import PIIHit  # Phase 3 (03-word) — merge_word_matches_with_priority PIIHit 分派
 
 # v37.0.5: 延迟导入 OCR 模块，便于错误处理
 RapidOCR = None
@@ -865,12 +866,15 @@ def merge_word_matches_with_priority(text, rules, default_replacement_text,
                                      pii_matches=None):
     """合并规则替换、手动脱敏、OCR 脱敏区间，优先级：规则 > 手动 > OCR。
 
-    Phase 3 (03-word): 第六参数 pii_matches=None（Wave 1 RED 默认值保持 back-compat）；
+    Phase 3 (03-word): 第六参数 pii_matches=None（默认 back-compat）；
     Wave 2 GREEN 启用 priority 顺序 rule > pii > manual > ocr（D-19 锁）。
+
+    PIIHit dataclass 实例分派：通过 page_offset / page_length / normalized / mask_strategy
+    映射为内部 dict 形态，再走通用 _append_candidates 路径。
     """
     manual_matches = manual_matches or []
     ocr_matches = ocr_matches or []
-    # Phase 3 (03-word) — Wave 1 占位；Wave 2 启用 pii_matches 处理（per BLOCKER 6 RED 不破坏）
+    # Phase 3 (03-word) — Wave 2 启用 pii_matches 处理（D-19 priority 锁）
     pii_matches = pii_matches or []
     text_len = len(text) if isinstance(text, str) else 0
     fallback_text = default_replacement_text if isinstance(default_replacement_text, str) and default_replacement_text else "[已脱敏]"
@@ -880,8 +884,26 @@ def merge_word_matches_with_priority(text, rules, default_replacement_text,
 
     def _append_candidates(candidates, source_name):
         for item in candidates:
-            start = item.get("start")
-            end = item.get("end")
+            # Phase 3 (03-word) — PIIHit dataclass 实例分派（D-19 priority 锁）
+            if isinstance(item, PIIHit):
+                start = item.page_offset
+                end = item.page_offset + item.page_length
+                replacement = item.mask_strategy or fallback_text
+                if not isinstance(replacement, str):
+                    replacement = str(replacement)
+                text_for_range = item.normalized or (text[start:end] if isinstance(text, str) else "")
+                item_dict = {
+                    "start": start,
+                    "end": end,
+                    "text": text_for_range,
+                    "replacement": replacement,
+                    "mode": "global",
+                    "rule_name": "",
+                }
+            else:
+                item_dict = item
+            start = item_dict.get("start")
+            end = item_dict.get("end")
             if not isinstance(start, int) or not isinstance(end, int):
                 continue
             if start < 0 or end > text_len or start >= end:
@@ -889,7 +911,7 @@ def merge_word_matches_with_priority(text, rules, default_replacement_text,
             if _range_overlaps(start, end, occupied_ranges):
                 continue
 
-            replacement = item.get("replacement", fallback_text)
+            replacement = item_dict.get("replacement", fallback_text)
             if replacement is None:
                 replacement = fallback_text
             if not isinstance(replacement, str):
@@ -898,15 +920,17 @@ def merge_word_matches_with_priority(text, rules, default_replacement_text,
             merged.append({
                 "start": start,
                 "end": end,
-                "text": item.get("text", text[start:end] if isinstance(text, str) else ""),
+                "text": item_dict.get("text", text[start:end] if isinstance(text, str) else ""),
                 "replacement": replacement,
                 "source": source_name,
-                "mode": item.get("mode", "global"),
-                "rule_name": item.get("rule_name", "")
+                "mode": item_dict.get("mode", "global"),
+                "rule_name": item_dict.get("rule_name", "")
             })
             occupied_ranges.append((start, end))
 
     _append_candidates(build_word_rule_matches(text, rules, fallback_text), "rule")
+    # Phase 3 (03-word) — D-19 priority 顺序 rule > pii > manual > ocr
+    _append_candidates(pii_matches, "pii")
     _append_candidates(manual_matches, "manual")
     _append_candidates(ocr_matches, "ocr")
     merged.sort(key=lambda item: item["start"])
@@ -10793,7 +10817,7 @@ class MainWindow(QMainWindow):
             self._reset_batch_session_state()
             self.word_compare_mode = False
             self.word_compare_user_hidden = False
-            # Phase 3 (03-word) — Wave 1 RED 占位 — Wave 2 实施 WordPIIWorker 启动
+            # Phase 3 (03-word) — WordPIIWorker 自动启动（D-09）
             self._word_pii_worker = None
             self.word_doc = Document(fname)
             self.file_path = fname
@@ -10837,6 +10861,14 @@ class MainWindow(QMainWindow):
 
             # 显示 HTML 预览
             self.render_word_preview()
+
+            # Phase 3 (03-word) — WordPIIWorker 自动启动（D-09 / D-18 + cp30 教训扩展）
+            from privacyguard.word.worker import WordPIIWorker
+            self._word_pii_worker = WordPIIWorker(self.word_data, parent=self)
+            self._word_pii_worker.pii_signal.connect(self._on_word_pii_page_result)
+            self._word_pii_worker.error_signal.connect(self._on_word_pii_scan_error)
+            self._word_pii_worker.finished_signal.connect(self._on_word_pii_scan_complete)
+            self._word_pii_worker.start()
 
             self._clear_info_bar_message()
 
@@ -11530,12 +11562,59 @@ sudo dnf install antiword
             self.render_view()
 
     def _on_word_pii_page_result(self, key: str, hits_data: list):
-        """Phase 3: pii_signal 接收槽（D-09 / D-18 — Wave 1 占位，Wave 2 实施）。
+        """Phase 3: pii_signal 接收槽（D-09 / D-18 + cp30 教训扩展）。
 
-        Wave 1 占位仅记录 + print，不写 word_data（避免破坏既有 _save_word 行为）。
-        Wave 2 实施 QMutexLocker 写 + _apply_word_pii_panel_updates 增量 DOM patch。
+        反序列化 worker 发出的 dict 列表为 PIIHit 对象；
+        写入受 _word_data_lock 保护；后续触发 _apply_word_pii_panel_updates 增量 DOM patch。
         """
-        print(f'[Word PII STUB] key={key} hits_count={len(hits_data)}')
+        # lazy import inside slot — 避免 import-time 拉起 PII 引擎
+        from privacyguard.pii.hits import PIIHit
+        with QMutexLocker(self._word_data_lock):
+            if key in self.word_data:
+                self.word_data[key]['pii'] = [PIIHit(**h) for h in hits_data]
+            else:
+                print(f'[Word PII WARN] key {key} not in word_data')
+        # 触发 Word 双栏预览增量 DOM patch（Wave 2 占位方法 stub — Wave 3 完整实施）
+        self._apply_word_pii_panel_updates(key, hits_data)
+
+    def _on_word_pii_scan_error(self, exception_class: str) -> None:
+        """Phase 3: WordPIIWorker 异常槽（D-09 / D-18）。"""
+        try:
+            self._word_pii_status_chip_set(
+                f'Word 隐私识别 引擎初始化失败：{exception_class}。已自动关闭本会话识别。'
+            )
+        except Exception:
+            pass
+
+    def _on_word_pii_scan_complete(self) -> None:
+        """Phase 3: WordPIIWorker 完成槽（D-09 / D-18）。"""
+        try:
+            self._refresh_word_pii_status_chip()
+        except Exception:
+            pass
+
+    def _apply_word_pii_panel_updates(self, key: str, hits_data: list) -> None:
+        """Phase 3: 触发 Word 双栏预览增量 DOM patch（D-07 / D-10 — Wave 2 占位 stub）。
+
+        Wave 2 占位：仅 no-op。Wave 3 实施 cp27 局部 patch（web_view.page().runJavaScript
+        ("updateBlock(...)")；不触发整页 setHtml，避免高亮节点被破坏）。
+        """
+        # Wave 2 stub：no-op；Wave 3 完整实施 cp27 局部 patch
+        return None
+
+    def _word_pii_status_chip_set(self, message: str) -> None:
+        """Phase 3: 更新 wordPiiStatusChip（占位 — Wave 3 完整实施）。
+
+        Wave 2 stub：仅 print；Wave 3 完整实施 wordPiiStatusChip 状态机 7 阶段。
+        """
+        print(f'[Word PII Chip] {message}')
+
+    def _refresh_word_pii_status_chip(self) -> None:
+        """Phase 3: 刷新 wordPiiStatusChip（占位 — Wave 3 完整实施）。
+
+        Wave 2 stub：no-op；Wave 3 完整实施 wordPiiStatusChip 状态机 7 阶段。
+        """
+        return None
 
     def _on_ocr_finished_safe(self, _):
         """v36.4: 线程安全 - OCR 完成处理（在主线程执行）
@@ -12718,6 +12797,8 @@ sudo dnf install antiword
         try:
             import shutil
             from docx import Document
+            from privacyguard.word.redact import redact_word
+            from privacyguard.word.clear_doc_props import clear_word_doc_props
 
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
@@ -12739,14 +12820,14 @@ sudo dnf install antiword
                         self.word_replace_rules,
                         self.replacement_text,
                         manual_matches=data.get("manual", []),
-                        ocr_matches=data.get("ocr", [])
+                        ocr_matches=data.get("ocr", []),
+                        # Phase 3 (03-word) — D-19 priority 第六参数 PII 命中
+                        pii_matches=data.get("pii", []),
                     )
                     if merged_matches:
-                        replace_matches_in_paragraph(
-                            para,
-                            merged_matches,
-                            text_offset=0,
-                            fallback_replacement_text=self.replacement_text
+                        redact_word(
+                            new_doc, key, merged_matches,
+                            fallback_replacement_text=self.replacement_text,
                         )
 
             # 遍历表格进行 run 级别的文本替换
@@ -12762,25 +12843,19 @@ sudo dnf install antiword
                                 self.word_replace_rules,
                                 self.replacement_text,
                                 manual_matches=data.get("manual", []),
-                                ocr_matches=data.get("ocr", [])
+                                ocr_matches=data.get("ocr", []),
+                                # Phase 3 (03-word) — D-19 priority 第六参数 PII 命中
+                                pii_matches=data.get("pii", []),
                             )
 
                             if merged_matches:
-                                # 处理单元格内的所有段落（按 cell.text 的偏移映射）
-                                para_offset = 0
-                                paragraphs = list(cell.paragraphs)
-                                for idx, para in enumerate(paragraphs):
-                                    original_para_len = len(''.join(run.text for run in para.runs))
-                                    replace_matches_in_paragraph(
-                                        para,
-                                        merged_matches,
-                                        text_offset=para_offset,
-                                        fallback_replacement_text=self.replacement_text
-                                    )
-                                    para_offset += original_para_len
-                                    if idx < len(paragraphs) - 1:
-                                        # python-docx 的 cell.text 使用换行拼接段落
-                                        para_offset += 1
+                                redact_word(
+                                    new_doc, key, merged_matches,
+                                    fallback_replacement_text=self.replacement_text,
+                                )
+
+            # Phase 3 (03-word) — D-08 / D-24 — 与 Phase 2 SAFE-03 clear_pdf_metadata 对称
+            clear_word_doc_props(new_doc)
 
             # 保存文档
             new_doc.save(fname)

@@ -57,7 +57,7 @@ class TestWordPIIAutoTrigger(unittest.TestCase):
             f"手机 {fake_phone()} "
             f"邮箱 {fake_email()} "
             f"卡号 {fake_bank_card()} "
-            f"USCC {fake_uscc()} "
+            f"统一信用代码 {fake_uscc()} "
             f"发票 {fake_vat_invoice_20()} "
             f"账号 {fake_bank_account()}"
         )
