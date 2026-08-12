@@ -169,6 +169,13 @@ privacyguard_hiddenimports.extend([
     'privacyguard.pii.validators.vat_invoice',
     'privacyguard.pii.validators.bank_account',
     'privacyguard.pii.validators.taxpayer_id',
+    # Phase 3 (03-word): 6 Word 子模块 hiddenimports（cp30 parity with macOS spec）
+    'privacyguard.word',
+    'privacyguard.word.adapter',
+    'privacyguard.word.worker',
+    'privacyguard.word.redact',
+    'privacyguard.word.clear_doc_props',
+    'privacyguard.word.candidate_dialog',
 ])
 
 # 去重

@@ -5184,6 +5184,9 @@ class MainWindow(QMainWindow):
         self.word_compare_mode = False  # Word 预览是否开启原文/替换后对比
         self.word_compare_user_hidden = False  # 用户主动隐藏右侧对比预览
         self._word_data_lock = QMutex()  # v36.5: 保护 word_data 线程安全
+        # Phase 3 (03-word) — UX-01 取消语义持久状态（per BLOCKER 3）
+        self.confirmed_hits: set = set()  # 已确认 hit 四元组集合；(entity_type, key, page_offset, page_length)
+        self.candidate_only_pii: dict = {}  # 未确认候选存储；**永不**写入 word_data[key]['pii']（per BLOCKER 3）
         self.doc_type = None  # 'pdf', 'docx', 'doc'
         self.current_ui_mode = "idle"  # idle / pdf / word / batch / image_merge
         self.batch_stage = "idle"  # idle / rule_setup / running / finished / stopped
@@ -8776,6 +8779,12 @@ class MainWindow(QMainWindow):
             compare_action.setEnabled(bool(self.word_doc) and self._has_word_replacement_candidates())
             has_item = True
 
+            # Phase 3 (03-word) — Word 候选审阅入口（UX-01 / UX-02 — Wave 3 完整实施）
+            review_action = self.toolbar_more_menu.addAction(
+                "查看全部候选", self._open_word_candidate_dialog
+            )
+            review_action.setEnabled(bool(self.word_doc))
+
         if is_pdf and not getattr(self, "btn_fit_utility", None).isVisible():
             self.toolbar_more_menu.addAction("适应页面", self.fit_page)
             has_item = True
@@ -10819,6 +10828,9 @@ class MainWindow(QMainWindow):
             self._reset_batch_session_state()
             self.word_compare_mode = False
             self.word_compare_user_hidden = False
+            # Phase 3 (03-word) — UX-01 取消语义持久状态重置（per BLOCKER 3）
+            self.confirmed_hits = set()
+            self.candidate_only_pii = {}
             # Phase 3 (03-word) — WordPIIWorker 自动启动（D-09）
             self._word_pii_worker = None
             self.word_doc = Document(fname)
@@ -11741,6 +11753,66 @@ sudo dnf install antiword
         Wave 2 stub：no-op；Wave 3 完整实施 wordPiiStatusChip 状态机 7 阶段。
         """
         return None
+
+    def _open_word_candidate_dialog(self):
+        """Phase 3 (03-word) — 打开 Word 候选审阅对话框（UX-01 / UX-02 — Wave 3 完整实施）。
+
+        触发入口：菜单 / 工具栏 action_word_candidate_review。
+        D-25 锁：极简版（50 条分页 + 实体类型 / 来源筛选 + 4 CTAs）；
+        不含 Phase 7 实体（实体类型全局开关 UX-03 / 文档级白名单 UX-05 / 撤销栈 UX-06）。
+        """
+        if not self.word_data:
+            QMessageBox.information(self, '提示', '请先打开 Word 文档')
+            return
+        # lazy import 避免 import-time 拉起 PyQt6.WebEngineWidgets + candidate_dialog
+        from privacyguard.word.candidate_dialog import WordCandidateDialog
+        dlg = WordCandidateDialog(self.word_data, parent=self)
+        dlg.confirmed.connect(self._on_word_candidate_dialog_accept)
+        dlg.exec()
+
+    def _on_word_candidate_dialog_accept(self, payload: list):
+        """Phase 3 (03-word) — 候选审阅对话框 accepted 槽（UX-01 取消语义 per BLOCKER 3）。
+
+        payload 形态（D-18 契约）：list[dict{key, hit_dict, source}]
+        - key: word_data 的 key（paragraph_N / table_T_cell_R_C）
+        - hit_dict: PIIHit dataclass 的 dict 形态（asdict 后）
+        - source: 'pii' / 'ocr' / 'manual'
+
+        UX-01 取消语义：
+        - 用户确认的 hit 才写入 word_data[key]['confirmed'] + self.confirmed_hits 持久集合
+        - 未确认候选存储在 self.candidate_only_pii，但**永不**进入 _save_word 路径（per BLOCKER 3）
+        - QMutexLocker 保护 word_data 写；锁释放后再触发 cp27 局部 patch（避免锁内阻塞 UI 线程）
+        """
+        # lazy import inside slot — 避免 import-time 拉起 PII 引擎
+        from privacyguard.pii.hits import PIIHit
+
+        hits_by_key = {}
+        for entry in (payload or []):
+            if not isinstance(entry, dict):
+                continue
+            key = entry.get('key')
+            hit_dict = entry.get('hit') or {}
+            if not isinstance(hit_dict, dict):
+                continue
+            try:
+                hit = PIIHit(**hit_dict)
+            except (TypeError, ValueError) as e:
+                print(f'[Word PII WARN] invalid hit dict: {e}')
+                continue
+            # 更新 confirmed_hits 持久集合（per BLOCKER 3）
+            hit_id = (hit.entity_type, key, hit.page_offset, hit.page_length)
+            self.confirmed_hits.add(hit_id)
+            hits_by_key.setdefault(key, []).append(hit)
+
+        with QMutexLocker(self._word_data_lock):
+            for key, hits in hits_by_key.items():
+                if key in self.word_data:
+                    # 写入 word_data[key]['confirmed']（per BLOCKER 3 替代 pii）
+                    self.word_data[key]['confirmed'] = list(hits)
+        # 锁释放后再触发 cp27 局部 patch（避免在锁内阻塞 UI 线程）
+        for key, hits in hits_by_key.items():
+            if key in self.word_data:
+                self._apply_word_pii_panel_updates(key, hits)
 
     def _on_ocr_finished_safe(self, _):
         """v36.4: 线程安全 - OCR 完成处理（在主线程执行）
@@ -12943,14 +13015,28 @@ sudo dnf install antiword
                 if key in self.word_data:
                     data = self.word_data[key]
                     source_text = data.get("text", "")
+                    # Phase 3 (03-word) — UX-01 取消语义 guard（per BLOCKER 3）
+                    # 仅写 confirmed_hits 中的 PII 命中；candidate_only_pii 永不进入 save 路径
+                    confirmed_hits_set = (
+                        self.confirmed_hits if hasattr(self, 'confirmed_hits') else set()
+                    )
+                    if confirmed_hits_set:
+                        pii_for_save = [
+                            h for h in (data.get("pii", []) or [])
+                            if (h.entity_type, key, h.page_offset, h.page_length)
+                            in confirmed_hits_set
+                        ]
+                    else:
+                        # 未触发 dialog 确认 → pii 路径为空（per BLOCKER 3）
+                        pii_for_save = []
                     merged_matches = merge_word_matches_with_priority(
                         source_text,
                         self.word_replace_rules,
                         self.replacement_text,
                         manual_matches=data.get("manual", []),
                         ocr_matches=data.get("ocr", []),
-                        # Phase 3 (03-word) — D-19 priority 第六参数 PII 命中
-                        pii_matches=data.get("pii", []),
+                        # Phase 3 (03-word) — D-19 priority 第六参数 PII 命中（仅 confirmed）
+                        pii_matches=pii_for_save,
                     )
                     if merged_matches:
                         redact_word(
@@ -12966,14 +13052,26 @@ sudo dnf install antiword
                         if key in self.word_data:
                             data = self.word_data[key]
                             source_text = data.get("text", "")
+                            # Phase 3 (03-word) — UX-01 取消语义 guard（per BLOCKER 3）
+                            confirmed_hits_set = (
+                                self.confirmed_hits if hasattr(self, 'confirmed_hits') else set()
+                            )
+                            if confirmed_hits_set:
+                                pii_for_save = [
+                                    h for h in (data.get("pii", []) or [])
+                                    if (h.entity_type, key, h.page_offset, h.page_length)
+                                    in confirmed_hits_set
+                                ]
+                            else:
+                                pii_for_save = []
                             merged_matches = merge_word_matches_with_priority(
                                 source_text,
                                 self.word_replace_rules,
                                 self.replacement_text,
                                 manual_matches=data.get("manual", []),
                                 ocr_matches=data.get("ocr", []),
-                                # Phase 3 (03-word) — D-19 priority 第六参数 PII 命中
-                                pii_matches=data.get("pii", []),
+                                # Phase 3 (03-word) — D-19 priority 第六参数 PII 命中（仅 confirmed）
+                                pii_matches=pii_for_save,
                             )
 
                             if merged_matches:
