@@ -75,6 +75,7 @@ Plans:
 **UI hint**: no
 
 Plans:
+
 - [x] 02-01-tracer-PLAN.md — Tracer: USCC validator + partial mask write + metadata clear end-to-end (Wave 1)
 - [x] 02-02-engine-expansion-PLAN.md — Engine expansion: VAT invoice + bank account + 15-digit taxpayer ID validators + 9-entity engine coverage (Wave 2)
 - [x] 02-03-main-py-settings-packaging-PLAN.md — Ship bin dictionary (CC BY-SA 4.0) + SettingsDialog 9-row per-entity table + toolbar mask_override toggle + save_pdf wiring + PyInstaller parity (Wave 3)
@@ -98,9 +99,20 @@ Plans:
 **UI hint**: yes
 
 Plans:
+**Wave 1**
+
 - [ ] 03-01-tracer-PLAN.md — Tracer: privacyguard/word/{adapter,worker,redact,clear_doc_props} 5 模块 + main.py 4 处接线 + 79/79 baseline 保持（Wave 1）
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 03-02-engine-expansion-and-ui-PLAN.md — cp27 增量 DOM patch: 左栏红色 <mark class="pii-highlight"> + 短码徽章 + 右栏绿色 <mark class="pii-mask"> partial mask（Wave 2）
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 03-03-candidate-dialog-and-packaging-PLAN.md — WordCandidateDialog 完整 UI（50 条分页 + 实体类型 / 来源筛选 + 4 CTAs）+ packaging/{windows,macos} 双 spec hiddenimports parity（Wave 3）
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 03-04-tests-and-baseline-PLAN.md — TestWordDataKeySync + TestWordPartialMaskInComparePane + test_package_imports + test_convergence 扩展，基线 79/79 → 98+/98+（Wave 4）
 
 ---

@@ -42,6 +42,7 @@ must_haves:
     - "merge_word_matches_with_priority 新增 pii_matches=None 第六参数；priority 锁定 rule > pii > manual > ocr；区间重叠时 pii 命中覆盖 manual 命中（per D-19）"
     - "import privacyguard.word 不会拉起 python-docx 或 mammoth；privacyguard.word.__getattr__ + _LAZY_IMPORTS 严格 lazy-load（per D-06 / OPS-03）"
     - "现有基线测试保持通过（test_mixed_pdf_ocr / test_path_validation / test_ocr_api / test_package_imports / test_pdf_text_hit_dedup / test_app_config / test_word_replace_rules / test_batch_word_replace / test_config_alignment / test_fstring_safety / test_convergence）；新增 tests/unit/test_word_pii_pipeline.py 测试类全部 GREEN（per D-13 / D-14 / OPS-07）"
+    - "D-01: Phase 3 范围仅 Word 格式垂直切片（Excel/Image/ctxtier/UI/审计不在本阶段）；D-02: 复用 Phase 1/2 PII 引擎（privacyguard.pii.*）不新建 Word 专用；D-03: WordPIIWorker 依赖 Phase 1/2 既有 9 类 entity_hint 可见（CN_ID_CARD/CN_PHONE/CN_BANK_CARD/CN_EMAIL/CN_USCC/CN_TAXPAYER_ID/CN_TAXPAYER_ID_15/CN_VAT_INVOICE/CN_BANK_ACCOUNT）；D-07: 沿用 cp27 增量 DOM patch（绝不在 _apply_word_pii_panel_updates 触发整页 web_view.setHtml，必须走 runJavaScript(\"updateBlock(...)\") 局部 patch）；D-12: 不引入新 PyPI 依赖，沿用 python-docx + mammoth 现有依赖，不引入 docx2txt/python-docx-redactor/aspose-words"
   artifacts:
     - privacyguard/word/__init__.py NEW — _LAZY_IMPORTS + __getattr__ 懒加载入口（5 项 lazy forward）
     - privacyguard/word/adapter.py NEW — WordAdapter.collect_units 完整实现
