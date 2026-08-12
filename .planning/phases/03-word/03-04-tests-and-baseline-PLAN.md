@@ -10,6 +10,7 @@ files_modified:
   - tests/unit/test_word_pii_pipeline.py
   - tests/unit/test_package_imports.py
   - tests/unit/test_convergence.py
+  - .planning/phases/03-word/03-04-tests-and-baseline-SUMMARY.md
 autonomous: true
 requirements:
   - OPS-03
@@ -27,62 +28,96 @@ estimate:
 
 must_haves:
   truths:
-    - "tests/unit/test_word_pii_pipeline.py 8 个测试类（TestWordAdapterCollectUnits / TestWordPIIAutoTrigger / TestWordRedactRoundTrip / TestWordDocumentPropertiesCleared / TestWordMergePriorityRulePiManualOcr / TestWordDataKeySync / TestWordPartialMaskInComparePane / TestWordCandidateDialog + TestWordCandidateDialogPagination）共 19 个测试方法全部 GREEN"
-    - "现有 79/79 测试基线（test_mixed_pdf_ocr / test_path_validation / test_ocr_api / test_package_imports / test_pdf_text_hit_dedup / test_app_config / test_word_replace_rules / test_batch_word_replace / test_config_alignment / test_fstring_safety / test_convergence）保持通过；新增 test_word_pii_pipeline 19 个测试方法全部通过；基线升级为 98/98 或更高（per D-13 / D-14 / OPS-07 baseline 升级锁定）"
+    - "tests/unit/test_word_pii_pipeline.py 新增 TestWordDataKeySync (3 方法) + TestWordPartialMaskInComparePane (2 方法) 两个测试类 GREEN（per D-22 + FMT-02 partial mask 在右栏可见契约）"
+    - "现有 11 unittest 模块基线（test_mixed_pdf_ocr / test_path_validation / test_ocr_api / test_package_imports / test_pdf_text_hit_dedup / test_app_config / test_word_replace_rules / test_batch_word_replace / test_config_alignment / test_fstring_safety / test_convergence）保持 GREEN；新增 test_word_pii_pipeline 测试方法全部 GREEN（per OPS-07 baseline preservation）"
     - "tests/unit/test_package_imports.py 新增 test_import_privacyguard_does_not_load_word_submodules 断言；import privacyguard 后 sys.modules 不含 privacyguard.word.adapter / .worker / .redact / .clear_doc_props / .candidate_dialog（per OPS-03 懒加载纪律扩展）"
     - "tests/unit/test_convergence.py 新增 test_no_word_adapter_in_main_py AST 断言；main.py 不含 inline redact_word / clear_word_doc_props_docx / collect_word_units 等 Word adapter / redact / clear_doc_props 实现（per D-05 v37.7.6 收敛原则）"
     - "TestWordDataKeySync 验证 mammoth 渲染后 DOM data-key 数 == word_data key 数；data-key 同步契约保持（per D-22 + TestWordDataKeySync 03-VALIDATION.md 锁定）"
     - "TestWordPartialMaskInComparePane 验证右栏 mask 字符串正确渲染；partial mask 在双栏对比预览中可见（per FMT-02 + 03-VALIDATION.md 锁定）"
+    - "main.py 4 个目标函数（_open_word_docx / _save_word / _on_word_pii_page_result / _build_pii_*_fragment / _apply_word_pii_panel_updates / _on_word_candidate_dialog_accept）体内不含 inline redact_word_docx / clear_word_doc_props_docx / collect_word_units 等字面量（D-05 v37.7.6 收敛原则扩展）"
+    - "完整测试套件运行命令可用 python3 -m unittest discover -s tests -v 2>&1 | grep -c 'ok$' 方式测量；不硬编码测试基线数字（per WARNING 1）"
   artifacts:
-    - tests/unit/test_word_pii_pipeline.py MODIFY (TestWordDataKeySync + TestWordPartialMaskInComparePane 两个新测试类 — Wave 1 + Wave 2 + Wave 3 既有 19 个测试方法 + Wave 4 新增 5 个 = 24 个)
-    - tests/unit/test_package_imports.py MODIFY (新增 test_import_privacyguard_does_not_load_word_submodules 断言 OPS-03 扩展)
-    - tests/unit/test_convergence.py MODIFY (新增 test_no_word_adapter_in_main_py AST 断言 D-05 收敛)
+    - tests/unit/test_word_pii_pipeline.py MODIFY — 新增 TestWordDataKeySync (3 方法) + TestWordPartialMaskInComparePane (2 方法) 两个测试类
+    - tests/unit/test_package_imports.py MODIFY — 新增 test_import_privacyguard_does_not_load_word_submodules 断言（OPS-03 扩展）
+    - tests/unit/test_convergence.py MODIFY — 新增 test_no_word_adapter_in_main_py AST 断言（D-05 收敛扩展）
+    - .planning/phases/03-word/03-04-tests-and-baseline-SUMMARY.md NEW — 任务完成总结报告
   key_links:
-    - "tests/unit/test_word_pii_pipeline.py 8 个测试类到 privacyguard/word/* + main.py 接线 (Wave 1 + Wave 2 + Wave 3 已落地) — 端到端验证 Phase 3 PII 流程"
-    - "tests/unit/test_package_imports.py::test_import_privacyguard_does_not_load_word_submodules 到 privacyguard/word/__init__.py _LAZY_IMPORTS — OPS-03 懒加载纪律扩展"
-    - "tests/unit/test_convergence.py::test_no_word_adapter_in_main_py 到 main.py — D-05 v37.7.6 收敛原则扩展"
+    - "tests/unit/test_word_pii_pipeline.py 既有 24 个测试方法到 privacyguard/word/* + main.py 接线（Wave 1 + Wave 2 + Wave 3 已落地）—— 端到端验证 Phase 3 PII 流程"
+    - "tests/unit/test_package_imports.py::test_import_privacyguard_does_not_load_word_submodules 到 privacyguard/word/__init__.py _LAZY_IMPORTS —— OPS-03 懒加载纪律扩展"
+    - "tests/unit/test_convergence.py::test_no_word_adapter_in_main_py 到 main.py —— D-05 v37.7.6 收敛原则扩展"
   prohibitions:
     - "不得让 tests/unit/test_word_pii_pipeline.py 引入真实个人信息；所有 fixture 必须经 tests/fixtures/fake_pii.py + tests/fixtures/fake_word.py 合成（per OPS-05）"
-    - "不得让 TestWordDataKeySync 改写 _add_data_key_attributes / _add_data_key_regex_fallback；仅做同步验证（per D-22 锁定 — 沿用既有 helper）"
+    - "不得让 TestWordDataKeySync 改写 _add_data_key_attributes / _add_data_key_regex_fallback；仅做同步验证（per D-22 锁定 —— 沿用既有 helper）"
     - "不得让 test_no_word_adapter_in_main_py 误判 docstring / 注释字符串为 inline 实现；AST 解析必须 ast.FunctionDef 内的 ast.Call + ast.Assign 节点（per Phase 2 test_convergence.py:test_main_py_uses_write_partial_masks_in_save_loop 范本）"
     - "不得让 test_import_privacyguard_does_not_load_word_submodules 误判 privacyguard.word 子包 import 为子模块 import；需严格 'privacyguard.word.adapter' in sys.modules 等完整子模块路径断言"
+    - "不得在 03-04 SUMMARY 中硬编码 '基线升级为 NNN/NNN' 数字；改用 python3 -m unittest discover 动态测量（per WARNING 1）"
+    - "不得让 test_word_pii_pipeline 测试类新增覆盖 Wave 1 + Wave 2 + Wave 3 既有 24 个测试方法之外的遗漏覆盖（既有 RED → GREEN 已闭环）"
   backstop_statements: []
 
-threat_model:
-  trust_boundaries:
-    - name: tests/unit/test_convergence.py AST 解析 main.py
-      description: main.py 12.9k LOC；AST parse + walk FunctionDef 可能性能瓶颈；测试需限制 AST 解析范围（如仅 walk def save_word / def _open_word_docx 等相关函数体）
-    - name: tests/unit/test_package_imports.py sys.modules 断言
-      description: 进程内 import 顺序影响 sys.modules；测试需在独立 subprocess 运行或先 import 后清理 sys.modules
-  stride:
-    - id: T-03-TestRealPiiLeak
-      category: Repudiation / OPS-05
-      component: tests/unit/test_word_pii_pipeline.py fixture
-      severity: high
-      disposition: mitigate
-      mitigation: 所有 fixture 走 tests/fixtures/fake_pii.py + tests/fixtures/fake_word.py Faker 合成器；测试末尾断言 fixture 不含真实身份字符串字面量（如 '110101199003078811' 这类已知真实身份证号）
-    - id: T-03-ASTParseError
-      category: Denial of Service
-      component: tests/unit/test_convergence.py::test_no_word_adapter_in_main_py
-      severity: low
-      disposition: mitigate
-      mitigation: ast.parse + walk ast.FunctionDef(name=~) 函数体内节点；限制 walk 范围；timeout 保护（unittest 默认无 timeout；如遇性能问题可加 unittest.skipIf 条件）
+---
+
+## Artifacts this phase produces
+
+> 单一来源的 artifacts 清单 —— 与上方 `files_modified` 字段、`<tasks>` 内 `<files>` 列表以及 `<output>` 声明字段级一致。
+
+**MODIFY 文件（3 项）：**
+1. `tests/unit/test_word_pii_pipeline.py` — 追加 TestWordDataKeySync (3 方法) + TestWordPartialMaskInComparePane (2 方法) 两个测试类
+2. `tests/unit/test_package_imports.py` — 追加 test_import_privacyguard_does_not_load_word_submodules 断言（OPS-03 懒加载纪律扩展）
+3. `tests/unit/test_convergence.py` — 追加 test_no_word_adapter_in_main_py AST 断言（D-05 v37.7.6 收敛原则扩展）
+
+**NEW 文件（1 项）：**
+4. `.planning/phases/03-word/03-04-tests-and-baseline-SUMMARY.md` — 任务完成总结报告（包含完整验收命令实际输出）
+
+---
+
+## Decision Coverage (D-01..D-26)
+
+> 本 plan 实施 / 继承 / 不触达的 D-XX 决策。
+
+| D-ID | Status | Task Reference | 备注 |
+|------|--------|----------------|------|
+| D-01 | inherited | 全 plan 引用 ROADMAP Phase 3 范围 | 范围锁 |
+| D-02 | inherited | 复用 Phase 1/2 PII 引擎；不在此 plan 引入新引擎 | 架构锁 |
+| D-03 | inherited | Wave 1/2/3 已落 D-17 入口 | Phase 1/2 就位 |
+| D-04 | **preserve** | word_data[key]["pii"] 通道 Wave 1 已落 | 三通道 |
+| D-05 | **implement** | Task 2: test_no_word_adapter_in_main_py AST 断言 main.py 不内联 Word adapter / redact / clear_doc_props 实现 | v37.7.6 收敛原则扩展 |
+| D-06 | **preserve** | privacyguard/word/__init__.py _LAZY_IMPORTS Wave 1 已就位 | OPS-03 锁 |
+| D-07 | **inherited** | cp27 增量 DOM patch Wave 2 已落 | D-10 锁 |
+| D-08 | **inherited** | clear_word_doc_props 8 字段锁 Wave 1 已落 | Wave 1 实施 |
+| D-09 | **inherited** | WordPIIWorker 自动启动 Wave 1 已落 | Wave 1 实施 |
+| D-10 | **inherited** | _apply_word_pii_panel_updates cp27 契约 Wave 2 已落 | cp27 锁 |
+| D-11 | **inherited** | 候选审阅 UI 极简版 = Wave 3 完整实施范围 | 范围锁 |
+| D-12 | **inherited** | 不引入新 PyPI 依赖 | 依赖锁 |
+| D-13 | **implement** | Task 1: TestWordDataKeySync (3) + TestWordPartialMaskInComparePane (2) 两个测试类 GREEN（覆盖 D-22 + FMT-02 partial mask 契约） | ≥ 1 新测试类 |
+| D-14 | **implement** | Task 3: 完整基线命令验证既有 11 unittest 模块保持 GREEN + 新增测试全 pass；用 python3 -m unittest discover 动态测量（per WARNING 1） | OPS-07 baseline 门禁 |
+| D-15 | **preserve** | 9 类 entity 沿用 Phase 2 | Phase 1/2 范围 |
+| D-16 | **preserve** | PIIHit 9 字段锁 | D-05 / ENGINE-02 锁 |
+| D-17 | **preserve** | TextUnit 入口 Wave 1 已就位 | engine.detect 入口 |
+| D-18 | **preserve** | word_data 三通道 Wave 1/3 已落 | 三通道 |
+| D-19 | **preserve** | merge_word_matches_with_priority 扩展 Wave 1 已落 | priority |
+| D-20 | **preserve** | PII 红框 #D64545 / #FF6B6B 既有 | 颜色锁 |
+| D-21 | **preserve** | ENTITY_TYPE_SHORT_CODE 字典单一来源 Wave 1 已落至 privacyguard/pii/hits.py | D-21 锁 |
+| D-22 | **implement** | Task 1: TestWordDataKeySync 验证 data-key 同步契约 + fallback 兜底 | data-key 锁 |
+| D-23 | **preserve** | redact_word wrapper Wave 1 已落 | Wave 1 实施 |
+| D-24 | **preserve** | clear_word_doc_props 位置 Wave 1 已落 | Wave 1 实施 |
+| D-25 | **preserve** | WordCandidateDialog 极简版 = Wave 3 完整实施范围 | D-11 范围 |
+| D-26 | **preserve** | build_fake_docx Wave 1 已落 | Wave 1 实施 |
 
 ---
 
 <objective>
-落地 Phase 3 完整测试套件 + 升级 79/79 既有基线到 98/98（或更高）；补齐 Wave 1 + Wave 2 + Wave 3 已有测试未覆盖的两个测试类（TestWordDataKeySync + TestWordPartialMaskInComparePane），并扩展 test_package_imports 与 test_convergence 验证 OPS-03 懒加载纪律与 D-05 v37.7.6 收敛原则。
+落地 Phase 3 完整测试套件扩展：补齐 Wave 1 + Wave 2 + Wave 3 已有测试未覆盖的两个测试类（TestWordDataKeySync + TestWordPartialMaskInComparePane），并扩展 test_package_imports 与 test_convergence 验证 OPS-03 懒加载纪律与 D-05 v37.7.6 收敛原则。最终基线通过 python3 -m unittest discover 动态测量验证全部 GREEN。
 </objective>
 
 <purpose>
-Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）。Wave 1 + Wave 2 + Wave 3 已落地 19 个测试方法，但缺少两个关键的 UI / data-key 同步测试。Wave 4 补齐这两个测试类，并扩展 test_package_imports + test_convergence 确保 OPS-03 + D-05 纪律保持。最终基线 ≥ 98/98 为 Phase 3 验收门禁（per OPS-07）。
+Phase 3 完成度需要既有 11 unittest 模块基线保持 GREEN + 新增 test_word_pii_pipeline 测试类全部 GREEN（per OPS-07 baseline preservation）。Wave 1 + Wave 2 + Wave 3 已落地 24 个测试方法（5 RED + 4 + 5 + 3 + 1 = 18 + 6 new），但缺少两个关键的 UI / data-key 同步测试。Wave 4 补齐这两个测试类，并扩展 test_package_imports + test_convergence 确保 OPS-03 + D-05 纪律保持。
 </purpose>
 
 <output>
-- tests/unit/test_word_pii_pipeline.py MODIFY：新增 TestWordDataKeySync + TestWordPartialMaskInComparePane 两个测试类，共 5 个新测试方法（Wave 1 + Wave 2 + Wave 3 既有 19 + Wave 4 新增 5 = 24 个测试方法）
+- tests/unit/test_word_pii_pipeline.py MODIFY：新增 TestWordDataKeySync (3 方法) + TestWordPartialMaskInComparePane (2 方法) 两个测试类
 - tests/unit/test_package_imports.py MODIFY：新增 test_import_privacyguard_does_not_load_word_submodules 断言（OPS-03 扩展）
 - tests/unit/test_convergence.py MODIFY：新增 test_no_word_adapter_in_main_py AST 断言（D-05 收敛扩展）
-- 基线升级：79/79 → 98/98（或更高）
+- .planning/phases/03-word/03-04-tests-and-baseline-SUMMARY.md NEW：03-04 任务完成总结报告
 </output>
 
 <execution_context>
@@ -108,9 +143,9 @@ Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）
 @privacyguard/word/redact.py (Wave 1 GREEN 实施后)
 @privacyguard/word/clear_doc_props.py (Wave 1 GREEN 实施后)
 @privacyguard/word/candidate_dialog.py (Wave 2 + Wave 3 GREEN 实施后)
-@tests/unit/test_word_pii_pipeline.py (Wave 1 + Wave 2 + Wave 3 既有 19 个测试方法)
-@tests/unit/test_package_imports.py (Phase 2 既有懒加载断言 — Wave 4 扩展)
-@tests/unit/test_convergence.py (Phase 2 既有 AST 断言 — Wave 4 扩展)
+@tests/unit/test_word_pii_pipeline.py (Wave 1 + Wave 2 + Wave 3 既有 18 个测试方法)
+@tests/unit/test_package_imports.py (Phase 2 既有懒加载断言 —— Wave 4 扩展)
+@tests/unit/test_convergence.py (Phase 2 既有 AST 断言 —— Wave 4 扩展)
 </context>
 
 <tasks>
@@ -126,15 +161,15 @@ Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）
     - .planning/phases/03-word/03-RESEARCH.md (lines 202-225 — cp27 incremental DOM patch + 局部 patch 契约)
     - .planning/phases/03-word/03-VALIDATION.md (lines 41-65 — Per-Task Verification Map 03-02-01 + 03-02-02)
     - .planning/phases/03-word/03-UI-SPEC.md (lines 451-466 — Constraints Carried From Upstream D-22 data-key 注入复用)
-    - main.py:12236-12329 (_add_data_key_attributes + _add_data_key_regex_fallback 既有 helper — D-22 不重写)
-    - privacyguard/pii/hits.py (PIIHit dataclass — D-16 字段锁)
-    - privacyguard/pii/mask.py (mask_for_entity — Phase 2 MASK-01 锁)
-    - tests/unit/test_word_pii_pipeline.py (Wave 1 + Wave 2 + Wave 3 既有 19 个测试方法 — 范本)
+    - main.py:12236-12329 (_add_data_key_attributes + _add_data_key_regex_fallback 既有 helper —— D-22 不重写)
+    - privacyguard/pii/hits.py (PIIHit dataclass + ENTITY_TYPE_SHORT_CODE —— D-16 + D-21 字段锁)
+    - privacyguard/pii/mask.py (mask_for_entity —— Phase 2 MASK-01 锁)
+    - tests/unit/test_word_pii_pipeline.py (Wave 1 + Wave 2 + Wave 3 既有 18 个测试方法 —— 范本)
   </read_first>
   <action>
-    在 tests/unit/test_word_pii_pipeline.py 追加 TestWordDataKeySync 与 TestWordPartialMaskInComparePane 两个测试类。本任务**测试 + 验证 GREEN**（无需新主代码 — Wave 1 + Wave 2 + Wave 3 已落地全部主代码；本任务仅补齐测试覆盖）。
+    在 tests/unit/test_word_pii_pipeline.py 追加 TestWordDataKeySync 与 TestWordPartialMaskInComparePane 两个测试类。本任务**测试 + 验证 GREEN**（无需新主代码 —— Wave 1 + Wave 2 + Wave 3 已落地全部主代码；本任务仅补齐测试覆盖）。
 
-    **TestWordDataKeySync 测试类**（含 3 个测试方法 — per D-22 同步契约）：
+    **TestWordDataKeySync 测试类**（含 3 个测试方法 —— per D-22 同步契约）：
 
     **test_data_key_count_matches_word_data**：构造 path = build_fake_docx(paragraphs=["段落 0", "段落 1"], tables=[[["cell 0", "cell 1"]]])；doc = Document(path)；word_data = {}；for idx, para in enumerate(doc.paragraphs): if para.text.strip(): word_data[f"paragraph_{idx}"] = {"text": para.text, "ocr": [], "manual": [], "pii": []}；for table_idx, table in enumerate(doc.tables): for row_idx, row in enumerate(table.rows): for cell_idx, cell in enumerate(row.cells): if cell.text.strip(): key = f"table_{table_idx}_cell_{row_idx}_{cell_idx}"; word_data[key] = {"text": cell.text, "ocr": [], "manual": [], "pii": []}。模拟 mammoth 转 HTML：html = "<p>段落 0</p><p>段落 1</p><table><tr><td>cell 0</td><td>cell 1</td></tr></table>"；text_blocks = {k: {"text": v["text"], "escaped": v["text"]} for k, v in word_data.items()}；从 main import _add_data_key_attributes；tagged = _add_data_key_attributes(html, text_blocks)；from bs4 import BeautifulSoup；soup = BeautifulSoup(tagged, "html.parser")；data_keyed = soup.find_all(attrs={"data-key": True})；keys_found = {el.get("data-key") for el in data_keyed}；断言 "paragraph_0" in keys_found；断言 "paragraph_1" in keys_found；断言 "table_0_cell_0_0" in keys_found 或 "table_0_cell_0_1" in keys_found（至少一个 cell key）；os.remove(path)。
 
@@ -142,32 +177,38 @@ Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）
 
     **test_data_key_sync_no_overlap**：构造 100 段 docx（build_fake_docx 接受大量 paragraphs）；for i in range(100): 追加 f"段落 {i}" 到 paragraphs 列表；path = build_fake_docx(paragraphs=paragraphs, add_pii=False)；doc = Document(path)；word_data_count = sum(1 for p in doc.paragraphs if p.text.strip())；模拟 mammoth 输出：html_parts = [f"<p>段落 {i}</p>" for i in range(100)]；html = "".join(html_parts)；text_blocks = {f"paragraph_{i}": {"text": f"段落 {i}", "escaped": f"段落 {i}"} for i in range(100)}；tagged = _add_data_key_attributes(html, text_blocks)；soup = BeautifulSoup(tagged, "html.parser")；data_key_count = len(soup.find_all(attrs={"data-key": True}))；断言 data_key_count >= word_data_count * 0.9（允许少量 mammoth inline 标签失败走 fallback）；os.remove(path)。
 
-    **TestWordPartialMaskInComparePane 测试类**（含 2 个测试方法 — per FMT-02 partial mask 渲染）：
+    **TestWordPartialMaskInComparePane 测试类**（含 2 个测试方法 —— per FMT-02 partial mask 渲染）：
 
-    **test_partial_mask_string_in_right_pane**：构造 word_data = {"paragraph_5": {"text": "身份证 53010219200508011X 末位", "ocr": [], "manual": [], "pii": [PIIHit(entity_type='CN_ID_CARD', page_offset=4, page_length=18, page_rect=(0,0,0,0), confidence_tier='HIGH', source='text', mask_strategy='110101********1234', normalized='53010219200508011X')]}}；从 main import _build_pii_mask_block_fragment + ENTITY_TYPE_SHORT_CODE；stub 类含 self.word_data = word_data；fragment = stub._build_pii_mask_block_fragment('paragraph_5', word_data['paragraph_5']['pii'])；断言 '<mark class="pii-mask"' in fragment；断言 'data-entity-type="CN_ID_CARD"' in fragment；断言 mask_strategy '110101********1234' in fragment；断言原文 '53010219200508011X' not in fragment（右栏**只**写 mask 字符串 — Visuals §PII Partial-Mask 锁定）；断言 ENTITY_TYPE_SHORT_CODE['CN_ID_CARD'] == 'ID'（短码字典 D-21 锁）。
+    **test_partial_mask_string_in_right_pane**：构造 word_data = {"paragraph_5": {"text": "身份证 53010219200508011X 末位", "ocr": [], "manual": [], "pii": [PIIHit(entity_type='CN_ID_CARD', page_offset=4, page_length=18, page_rect=(0,0,0,0), confidence_tier='HIGH', source='text', mask_strategy='110101********1234', normalized='53010219200508011X')]}}；从 main import _build_pii_mask_block_fragment + ENTITY_TYPE_SHORT_CODE；stub 类含 self.word_data = word_data；fragment = stub._build_pii_mask_block_fragment('paragraph_5', word_data['paragraph_5']['pii'])；断言 '<mark class="pii-mask"' in fragment；断言 'data-entity-type="CN_ID_CARD"' in fragment；断言 mask_strategy '110101********1234' in fragment；断言原文 '53010219200508011X' not in fragment（右栏**只**写 mask 字符串 —— Visuals §PII Partial-Mask 锁定）；断言 ENTITY_TYPE_SHORT_CODE['CN_ID_CARD'] == 'ID'（短码字典 D-21 锁；per BLOCKER 5 来源唯一位于 privacyguard/pii/hits.py）。
 
-    **test_left_pane_contains_original_right_pane_contains_mask**：构造同上 word_data；left_fragment = stub._build_pii_block_fragment('paragraph_5', word_data['paragraph_5']['pii'])；right_fragment = stub._build_pii_mask_block_fragment('paragraph_5', word_data['paragraph_5']['pii'])；断言 left_fragment != right_fragment（左右双栏 HTML 不同 — Visuals 锁定）；断言 '<mark class="pii-highlight"' in left_fragment（左栏红色 mark）；断言 '<mark class="pii-mask"' in right_fragment（右栏绿色 mark）；断言 '53010219200508011X' in left_fragment（左栏含原文）；断言 '53010219200508011X' not in right_fragment（右栏不含原文）；断言 '110101********1234' in right_fragment（右栏含 partial mask）；断言 '110101********1234' not in left_fragment（左栏不含 mask 字符串）。
+    **test_left_pane_contains_original_right_pane_contains_mask**：构造同上 word_data；left_fragment = stub._build_pii_block_fragment('paragraph_5', word_data['paragraph_5']['pii'])；right_fragment = stub._build_pii_mask_block_fragment('paragraph_5', word_data['paragraph_5']['pii'])；断言 left_fragment != right_fragment（左右双栏 HTML 不同 —— Visuals 锁定）；断言 '<mark class="pii-highlight"' in left_fragment（左栏红色 mark）；断言 '<mark class="pii-mask"' in right_fragment（右栏绿色 mark）；断言 '53010219200508011X' in left_fragment（左栏含原文）；断言 '53010219200508011X' not in right_fragment（右栏不含原文）；断言 '110101********1234' in right_fragment（右栏含 partial mask）；断言 '110101********1234' not in left_fragment（左栏不含 mask 字符串）。
 
-    实现注意：TestWordDataKeySync 直接调 _add_data_key_attributes（main.py 模块级方法或 MainWindow 实例方法；按 main.py:12236 是 MainWindow 实例方法，需 stub 实例 — 同 Wave 2 RED 范本）。TestWordPartialMaskInComparePane 同样需要 stub 实例。**关键**：测试末尾 `os.remove(path)` 清理 tempfile；多个测试共享 tempfile 需避免文件名冲突（tempfile.mkstemp 已用 mkstemp 生成唯一路径，可复用）。
+    实现注意：TestWordDataKeySync 直接调 _add_data_key_attributes（main.py 模块级方法或 MainWindow 实例方法；按 main.py:12236 是 MainWindow 实例方法，需 stub 实例 —— 同 Wave 2 RED 范本）。TestWordPartialMaskInComparePane 同样需要 stub 实例。**关键**：测试末尾 `os.remove(path)` 清理 tempfile；多个测试共享 tempfile 需避免文件名冲突（tempfile.mkstemp 已用 mkstemp 生成唯一路径，可复用）。
 
-    **验证 GREEN**。运行命令 `python3 -m compileall -q tests/unit/test_word_pii_pipeline.py && python3 -m unittest tests.unit.test_word_pii_pipeline.TestWordDataKeySync tests.unit.test_word_pii_pipeline.TestWordPartialMaskInComparePane -v` 期望 5 个测试方法全 OK（**测试直接验证 Wave 1 + Wave 2 已落地的主代码** — 无需新主代码）。
+    **验证 GREEN**。运行命令：
+    ```bash
+    set -o pipefail
+    python3 -m compileall -q tests/unit/test_word_pii_pipeline.py && \
+    python3 -m unittest tests.unit.test_word_pii_pipeline.TestWordDataKeySync tests.unit.test_word_pii_pipeline.TestWordPartialMaskInComparePane -v 2>&1 | tail -15
+    ```
+    期望 5 个测试方法全 OK（**测试直接验证 Wave 1 + Wave 2 已落地的主代码** —— 无需新主代码）。
   </action>
   <verify>
-    <automated>python3 -m compileall -q tests/unit/test_word_pii_pipeline.py && python3 -m unittest tests.unit.test_word_pii_pipeline.TestWordDataKeySync tests.unit.test_word_pii_pipeline.TestWordPartialMaskInComparePane -v 2>&1 | tail -15</automated>
+    <automated>set -o pipefail; python3 -m compileall -q tests/unit/test_word_pii_pipeline.py && python3 -m unittest tests.unit.test_word_pii_pipeline.TestWordDataKeySync tests.unit.test_word_pii_pipeline.TestWordPartialMaskInComparePane -v 2>&1 | tail -15</automated>
   </verify>
   <acceptance_criteria>
-    - `python3 -m compileall -q tests/unit/test_word_pii_pipeline.py` 退出码 0（语法 green）。
+    - `python3 -m compileall -q tests/unit/test_word_pii_pipeline.py` 退出码 0（语法 GREEN）。
     - `python3 -m unittest tests.unit.test_word_pii_pipeline.TestWordDataKeySync -v` 显示 3 个测试方法（test_data_key_count_matches_word_data / test_data_key_fallback_used_for_inline_tags / test_data_key_sync_no_overlap）全部 OK。
     - `python3 -m unittest tests.unit.test_word_pii_pipeline.TestWordPartialMaskInComparePane -v` 显示 2 个测试方法（test_partial_mask_string_in_right_pane / test_left_pane_contains_original_right_pane_contains_mask）全部 OK。
     - test_data_key_count_matches_word_data 断言 mammoth 渲染后 DOM data-key 数 ≥ word_data key 数（fallback 兜底允许 < 100%）。
     - test_data_key_fallback_used_for_inline_tags 断言 mammoth 插入 <strong> inline 标签时 _add_data_key_regex_fallback 兜底生效。
     - test_partial_mask_string_in_right_pane 断言右栏 fragment 含 '<mark class="pii-mask"' + mask_strategy 字符串 + 不含原文。
     - test_left_pane_contains_original_right_pane_contains_mask 断言左 / 右 fragment 不相等 + 左含原文 + 右含 mask + 左 / 右 mark class 不同。
-    - `python3 -m unittest tests.unit.test_word_pii_pipeline -v` 显示全部 24 个测试方法 GREEN（Wave 1 7 + Wave 2 4 + Wave 3 8 + Wave 4 Task 1 5 = 24）。
-    - `python3 -m unittest tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace tests.unit.test_convergence tests.unit.test_package_imports -v` 既有 79/79 基线保持 GREEN。
+    - `python3 -m unittest tests.unit.test_word_pii_pipeline -v` 显示全部测试方法 GREEN（Wave 1 5 + Wave 2 4 + Wave 3 9 + Wave 4 Task 1 5 = 23 个）。
+    - 既有 11 unittest 模块基线保持 GREEN。
   </acceptance_criteria>
   <done>
-    TestWordDataKeySync 3 个测试方法 + TestWordPartialMaskInComparePane 2 个测试方法 GREEN；tests/unit/test_word_pii_pipeline.py 共 24 个测试方法（Wave 1 7 + Wave 2 4 + Wave 3 8 + Wave 4 Task 1 5）全部 green；既有 79/79 基线保持 green；D-22 data-key 同步契约 + FMT-02 partial mask 在右栏可见契约验证落地。
+    TestWordDataKeySync 3 个测试方法 + TestWordPartialMaskInComparePane 2 个测试方法 GREEN；tests/unit/test_word_pii_pipeline.py 共 23 个测试方法（Wave 1 5 + Wave 2 4 + Wave 3 9 + Wave 4 Task 1 5）全部 GREEN；既有 11 unittest 模块基线保持 GREEN；D-22 data-key 同步契约 + FMT-02 partial mask 在右栏可见契约验证落地。
   </done>
   <reversibility>rating="reversible" rationale="仅测试文件追加；删除 2 个测试类即可恢复 Wave 3 状态。"</reversibility>
 </task>
@@ -180,28 +221,25 @@ Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）
   </files>
   <read_first>
     - .planning/phases/03-word/03-RESEARCH.md (lines 1854-1870 — ASVS V12 Files and Resources + PyInstaller datas + hiddenimports 同步)
-    - .planning/phases/03-word/03-PATTERNS.md (lines 60-71 — Convergence Notes 锁清单 — D-05 v37.7.6 收敛原则 + OPS-03 懒加载纪律扩展)
+    - .planning/phases/03-word/03-PATTERNS.md (lines 60-71 — Convergence Notes 锁清单 —— D-05 v37.7.6 收敛原则 + OPS-03 懒加载纪律扩展)
     - .planning/phases/03-word/03-VALIDATION.md (lines 41-65 — Per-Task Verification Map 03-03-04 PyInstaller hiddenimports parity)
-    - tests/unit/test_package_imports.py (Phase 2 既有 13 项 PII 懒加载断言 — 范本)
-    - tests/unit/test_convergence.py (Phase 2 既有 AST 断言 test_main_py_uses_write_partial_masks_in_save_loop — 范本)
-    - main.py:863-906 (merge_word_matches_with_priority — 已扩展第六参数 pii_matches=None)
-    - main.py:10777-10819 (_open_word_docx — Wave 1 接线后)
-    - main.py:12699-12794 (_save_word — Wave 1 接线后)
+    - tests/unit/test_package_imports.py (Phase 2 既有 13 项 PII 懒加载断言 —— 范本)
+    - tests/unit/test_convergence.py (Phase 2 既有 AST 断言 test_main_py_uses_write_partial_masks_in_save_loop —— 范本)
+    - main.py:863-906 (merge_word_matches_with_priority —— 已扩展第六参数 pii_matches=None)
+    - main.py:10777-10819 (_open_word_docx —— Wave 1 接线后)
+    - main.py:12699-12794 (_save_word —— Wave 1 接线后)
     - privacyguard/word/__init__.py (_LAZY_IMPORTS 5 项 Wave 1 已就位)
-  </files>
-  <read_first>
-    - privacyguard/__init__.py (_LAZY_IMPORTS Wave 1 追加 5 项 word 符号)
-    - privacyguard/word/__init__.py (_LAZY_IMPORTS 5 项 word 子模块)
+    - privacyguard/__init__.py (_LAZY_IMPORTS Wave 1 追加 6 项 word 符号)
   </read_first>
   <action>
-    在 tests/unit/test_package_imports.py 与 tests/unit/test_convergence.py 各追加 1 个测试方法验证 OPS-03 懒加载纪律与 D-05 v37.7.6 收敛原则。本任务**测试 + 验证 GREEN**（无需新主代码 — Wave 1 + Wave 2 + Wave 3 已落地全部主代码；本任务仅补齐测试覆盖）。
+    在 tests/unit/test_package_imports.py 与 tests/unit/test_convergence.py 各追加 1 个测试方法验证 OPS-03 懒加载纪律与 D-05 v37.7.6 收敛原则。本任务**测试 + 验证 GREEN**（无需新主代码 —— Wave 1 + Wave 2 + Wave 3 已落地全部主代码；本任务仅补齐测试覆盖）。
 
     **tests/unit/test_package_imports.py MODIFY**：追加 test_import_privacyguard_does_not_load_word_submodules 方法（紧邻既有 test_import_privacyguard_does_not_load_* 系列测试）。
 
-    实现：
+    实现（防御性 try/except 包 import 子模块；避免影响其他测试）：
     ```python
     def test_import_privacyguard_does_not_load_word_submodules(self):
-        """Phase 3 (03-word) — OPS-03 懒加载纪律扩展：import privacyguard 不拉起 privacyguard.word.* 子模块。
+        """Phase 3 (03-word) —— OPS-03 懒加载纪律扩展：import privacyguard 不拉起 privacyguard.word.* 子模块。
 
         5 个 word 子模块：privacyguard.word.adapter / .worker / .redact / .clear_doc_props / .candidate_dialog
         必须均不在 sys.modules 中（直到具体使用时才 import）。
@@ -246,23 +284,22 @@ Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）
         # 触发 lazy forward 应正确加载
         from privacyguard.word import WordAdapter
         self.assertIn('privacyguard.word.adapter', sys.modules)
-        self.assertIn('privacyguard.word.worker', sys.modules)  # __init__.py 加载时触发 _LAZY_IMPORTS 也可能加载 .worker
-        # ... 或根据实际 _LAZY_IMPORTS 行为放宽断言
     ```
 
     **关键**：精确断言 'privacyguard.word.adapter' / '.worker' / '.redact' / '.clear_doc_props' / '.candidate_dialog' 5 个子模块**均不在** sys.modules 中（OPS-03 锁）。'privacyguard.word' 子包本身可被 import（lazy forward 入口）。
 
-    **tests/unit/test_convergence.py MODIFY**：追加 test_no_word_adapter_in_main_py 方法（紧邻既有 test_main_py_uses_write_partial_masks_in_save_loop 测试 — Phase 2 范本镜像）。
+    **tests/unit/test_convergence.py MODIFY**：追加 test_no_word_adapter_in_main_py 方法（紧邻既有 test_main_py_uses_write_partial_masks_in_save_loop 测试 —— Phase 2 范本镜像）。
 
-    实现：
+    实现（防御性 list 而非 tuple；hit identity 不硬编码）：
     ```python
     def test_no_word_adapter_in_main_py(self):
-        """Phase 3 (03-word) — D-05 v37.7.6 收敛原则扩展：main.py 不含 inline Word adapter / redact / clear_doc_props 实现。
+        """Phase 3 (03-word) —— D-05 v37.7.6 收敛原则扩展：main.py 不含 inline Word adapter / redact / clear_doc_props 实现。
 
         AST 解析 main.py；扫描 def _open_word_docx / def _save_word / def _on_word_pii_page_result /
-        def _apply_word_pii_panel_updates / def _build_pii_block_fragment / def _build_pii_mask_block_fragment
-        函数体内不允许出现 inline redact_word_docx / clear_word_doc_props_docx / collect_word_units
-        等 Word adapter / redact / clear_doc_props 实现。所有这些实现必须位于 privacyguard/word/* 子包。
+        def _on_word_candidate_dialog_accept / def _apply_word_pii_panel_updates / def _build_pii_block_fragment /
+        def _build_pii_mask_block_fragment 函数体内不允许出现 inline redact_word_docx / clear_word_doc_props_docx /
+        collect_word_units 等 Word adapter / redact / clear_doc_props 实现。所有这些实现必须位于
+        privacyguard/word/* 子包。
         """
         import ast
         from pathlib import Path
@@ -297,7 +334,6 @@ Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）
             if func_name not in functions:
                 continue
             func_node = functions[func_name]
-            func_source_lines = [getattr(node, 'lineno', 0) for node in ast.walk(func_node)]
             for node in ast.walk(func_node):
                 # 检查 ast.Str / ast.Constant 字符串字面量
                 if isinstance(node, ast.Constant) and isinstance(node.value, str):
@@ -312,30 +348,36 @@ Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）
                          f'All such implementations MUST live in privacyguard/word/* (D-05 v37.7.6 convergence).')
     ```
 
-    **关键**：AST 解析 main.py；扫描 7 个目标函数体内是否含 forbidden_literals（'redact_word_docx' / 'clear_word_doc_props_docx' / 'collect_word_units'）；如有则报错指向 D-05 v37.7.6 收敛原则。**允许**：ast.ImportFrom / ast.Import 节点（import privacyguard.word.redact 模块级 import）；ast.Call 节点（调 redact_word / clear_word_doc_props — 这些是允许的）。
+    **关键**：AST 解析 main.py；扫描 7 个目标函数体内是否含 forbidden_literals（'redact_word_docx' / 'clear_word_doc_props_docx' / 'collect_word_units'）；如有则报错指向 D-05 v37.7.6 收敛原则。**允许**：ast.ImportFrom / ast.Import 节点（import privacyguard.word.redact 模块级 import）；ast.Call 节点（调 redact_word / clear_word_doc_props —— 这些是允许的）。
 
-    **验证 GREEN**。运行命令 `python3 -m compileall -q tests/unit/test_package_imports.py tests/unit/test_convergence.py && python3 -m unittest tests.unit.test_package_imports tests.unit.test_convergence -v` 期望既有 13 项 PII 懒加载断言 + 新增 test_import_privacyguard_does_not_load_word_submodules 全 OK；既有 Phase 2 AST 断言 + 新增 test_no_word_adapter_in_main_py 全 OK。
+    **验证 GREEN**。运行命令：
+    ```bash
+    set -o pipefail
+    python3 -m compileall -q tests/unit/test_package_imports.py tests/unit/test_convergence.py && \
+    python3 -m unittest tests.unit.test_package_imports tests.unit.test_convergence -v 2>&1 | tail -20
+    ```
+    期望既有 13 项 PII 懒加载断言 + 新增 test_import_privacyguard_does_not_load_word_submodules 全 OK；既有 Phase 2 AST 断言 + 新增 test_no_word_adapter_in_main_py 全 OK。
   </action>
   <verify>
-    <automated>python3 -m compileall -q tests/unit/test_package_imports.py tests/unit/test_convergence.py && python3 -m unittest tests.unit.test_package_imports tests.unit.test_convergence -v 2>&1 | tail -20</automated>
+    <automated>set -o pipefail; python3 -m compileall -q tests/unit/test_package_imports.py tests/unit/test_convergence.py && python3 -m unittest tests.unit.test_package_imports tests.unit.test_convergence -v 2>&1 | tail -20</automated>
   </verify>
   <acceptance_criteria>
-    - `python3 -m compileall -q tests/unit/test_package_imports.py tests/unit/test_convergence.py` 退出码 0（语法 green）。
+    - `python3 -m compileall -q tests/unit/test_package_imports.py tests/unit/test_convergence.py` 退出码 0（语法 GREEN）。
     - `python3 -m unittest tests.unit.test_package_imports -v` 显示既有 13 项 PII 懒加载断言 + 新增 test_import_privacyguard_does_not_load_word_submodules 全部 OK。
     - test_import_privacyguard_does_not_load_word_submodules 断言 import privacyguard 与 import privacyguard.word 后，5 个 word 子模块（adapter / worker / redact / clear_doc_props / candidate_dialog）均**不**在 sys.modules 中。
     - `python3 -m unittest tests.unit.test_convergence -v` 显示既有 Phase 2 AST 断言 + 新增 test_no_word_adapter_in_main_py 全部 OK。
     - test_no_word_adapter_in_main_py 断言 main.py 7 个目标函数体内**不**含 inline 'redact_word_docx' / 'clear_word_doc_props_docx' / 'collect_word_units' 字符串字面量或内嵌函数定义（D-05 v37.7.6 收敛原则）。
-    - `python3 -m unittest tests.unit.test_word_pii_pipeline -v` 显示全部 24 个测试方法 GREEN（Wave 1 + Wave 2 + Wave 3 + Wave 4 Task 1）。
-    - `python3 -m unittest tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace tests.unit.test_app_config tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_pdf_text_hit_dedup tests.unit.test_config_alignment tests.unit.test_fstring_safety -v` 既有 79/79 基线保持 GREEN。
+    - `python3 -m unittest tests.unit.test_word_pii_pipeline -v` 显示全部 23 个测试方法 GREEN（Wave 1 5 + Wave 2 4 + Wave 3 9 + Wave 4 Task 1 5）。
+    - 既有 11 unittest 模块基线保持 GREEN。
   </acceptance_criteria>
   <done>
-    tests/unit/test_package_imports.py 新增 test_import_privacyguard_does_not_load_word_submodules 断言（OPS-03 懒加载纪律扩展）；tests/unit/test_convergence.py 新增 test_no_word_adapter_in_main_py AST 断言（D-05 v37.7.6 收敛原则扩展）；测试覆盖 Phase 3 全部纪律验证；既有 79/79 基线保持 GREEN。
+    tests/unit/test_package_imports.py 新增 test_import_privacyguard_does_not_load_word_submodules 断言（OPS-03 懒加载纪律扩展）；tests/unit/test_convergence.py 新增 test_no_word_adapter_in_main_py AST 断言（D-05 v37.7.6 收敛原则扩展）；测试覆盖 Phase 3 全部纪律验证；既有 11 unittest 模块基线保持 GREEN。
   </done>
   <reversibility>rating="reversible" rationale="仅测试文件追加；删除 2 个测试方法即可恢复 Wave 3 状态。"</reversibility>
 </task>
 
 <task type="auto">
-  <name>最终基线验证 — 完整 79/79 + test_word_pii_pipeline 24 + test_package_imports + test_convergence 全部 GREEN（基线升级为 98+/98+）</name>
+  <name>最终基线验证 — 完整 11 unittest 模块 + test_word_pii_pipeline 23 + test_package_imports + test_convergence 全部 GREEN</name>
   <files>
     - .planning/phases/03-word/03-04-tests-and-baseline-SUMMARY.md
   </files>
@@ -352,6 +394,7 @@ Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）
 
     **Step 1 — 完整基线命令**（CLAUDE.md §基线）。运行：
     ```bash
+    set -o pipefail
     python3 -m compileall -q main.py privacyguard tests \
       && python3 -m unittest \
           tests.unit.test_mixed_pdf_ocr \
@@ -368,7 +411,14 @@ Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）
           tests.unit.test_word_pii_pipeline \
           -v
     ```
-    期望 12 个 unittest 模块全部 OK；test_word_pii_pipeline 24 个测试方法全 green；既有 11 个模块保持 green。基线从 79/79 升级为 ≥ 98/98（Phase 1 + Phase 2 + Phase 3 累计）。runtime 预期 < 30s。
+    期望 12 个 unittest 模块全部 OK；test_word_pii_pipeline 23 个测试方法全 GREEN（Wave 1 5 + Wave 2 4 + Wave 3 9 + Wave 4 Task 1 5）；既有 11 个模块保持 GREEN。runtime 预期 < 30s。
+
+    **Step 1b — 动态测试计数测量**（per WARNING 1；避免硬编码基线数字）：
+    ```bash
+    set -o pipefail
+    python3 -m unittest discover -s tests -v 2>&1 | grep -c "ok$"
+    ```
+    期望输出一个数字（N）；N ≥ 既有基线（具体数字由执行结果动态测量）；SUMMARY 中记录此数字但不预设精确值。
 
     **Step 2 — 双 spec parity 验证**。运行：
     ```bash
@@ -391,7 +441,7 @@ Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）
     funcs = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
     forbidden = ['redact_word_docx', 'clear_word_doc_props_docx', 'collect_word_units']
     found = []
-    for fname in ['_open_word_docx', '_save_word', '_on_word_pii_page_result', '_apply_word_pii_panel_updates']:
+    for fname in ['_open_word_docx', '_save_word', '_on_word_pii_page_result', '_apply_word_pii_panel_updates', '_on_word_candidate_dialog_accept', '_build_pii_block_fragment', '_build_pii_mask_block_fragment']:
         if fname not in funcs: continue
         for node in ast.walk(funcs[fname]):
             if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in forbidden:
@@ -401,16 +451,22 @@ Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）
     ```
     期望输出 `D-05 violations: NONE`（main.py 不含 inline Word adapter / redact / clear_doc_props 实现）。
 
-    **Step 5 — 编写 03-04 SUMMARY**。创建 `.planning/phases/03-word/03-04-tests-and-baseline-SUMMARY.md`，内容包含：
-    - 完成总结：基线从 79/79 升级到 98/98+；5 个新增测试类（TestWordDataKeySync 3 + TestWordPartialMaskInComparePane 2 + 扩展 test_package_imports + test_convergence）共 5 个测试方法全部 GREEN
-    - 验收命令实际输出（基线命令 + spec parity + OPS-03 + D-05 全部通过）
-    - Phase 3 完成度：FMT-02 / UX-01 / UX-02 三个需求 ID 全部覆盖；OPS-03 / OPS-04 / OPS-07 三个 OPS 需求 ID 全部覆盖
-    - Wave 1 / Wave 2 / Wave 3 / Wave 4 全部任务清单 + 状态（green）
-    - 链接 .planning/STATE.md 更新待办：Phase 3 状态从 Not started → Complete；Phase 4 / 5 / 6 / 7 / 8 状态更新
-
-    **Step 6 — 提交**。运行：
+    **Step 5 — D-21 单一来源验证**（per BLOCKER 5）。运行：
     ```bash
-    gsd_run query commit "docs(03-04): tests-and-baseline complete — 79/79 → 98+/98+ baseline upgrade" --files \
+    python3 -c "from privacyguard.pii.hits import ENTITY_TYPE_SHORT_CODE; print('CN_ID_CARD:', ENTITY_TYPE_SHORT_CODE['CN_ID_CARD'])"
+    ```
+    期望输出 `CN_ID_CARD: ID`（单一来源就位）。
+
+    **Step 6 — 编写 03-04 SUMMARY**。创建 `.planning/phases/03-word/03-04-tests-and-baseline-SUMMARY.md`，内容内容包含：
+    - 完成总结：5 个新增测试方法（TestWordDataKeySync 3 + TestWordPartialMaskInComparePane 2 + 扩展 test_package_imports 1 + test_convergence 1 = 6 个测试方法）全部 GREEN；基线从既有 11 unittest 模块保持 GREEN 升级为 12 个模块（新增 test_word_pii_pipeline）
+    - 验收命令实际输出（动态测量不硬编码）
+    - Phase 3 完成度：FMT-02 / UX-01 / UX-02 三个需求 ID 全部覆盖；OPS-03 / OPS-04 / OPS-07 三个 OPS 需求 ID 全部覆盖
+    - Wave 1 / Wave 2 / Wave 3 / Wave 4 全部任务清单 + 状态（GREEN）
+    - 链接 STATE.md 更新待办：Phase 3 状态从 Not started → 完成；Phase 4 / 5 / 6 / 7 / 8 状态更新
+
+    **Step 7 — 提交**。运行：
+    ```bash
+    gsd_run query commit "docs(03-04): tests-and-baseline complete — phase 3 完整测试套件 + 纪律验证" --files \
       .planning/phases/03-word/03-04-tests-and-baseline-PLAN.md \
       .planning/phases/03-word/03-04-tests-and-baseline-SUMMARY.md \
       tests/unit/test_word_pii_pipeline.py \
@@ -422,21 +478,23 @@ Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）
     （gsd_run 是 gsd-tools.cjs 包装；如不可用，回退到直接 git commit。）
   </action>
   <verify>
-    <automated>python3 -m compileall -q main.py privacyguard tests && python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace tests.unit.test_config_alignment tests.unit.test_fstring_safety tests.unit.test_convergence tests.unit.test_word_pii_pipeline -v 2>&1 | tail -30 && echo "=== test count summary ===" && python3 -m unittest tests.unit.test_word_pii_pipeline -v 2>&1 | grep -E "Ran |^OK|^FAIL"</automated>
+    <automated>set -o pipefail; python3 -m compileall -q main.py privacyguard tests && python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace tests.unit.test_config_alignment tests.unit.test_fstring_safety tests.unit.test_convergence tests.unit.test_word_pii_pipeline -v 2>&1 | tail -30</automated>
   </verify>
   <acceptance_criteria>
     - 完整基线命令（12 个 unittest 模块）退出码 0；全部模块 OK。
-    - test_word_pii_pipeline 报告 `Ran 24 tests in X.XXXs` + `OK`（24 个测试方法全 green）。
-    - test_package_imports 报告 `Ran 14 tests in X.XXXs` + `OK`（既有 13 项 PII + 新增 1 项 word）。
-    - test_convergence 报告 `Ran N tests in X.XXXs` + `OK`（既有 Phase 2 + 新增 1 项 word）。
-    - 基线从 79/79 升级到 ≥ 98/98（Phase 3 完成）。
-    - grep -E "privacyguard.word" 双 spec 输出字段级一致。
+    - test_word_pii_pipeline 报告全部测试方法 GREEN（Wave 1 5 + Wave 2 4 + Wave 3 9 + Wave 4 Task 1 5 = 23 个；动态测量不硬编码）。
+    - test_package_imports 报告既有 13 项 PII + 新增 1 项 word 全部 GREEN（动态测量）。
+    - test_convergence 报告既有 Phase 2 + 新增 1 项 word 全部 GREEN（动态测量）。
+    - 既有 11 unittest 模块基线保持 GREEN；新增 test_word_pii_pipeline 加入完整基线（12 个模块总）。
+    - grep -E "privacyguard.word" 双 spec 输出字段级一致（12 / 6 行）。
     - OPS-03 验证输出 5 个 False。
     - D-05 验证输出 NONE。
-    - 03-04 SUMMARY 文件落地；Phase 3 状态更新至 Complete。
+    - D-21 单一来源验证输出 `CN_ID_CARD: ID`（per BLOCKER 5）。
+    - python3 -m unittest discover 动态测试计数 N 记录到 SUMMARY（不硬编码）。
+    - 03-04 SUMMARY 文件落地；Phase 3 状态更新至完成。
   </acceptance_criteria>
   <done>
-    Phase 3 完整基线通过：12 个 unittest 模块全部 GREEN；test_word_pii_pipeline 24 测试方法全 green；test_package_imports 14 测试方法全 green；test_convergence N 测试方法全 green；基线从 79/79 升级到 ≥ 98/98；双 spec PyInstaller hiddenimports 字段级一致（cp30 教训扩展）；OPS-03 + D-05 + D-08 + D-09 + D-10 + D-13 + D-14 + D-19 + D-21 + D-22 + D-23 + D-24 + D-25 全部纪律验证通过；03-04 SUMMARY 落地；Phase 3 验收完成。
+    Phase 3 完整基线通过：12 个 unittest 模块全部 GREEN；test_word_pii_pipeline 23 测试方法全 GREEN（动态测量）；test_package_imports 全 GREEN；test_convergence 全 GREEN；既有 11 unittest 模块基线保持 GREEN；双 spec PyInstaller hiddenimports 字段级一致（cp30 教训扩展）；OPS-03 + D-05 + D-08 + D-09 + D-10 + D-13 + D-14 + D-19 + D-21 + D-22 + D-23 + D-24 + D-25 全部纪律验证通过；D-21 单一来源 from privacyguard/pii/hits.py 验证（per BLOCKER 5）；03-04 SUMMARY 落地；Phase 3 验收完成。
   </done>
   <reversibility>rating="costly" rationale="最终基线验证 + SUMMARY + 提交；删除需恢复 Wave 3 状态 + 删除 SUMMARY 文件 + git reset。"</reversibility>
 </task>
@@ -455,13 +513,16 @@ Phase 3 完成度需要 79/79 → 98/98+ 的基线升级（D-13 / D-14 锁定）
 
 | Threat ID | Category | Component | Severity | Disposition | Mitigation Plan |
 |-----------|----------|-----------|----------|-------------|-----------------|
-| T-03-TestRealPiiLeak | Repudiation / OPS-05 | tests/unit/test_word_pii_pipeline.py fixture | high | mitigate | 所有 fixture 走 tests/fixtures/fake_pii.py + tests/fixtures/fake_word.py Faker 合成器；测试末尾断言 fixture 不含真实身份字符串字面量 |
-| T-03-ASTParseError | Denial of Service | tests/unit/test_convergence.py::test_no_word_adapter_in_main_py | low | mitigate | ast.parse + walk ast.FunctionDef(name=~) 函数体内节点；限制 walk 范围 |
+| T-03-TestRealPiiLeak | Repudiation / OPS-05 | tests/unit/test_word_pii_pipeline.py fixture | high | mitigate | 所有 fixture 走 tests/fixtures/fake_pii.py + tests/fixtures/fake_word.py Faker 合成器；测试末尾断言 fixture 不含真实身份字符串字面量（如 '110101199003078811' 这类已知真实身份证号） |
+| T-03-ASTParseError | Denial of Service | tests/unit/test_convergence.py::test_no_word_adapter_in_main_py | low | mitigate | ast.parse + walk ast.FunctionDef(name=~) 函数体内节点；限制 walk 范围；timeout 保护（unittest 默认无 timeout；如遇性能问题可加 unittest.skipIf 条件） |
+| T-03-ShortCodeSourceOfTruth | Tampering / D-21 single-source violation | privacyguard/pii/hits.py + main.py | medium | mitigate | per BLOCKER 5：ENTITY_TYPE_SHORT_CODE 9 短码字典唯一来源位于 privacyguard/pii/hits.py；main.py 与 privacyguard/word/candidate_dialog.py 均从此 import；test_convergence AST 断言 main.py 不内联 9 短码字面量（test_no_word_adapter_in_main_py 可扩展检查） |
+
 </threat_model>
 
 <verification>
-完整 Phase 3 验收命令（CLAUDE.md §基线 — 升级版）：
+完整 Phase 3 验收命令（CLAUDE.md §基线 —— 升级版）：
 ```bash
+set -o pipefail
 python3 -m compileall -q main.py privacyguard tests \
   && python3 -m unittest \
       tests.unit.test_mixed_pdf_ocr \
@@ -478,7 +539,14 @@ python3 -m compileall -q main.py privacyguard tests \
       tests.unit.test_word_pii_pipeline \
       -v
 ```
-期望：12 个 unittest 模块全部 OK；test_word_pii_pipeline 24 个测试方法全 green；既有 11 个模块保持 green；基线从 79/79 升级到 ≥ 98/98。
+期望：12 个 unittest 模块全部 OK；test_word_pii_pipeline 全部测试方法 GREEN（Wave 1 5 + Wave 2 4 + Wave 3 9 + Wave 4 5 = 23 个）；既有 11 个模块保持 GREEN。
+
+动态测试计数（per WARNING 1）：
+```bash
+set -o pipefail
+python3 -m unittest discover -s tests -v 2>&1 | grep -c "ok$"
+```
+输出 N（不硬编码）。
 
 辅助验证：
 ```bash
@@ -489,7 +557,23 @@ grep -E "privacyguard.word" packaging/windows/config/PrivacyGuard_windows.spec p
 python3 -c "import sys; import privacyguard; print('word.adapter:', 'privacyguard.word.adapter' in sys.modules)"
 
 # D-05 v37.7.6 收敛
-python3 -c "import ast; from pathlib import Path; tree = ast.parse(Path('main.py').read_text(encoding='utf-8')); funcs = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}; print('redact_word_docx in main.py:', 'redact_word_docx' in funcs)"
+python3 -c "
+import ast
+from pathlib import Path
+tree = ast.parse(Path('main.py').read_text(encoding='utf-8'))
+funcs = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+forbidden = ['redact_word_docx', 'clear_word_doc_props_docx', 'collect_word_units']
+found = []
+for fname in ['_open_word_docx', '_save_word', '_on_word_pii_page_result', '_apply_word_pii_panel_updates', '_on_word_candidate_dialog_accept', '_build_pii_block_fragment', '_build_pii_mask_block_fragment']:
+    if fname not in funcs: continue
+    for node in ast.walk(funcs[fname]):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in forbidden:
+            found.append(f'{fname} line {node.lineno}: {node.value}')
+print('D-05 violations:', found if found else 'NONE')
+"
+
+# D-21 单一来源（per BLOCKER 5）
+python3 -c "from privacyguard.pii.hits import ENTITY_TYPE_SHORT_CODE; print(ENTITY_TYPE_SHORT_CODE['CN_ID_CARD'])"
 ```
 </verification>
 
@@ -497,19 +581,19 @@ python3 -c "import ast; from pathlib import Path; tree = ast.parse(Path('main.py
 - [ ] TestWordDataKeySync 3 + TestWordPartialMaskInComparePane 2 共 5 个新测试方法全部 GREEN
 - [ ] test_import_privacyguard_does_not_load_word_submodules 断言 OPS-03 扩展
 - [ ] test_no_word_adapter_in_main_py AST 断言 D-05 收敛扩展
-- [ ] 完整 12 个 unittest 模块全部 GREEN（基线升级 ≥ 98/98）
-- [ ] test_word_pii_pipeline 24 测试方法全 GREEN
-- [ ] test_package_imports 14 测试方法全 GREEN（13 既有 + 1 新增）
-- [ ] test_convergence N 测试方法全 GREEN（含 1 新增 word）
-- [ ] 双 spec PyInstaller hiddenimports 字段级一致
+- [ ] 完整 12 个 unittest 模块全部 GREEN（基线保持 + 扩展）
+- [ ] test_word_pii_pipeline 测试方法全 GREEN（动态测量不硬编码）
+- [ ] test_package_imports 测试方法全 GREEN（含 1 新增 word）
+- [ ] test_convergence 测试方法全 GREEN（含 1 新增 word）
+- [ ] 双 spec PyInstaller hiddenimports 字段级一致（cp30 教训扩展）
 - [ ] OPS-03 懒加载纪律保持（5 个 word 子模块 import privacyguard 后不在 sys.modules）
 - [ ] D-05 v37.7.6 收敛原则保持（main.py 不含 inline Word adapter / redact / clear_doc_props 实现）
 - [ ] D-08 文档属性清除 8 字段范围锁保持
 - [ ] D-09 WordPIIWorker 自动触发保持
 - [ ] D-10 cp27 增量 DOM patch 契约保持
-- [ ] D-13 / D-14 ≥ 1 个新测试类 + 79/79 → 98/98+ 基线升级锁定
+- [ ] D-13 ≥ 1 个新测试类 + 79/79 → ≥ 98/98 基线升级锁定（动态测量）
 - [ ] D-19 priority rule > pii > manual > ocr 锁定 + pii_matches=None back-compat
-- [ ] D-21 9 短码字典单一来源 + ASCII uppercase 锁定
+- [ ] D-21 9 短码字典单一来源 + ASCII uppercase（per BLOCKER 5 抽离至 privacyguard/pii/hits.py）
 - [ ] D-22 data-key 注入复用既有 helper 不重写
 - [ ] D-23 redact_word wrapper 复用 main.py:replace_matches_in_paragraph 不重写
 - [ ] D-24 clear_word_doc_props 紧邻 new_doc.save(fname) 前调
