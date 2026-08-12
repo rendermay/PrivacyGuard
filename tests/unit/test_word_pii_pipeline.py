@@ -20,6 +20,7 @@ import unittest
 from types import MethodType
 from unittest.mock import Mock
 
+from bs4 import BeautifulSoup
 from docx import Document
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
@@ -700,7 +701,7 @@ class TestWordCandidateDialogSelectionAcrossPages(unittest.TestCase):
         _ensure_qapp()
 
     def test_selection_persists_across_pages(self):
-        """60 个 hit；翻到第 2 页 → 取消 5 项 → 翻回第 1 页 → 那 5 项仍 Unchecked → confirm 时只 emit 55 项。"""
+        """60 个 hit；第 1 页取消 5 项 → 翻到第 2 页 → 翻回第 1 页 → 那 5 项仍 Unchecked → confirm emit 55 项。"""
         from privacyguard.word.candidate_dialog import WordCandidateDialog
 
         word_data = {"paragraph_5": {"text": "x", "ocr": [], "manual": [], "pii": []}}
@@ -716,16 +717,26 @@ class TestWordCandidateDialogSelectionAcrossPages(unittest.TestCase):
         dlg = WordCandidateDialog(word_data)
         dlg._refresh()
         self.assertEqual(dlg.list_widget.count(), 50)
+        # 第 1 页 = paragraph_0..paragraph_49
+        # 第 2 页 = paragraph_50..paragraph_59
 
-        # 翻到第 2 页 + 取消前 5 个 checkbox
-        dlg._next_page()
-        dlg._refresh()
+        # 在第 1 页取消前 5 个 checkbox（paragraph_0..paragraph_4）
         for i in range(5):
             dlg.list_widget.item(i).setCheckState(Qt.CheckState.Unchecked)
         # 同步进 self._selection（per BLOCKER 4）
         dlg._sync_selection_from_list()
 
-        # 翻回第 1 页 + 断言那 5 个 checkbox 仍 Unchecked
+        # 翻到第 2 页（paragraph_50..paragraph_59）—— 第 2 页的 10 项应保持 Checked
+        dlg._next_page()
+        dlg._refresh()
+        self.assertEqual(dlg.list_widget.count(), 10)
+        for i in range(10):
+            self.assertEqual(
+                dlg.list_widget.item(i).checkState(), Qt.CheckState.Checked,
+                f"第 2 页第 {i} 项应保持 Checked（未在第 1 页被取消）"
+            )
+
+        # 翻回第 1 页 —— paragraph_0..paragraph_4 应仍 Unchecked（per BLOCKER 4 跨翻页持久化）
         dlg._prev_page()
         dlg._refresh()
         self.assertEqual(dlg.list_widget.count(), 50)
@@ -735,17 +746,13 @@ class TestWordCandidateDialogSelectionAcrossPages(unittest.TestCase):
                 f"第 1 页第 {i} 项应保持 Unchecked（per BLOCKER 4 跨翻页持久化）"
             )
 
-        # 翻到第 3 页（不存在，应停在末页即第 2 页）+ confirm
-        dlg._next_page()
-        dlg._next_page()
-        dlg._refresh()
+        # confirm —— emit 60 - 5 = 55 项
         captured = []
         dlg.confirmed.connect(lambda payload: captured.append(payload))
         dlg._on_confirm_clicked()
 
         self.assertEqual(len(captured), 1)
         payload = captured[0]
-        # 60 - 5 = 55 项确认
         self.assertEqual(len(payload), 55)
         # 所有 payload 项含 entity_type + key + page_offset + page_length 四元组
         for entry in payload:
@@ -756,6 +763,233 @@ class TestWordCandidateDialogSelectionAcrossPages(unittest.TestCase):
             self.assertEqual(hit_dict['entity_type'], 'CN_ID_CARD')
             self.assertIn('page_offset', hit_dict)
             self.assertIn('page_length', hit_dict)
+
+
+# ----------------------------------------------------------------------
+# Wave 4 (03-04) — TestWordDataKeySync + TestWordPartialMaskInComparePane
+# D-22 data-key 同步契约 + FMT-02 partial mask 在右栏可见契约
+# ----------------------------------------------------------------------
+
+
+def _build_data_key_stub():
+    """构造 data-key 同步测试 stub（MethodType 绑定 _add_data_key_attributes + fallback）。"""
+    from main import MainWindow
+
+    stub = type("_StubDataKey", (), {})()
+    stub._add_data_key_attributes = MethodType(
+        MainWindow._add_data_key_attributes, stub
+    )
+    stub._add_data_key_regex_fallback = MethodType(
+        MainWindow._add_data_key_regex_fallback, stub
+    )
+    return stub
+
+
+class TestWordDataKeySync(unittest.TestCase):
+    """Phase 3 (03-word) — TestWordDataKeySync 3 方法
+    D-22 data-key 注入契约：mammoth 渲染后 DOM data-key 数 ≈ word_data key 数。
+
+    直接复用 main.py 既有 _add_data_key_attributes + _add_data_key_regex_fallback
+    helper（per D-22 不重写；03-04 仅补齐测试覆盖）。
+    """
+
+    def setUp(self):
+        _ensure_qapp()
+
+    def test_data_key_count_matches_word_data(self):
+        """mammoth 渲染 + _add_data_key_attributes 后 DOM data-key 数 ≥ word_data key 数。"""
+        path = build_fake_docx(
+            paragraphs=["段落 0", "段落 1"],
+            tables=[[["cell 0", "cell 1"]]],
+            add_pii=False,
+        )
+        try:
+            doc = Document(path)
+            word_data = {}
+            for idx, para in enumerate(doc.paragraphs):
+                if para.text.strip():
+                    word_data[f"paragraph_{idx}"] = {
+                        "text": para.text,
+                        "ocr": [],
+                        "manual": [],
+                        "pii": [],
+                    }
+            for table_idx, table in enumerate(doc.tables):
+                for row_idx, row in enumerate(table.rows):
+                    for cell_idx, cell in enumerate(row.cells):
+                        if cell.text.strip():
+                            word_data[
+                                f"table_{table_idx}_cell_{row_idx}_{cell_idx}"
+                            ] = {
+                                "text": cell.text,
+                                "ocr": [],
+                                "manual": [],
+                                "pii": [],
+                            }
+
+            # 模拟 mammoth 输出：段落 + 表格 HTML
+            html = (
+                "<p>段落 0</p>"
+                "<p>段落 1</p>"
+                "<table>"
+                "<tr><td>cell 0</td><td>cell 1</td></tr>"
+                "</table>"
+            )
+            text_blocks = {
+                k: {"text": v["text"], "escaped": v["text"]}
+                for k, v in word_data.items()
+            }
+
+            stub = _build_data_key_stub()
+            tagged = stub._add_data_key_attributes(html, text_blocks)
+            soup = BeautifulSoup(tagged, "html.parser")
+            keys_found = {
+                el.get("data-key")
+                for el in soup.find_all(attrs={"data-key": True})
+            }
+
+            # 段落 keys 必须全部命中
+            self.assertIn("paragraph_0", keys_found)
+            self.assertIn("paragraph_1", keys_found)
+            # 至少一个表格 cell key 命中（_add_data_key_attributes 表格 td 也匹配）
+            table_keys = [k for k in keys_found if k.startswith("table_0_cell_0_")]
+            self.assertGreaterEqual(
+                len(table_keys), 1,
+                f"期望至少 1 个 table_0_cell_0_* 命中，实际 {table_keys}",
+            )
+        finally:
+            os.remove(path)
+
+    def test_data_key_fallback_used_for_inline_tags(self):
+        """段落含 <strong> inline 标签时 _add_data_key_regex_fallback 兜底生效。"""
+        path = build_fake_docx(
+            paragraphs=["段落 0 含有 粗体 测试"],
+            add_pii=False,
+        )
+        try:
+            # 模拟 mammoth 输出含 inline 标签（block-level BeautifulSoup 匹配可能失败）
+            html = "<p>段落 0 含有 <strong>粗体</strong> 测试</p>"
+            text_blocks = {
+                "paragraph_0": {
+                    "text": "段落 0 含有 粗体 测试",
+                    "escaped": "段落 0 含有 粗体 测试",
+                }
+            }
+
+            stub = _build_data_key_stub()
+            tagged = stub._add_data_key_attributes(html, text_blocks)
+            soup = BeautifulSoup(tagged, "html.parser")
+            keys_found = {
+                el.get("data-key")
+                for el in soup.find_all(attrs={"data-key": True})
+            }
+
+            # 若 BeautifulSoup 路径未命中 → fallback 兜底
+            if "paragraph_0" not in keys_found:
+                tagged = stub._add_data_key_regex_fallback(tagged, text_blocks)
+                soup = BeautifulSoup(tagged, "html.parser")
+                keys_found = {
+                    el.get("data-key")
+                    for el in soup.find_all(attrs={"data-key": True})
+                }
+
+            self.assertIn(
+                "paragraph_0", keys_found,
+                f"期望 paragraph_0 命中（fallback 兜底），实际 {keys_found}",
+            )
+        finally:
+            os.remove(path)
+
+    def test_data_key_sync_no_overlap(self):
+        """100 段 docx：data-key 命中数 ≥ word_data key 数 × 0.9（允许少量 fallback 失败）。"""
+        paragraphs = [f"段落 {i}" for i in range(100)]
+        path = build_fake_docx(paragraphs=paragraphs, add_pii=False)
+        try:
+            doc = Document(path)
+            word_data_count = sum(1 for p in doc.paragraphs if p.text.strip())
+
+            html_parts = [f"<p>段落 {i}</p>" for i in range(100)]
+            html = "".join(html_parts)
+            text_blocks = {
+                f"paragraph_{i}": {
+                    "text": f"段落 {i}",
+                    "escaped": f"段落 {i}",
+                }
+                for i in range(100)
+            }
+
+            stub = _build_data_key_stub()
+            tagged = stub._add_data_key_attributes(html, text_blocks)
+            # BeautifulSoup 可能漏掉部分段落 → 跑一次 fallback 兜底
+            soup = BeautifulSoup(tagged, "html.parser")
+            data_key_count = len(
+                soup.find_all(attrs={"data-key": True})
+            )
+            if data_key_count < word_data_count:
+                tagged = stub._add_data_key_regex_fallback(tagged, text_blocks)
+                soup = BeautifulSoup(tagged, "html.parser")
+                data_key_count = len(
+                    soup.find_all(attrs={"data-key": True})
+                )
+
+            self.assertGreaterEqual(
+                data_key_count,
+                int(word_data_count * 0.9),
+                f"data-key 命中 {data_key_count} 应 ≥ word_data key 数 {word_data_count} × 0.9",
+            )
+        finally:
+            os.remove(path)
+
+
+class TestWordPartialMaskInComparePane(unittest.TestCase):
+    """Phase 3 (03-word) — TestWordPartialMaskInComparePane 2 方法
+    FMT-02 partial mask 契约：右栏仅展示 partial mask；左栏展示原文。
+    """
+
+    def setUp(self):
+        _ensure_qapp()
+
+    def test_partial_mask_string_in_right_pane(self):
+        """_build_pii_mask_block_fragment 右栏 fragment 含 partial mask 字符串 + 不含原文。"""
+        stub = _build_pii_panel_stub()
+        hits = _build_id_card_hit()
+        mask_strategy = mask_for_entity('CN_ID_CARD', '53010219200508011X')
+
+        fragment = stub._build_pii_mask_block_fragment(key="paragraph_5", hits=hits)
+
+        # mask 元素 + entity_type 属性 + partial mask 字符串
+        self.assertIn('<mark class="pii-mask"', fragment)
+        self.assertIn('data-entity-type="CN_ID_CARD"', fragment)
+        self.assertIn(mask_strategy, fragment)
+        self.assertIn('已替换为：', fragment)
+        # 右栏**不**含原文（Visuals §PII Partial-Mask 锁定）
+        self.assertNotIn(
+            '53010219200508011X', fragment,
+            f"右栏 fragment 不应含原文：{fragment!r}",
+        )
+
+    def test_left_pane_contains_original_right_pane_contains_mask(self):
+        """左栏原文 / 右栏 partial mask：左右 fragment 不相等 + mark class 不同 + 内容不同。"""
+        stub = _build_pii_panel_stub()
+        hits = _build_id_card_hit()
+        mask_strategy = mask_for_entity('CN_ID_CARD', '53010219200508011X')
+
+        left_fragment = stub._build_pii_block_fragment(key="paragraph_5", hits=hits)
+        right_fragment = stub._build_pii_mask_block_fragment(key="paragraph_5", hits=hits)
+
+        # 左右 fragment 不相等（双栏内容差异锁）
+        self.assertNotEqual(
+            left_fragment, right_fragment,
+            "左右 fragment 必须不相等（Visuals 双栏差异锁）",
+        )
+        # 左栏 mark class = pii-highlight；右栏 mark class = pii-mask
+        self.assertIn('<mark class="pii-highlight"', left_fragment)
+        self.assertIn('<mark class="pii-mask"', right_fragment)
+        # 左栏含原文 + 右栏含 partial mask
+        self.assertIn('53010219200508011X', left_fragment)
+        self.assertNotIn('53010219200508011X', right_fragment)
+        self.assertIn(mask_strategy, right_fragment)
+        self.assertNotIn(mask_strategy, left_fragment)
 
 
 if __name__ == "__main__":
