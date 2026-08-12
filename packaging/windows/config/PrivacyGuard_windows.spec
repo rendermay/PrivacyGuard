@@ -278,6 +278,13 @@ a = Analysis(
         'privacyguard.pii.validators.vat_invoice',
         'privacyguard.pii.validators.bank_account',
         'privacyguard.pii.validators.taxpayer_id',
+        # Phase 3 (03-word): 6 Word 子模块 hiddenimports（cp30 教训扩展 — 双 spec 字段级一致）
+        'privacyguard.word',
+        'privacyguard.word.adapter',
+        'privacyguard.word.worker',
+        'privacyguard.word.redact',
+        'privacyguard.word.clear_doc_props',
+        'privacyguard.word.candidate_dialog',
     ] + onnx_hiddenimports + rapid_hiddenimports + numpy_hiddenimports + bs4_hiddenimports + privacyguard_hiddenimports,
     hookspath=[current_dir],  # 包含 hook-privacyguard.py
     hooksconfig={},

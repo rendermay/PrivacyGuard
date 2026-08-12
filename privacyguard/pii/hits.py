@@ -36,4 +36,19 @@ class TextUnit:
     source: str  # "text" | "image_block" | "full_page_ocr"
 
 
-__all__ = ["PIIHit", "TextUnit", "ConfidenceTier"]
+# Phase 3 (03-word) — D-21 / BLOCKER 5 单一来源抽离
+# 9 类 entity 短码字典（ASCII uppercase），用于候选审阅对话框 / 状态栏 / 数据标签
+ENTITY_TYPE_SHORT_CODE: dict = {
+    'CN_ID_CARD': 'ID',
+    'CN_PHONE': 'PHONE',
+    'CN_BANK_CARD': 'BANK',
+    'CN_EMAIL': 'EMAIL',
+    'CN_USCC': 'USCC',
+    'CN_TAXPAYER_ID': 'TAX',
+    'CN_TAXPAYER_ID_15': 'TAX15',
+    'CN_VAT_INVOICE': 'VAT',
+    'CN_BANK_ACCOUNT': 'ACCT',
+}
+
+
+__all__ = ["PIIHit", "TextUnit", "ConfidenceTier", "ENTITY_TYPE_SHORT_CODE"]

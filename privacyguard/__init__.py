@@ -82,6 +82,13 @@ __all__ = [
     'validate_taxpayer_id_15',
     'has_vat_invoice_context',
     'has_bank_account_context',
+    # Phase 3 (03-word) — Word 子系统 5 符号 + 9 短码字典单一来源
+    'WordAdapter',
+    'redact_word',
+    'clear_word_doc_props',
+    'WordPIIWorker',
+    'WordCandidateDialog',
+    'ENTITY_TYPE_SHORT_CODE',
 ]
 
 _LAZY_IMPORTS = {
@@ -117,6 +124,13 @@ _LAZY_IMPORTS = {
     'validate_taxpayer_id_15': ('privacyguard.pii', 'validate_taxpayer_id_15'),
     'has_vat_invoice_context': ('privacyguard.pii', 'has_vat_invoice_context'),
     'has_bank_account_context': ('privacyguard.pii', 'has_bank_account_context'),
+    # Phase 3 (03-word) — Word 子系统 5 符号 + 9 短码字典单一来源（per BLOCKER 5 + D-21）
+    'WordAdapter': ('privacyguard.word', 'WordAdapter'),
+    'redact_word': ('privacyguard.word', 'redact_word'),
+    'clear_word_doc_props': ('privacyguard.word', 'clear_word_doc_props'),
+    'WordPIIWorker': ('privacyguard.word', 'WordPIIWorker'),
+    'WordCandidateDialog': ('privacyguard.word', 'WordCandidateDialog'),
+    'ENTITY_TYPE_SHORT_CODE': ('privacyguard.pii.hits', 'ENTITY_TYPE_SHORT_CODE'),
 }
 
 

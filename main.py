@@ -861,10 +861,17 @@ def resolve_settings_density_mode(width, height=0, scale=1.0):
 
 
 def merge_word_matches_with_priority(text, rules, default_replacement_text,
-                                     manual_matches=None, ocr_matches=None):
-    """合并规则替换、手动脱敏、OCR 脱敏区间，优先级：规则 > 手动 > OCR。"""
+                                     manual_matches=None, ocr_matches=None,
+                                     pii_matches=None):
+    """合并规则替换、手动脱敏、OCR 脱敏区间，优先级：规则 > 手动 > OCR。
+
+    Phase 3 (03-word): 第六参数 pii_matches=None（Wave 1 RED 默认值保持 back-compat）；
+    Wave 2 GREEN 启用 priority 顺序 rule > pii > manual > ocr（D-19 锁）。
+    """
     manual_matches = manual_matches or []
     ocr_matches = ocr_matches or []
+    # Phase 3 (03-word) — Wave 1 占位；Wave 2 启用 pii_matches 处理（per BLOCKER 6 RED 不破坏）
+    pii_matches = pii_matches or []
     text_len = len(text) if isinstance(text, str) else 0
     fallback_text = default_replacement_text if isinstance(default_replacement_text, str) and default_replacement_text else "[已脱敏]"
 
@@ -10786,6 +10793,8 @@ class MainWindow(QMainWindow):
             self._reset_batch_session_state()
             self.word_compare_mode = False
             self.word_compare_user_hidden = False
+            # Phase 3 (03-word) — Wave 1 RED 占位 — Wave 2 实施 WordPIIWorker 启动
+            self._word_pii_worker = None
             self.word_doc = Document(fname)
             self.file_path = fname
             self.doc_type = 'docx'
@@ -11519,6 +11528,14 @@ sudo dnf install antiword
             self.page_data[page_num]['pii'] = [PIIHit(**h) for h in pii_hits]
         if self.current_page == page_num:
             self.render_view()
+
+    def _on_word_pii_page_result(self, key: str, hits_data: list):
+        """Phase 3: pii_signal 接收槽（D-09 / D-18 — Wave 1 占位，Wave 2 实施）。
+
+        Wave 1 占位仅记录 + print，不写 word_data（避免破坏既有 _save_word 行为）。
+        Wave 2 实施 QMutexLocker 写 + _apply_word_pii_panel_updates 增量 DOM patch。
+        """
+        print(f'[Word PII STUB] key={key} hits_count={len(hits_data)}')
 
     def _on_ocr_finished_safe(self, _):
         """v36.4: 线程安全 - OCR 完成处理（在主线程执行）
