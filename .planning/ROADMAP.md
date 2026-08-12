@@ -94,8 +94,14 @@ Plans:
   3. User can browse a per-block candidate list and confirm each entry before save; list filters by entity type and paginates when over 50 entries
   4. Exported Word doc retains paragraph/table formatting and no longer contains the original sensitive text in its body or document properties
 
-**Plans**: TBD
+**Plans**: 4 plans drafted
 **UI hint**: yes
+
+Plans:
+- [ ] 03-01-tracer-PLAN.md — Tracer: privacyguard/word/{adapter,worker,redact,clear_doc_props} 5 模块 + main.py 4 处接线 + 79/79 baseline 保持（Wave 1）
+- [ ] 03-02-engine-expansion-and-ui-PLAN.md — cp27 增量 DOM patch: 左栏红色 <mark class="pii-highlight"> + 短码徽章 + 右栏绿色 <mark class="pii-mask"> partial mask（Wave 2）
+- [ ] 03-03-candidate-dialog-and-packaging-PLAN.md — WordCandidateDialog 完整 UI（50 条分页 + 实体类型 / 来源筛选 + 4 CTAs）+ packaging/{windows,macos} 双 spec hiddenimports parity（Wave 3）
+- [ ] 03-04-tests-and-baseline-PLAN.md — TestWordDataKeySync + TestWordPartialMaskInComparePane + test_package_imports + test_convergence 扩展，基线 79/79 → 98+/98+（Wave 4）
 
 ---
 
@@ -199,7 +205,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. PDF 自动识别身份证号与手机号并真脱敏 | 3/3 | Complete    | 2026-08-11 |
 | 2. PDF 增加银行卡/邮箱/财税实体识别与部分掩码 | 0/3 | Plans drafted | - |
-| 3. Word 文档接入识别引擎 | 0/TBD | Not started | - |
+| 3. Word 文档接入识别引擎 | 0/4 | Plans drafted | - |
 | 4. Excel 工作簿支持 | 0/TBD | Not started | - |
 | 5. 独立图片文件支持 | 0/TBD | Not started | - |
 | 6. 上下文型实体识别 | 0/TBD | Not started | - |
