@@ -619,15 +619,14 @@ class TestBankAccountContextMultipleOccurrences(unittest.TestCase):
 
     def test_two_occurrences_second_has_context_returns_true(self):
         from privacyguard.pii.validators.bank_account import has_bank_account_context
-        # First account: pos 60-77, window [40, 97) — no anchor in window
-        # Second account: pos 111-128, window [91, 148) — contains '账号' anchor at pos 108
-        # Gap (30 'Y' chars) MUST be > 40 chars between accounts so the first account's
-        # ±20 window CANNOT include the second anchor (gap=30 ensures '账号' at pos 108
-        # is past window end 97). With this gap, buggy text.find(target) returns False
-        # (no anchor in first window), but the fix (iterate text.find(target, start))
-        # finds the second occurrence with anchor -> True.
-        text = "X" * 60 + "622202123456789012" + "Y" * 30 + "账号 " + "622202987654321098"
-        self.assertTrue(has_bank_account_context(text, '622202123456789012'))
+        # The SAME target appears at pos 60-77 (first) and pos 111-128 (second).
+        # First occurrence window [40, 98): no anchor (only X's and Y's).
+        # Second occurrence window [91, 149) ∩ [0, 129) = [91, 129): contains '账号' at pos 108.
+        # Buggy text.find(target) only checks first → False.
+        # Fixed code iterates text.find(target, start) → finds second with anchor → True.
+        target = '622202123456789012'
+        text = "X" * 60 + target + "Y" * 30 + "账号 " + target
+        self.assertTrue(has_bank_account_context(text, target))
 
     def test_two_occurrences_either_has_context_returns_true(self):
         from privacyguard.pii.validators.bank_account import has_bank_account_context

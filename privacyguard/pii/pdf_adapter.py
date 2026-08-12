@@ -10,7 +10,7 @@
 - fitz.PDF_REDACT_IMAGE_PIXELS = 2（**不是**默认 0；否则图像像素不被销毁）
 - garbage=4 + deflate=True + clean=True 三个 save flag 联合清扫元数据 / 未引用对象。
 """
-from typing import Callable, Dict, Iterable, List, Literal, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Literal, Optional, Tuple, Union
 
 import fitz
 
@@ -18,6 +18,20 @@ from privacyguard.pii.hits import PIIHit
 
 
 Rect = Tuple[float, float, float, float]
+
+
+# 02-04: write_partial_masks mixed item type alias (CR-01 fix).
+# Each item in the items list can be:
+#   - PIIHit dataclass (routed via global mode)
+#   - fitz.Rect (routed via global mode)
+#   - (x, y, w, h, mode) tuple (per-item mode)
+#   - (PIIHit, mode) 2-tuple (per-item mode + PIIHit mask_strategy routing)
+PartialMaskItem = Union[
+    "PIIHit",
+    "fitz.Rect",
+    Tuple[float, float, float, float, str],
+    Tuple["PIIHit", str],
+]
 
 
 # PyMuPDF font name 映射表（page.get_text("dict") 返回的 font 名 → insert_text 支持的 fontname）
@@ -88,14 +102,20 @@ def apply_pii_redactions(
 def write_partial_masks(
     doc: "fitz.Document",
     page_idx: int,
-    pii_hits: List[PIIHit],
+    items: List[PartialMaskItem],
     mode: Literal["partial", "blackout"] = "partial",
 ) -> None:
-    """PII 命中 partial mask 写入（D-01 + D-02 + D-03 + D-21）。
+    """PII 命中 partial mask 写入（D-01 + D-02 + D-03 + D-21 + D-22 single-pass）。
+
+    02-04 (CR-01 fix): accepts mixed item types in a single call:
+        - PIIHit dataclass → routed via global ``mode``
+        - fitz.Rect → routed via global ``mode``
+        - (x, y, w, h, mode) 5-tuple → per-item mode (no mask text)
+        - (PIIHit, mode) 2-tuple → per-item mode + PIIHit mask_strategy routing
 
     mode="partial":
         1. add_redact_annot（黑底色块）
-        2. apply_redactions(IMAGE_PIXELS)
+        2. apply_redactions(IMAGE_PIXELS) — **仅一次**（D-22 单页不变式）
         3. insert_text 在色块上写 mask_strategy
             - 字体：优先 page.get_text("dict") 取最近 span 的 font + size
             - 字号：OCR / 占位 rect 路径用 rect.height - 4 估算（floor 6）
@@ -103,33 +123,102 @@ def write_partial_masks(
 
     mode="blackout":
         仅 add_redact_annot + apply_redactions(IMAGE_PIXELS)（沿用 Phase 1 行为）
+
+    Backward-compat: 02-01 callers passing List[PIIHit] + global mode 仍可工作。
     """
-    if not pii_hits:
+    if not items:
         return
     page = doc[page_idx]
     fill_color = (0.0, 0.0, 0.0)
-    # 1. 先画黑底色块
-    for hit in pii_hits:
-        r = hit.page_rect
-        rect = fitz.Rect(r[0], r[1], r[0] + r[2], r[1] + r[3])
+
+    # ------------------------------------------------------------------
+    # 02-04: 4-branch mixed item dispatcher (CR-01 fix).
+    # Normalize each item into (rect, mask_text_or_None, item_mode).
+    # ------------------------------------------------------------------
+    normalized: List[Tuple[fitz.Rect, Optional[str], str]] = []
+    for item in items:
+        # 2-tuple form: (PIIHit, mode) — per-item mode + PIIHit mask_strategy
+        if (
+            isinstance(item, tuple)
+            and len(item) == 2
+            and hasattr(item[0], "page_rect")
+            and hasattr(item[0], "mask_strategy")
+            and isinstance(item[1], str)
+        ):
+            hit, item_mode = item
+            r = hit.page_rect
+            rect = fitz.Rect(r[0], r[1], r[0] + r[2], r[1] + r[3])
+            normalized.append((rect, hit.mask_strategy or "", item_mode))
+        # 5-tuple form: (x, y, w, h, mode) — per-item mode + no mask text
+        elif (
+            isinstance(item, tuple)
+            and len(item) == 5
+            and isinstance(item[4], str)
+        ):
+            x, y, w, h, item_mode = item
+            rect = fitz.Rect(x, y, x + w, y + h)
+            normalized.append((rect, None, item_mode))
+        # fitz.Rect → global mode, no mask text
+        elif isinstance(item, fitz.Rect):
+            normalized.append((item, None, mode))
+        # PIIHit dataclass → global mode, mask_strategy from hit
+        elif hasattr(item, "page_rect") and hasattr(item, "mask_strategy"):
+            r = item.page_rect
+            rect = fitz.Rect(r[0], r[1], r[0] + r[2], r[1] + r[3])
+            normalized.append((rect, item.mask_strategy or "", mode))
+        else:
+            # 防御性：未知 item 跳过（不应发生）
+            continue
+
+    if not normalized:
+        return
+
+    # 1. 先画黑底色块（所有 item 一次性 add_redact_annot）
+    for rect, _mask_text, _item_mode in normalized:
         annot = page.add_redact_annot(rect)
         annot.set_colors(stroke=fill_color, fill=fill_color)
         annot.update()
-    # 2. 真删除（销毁底层文本+像素）
+
+    # 2. 真删除（销毁底层文本+像素）— D-22 单页不变式：仅一次
     page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_PIXELS)
+
     # 3. 清理 annot 防止编辑器修改
     for annot in page.annots() or []:
         page.delete_annot(annot)
-    # blackout 模式到此为止
-    if mode == "blackout":
-        return
-    # 4. partial mode：在新色块上写 mask_strategy
-    for hit in pii_hits:
-        r = hit.page_rect
-        rect = fitz.Rect(r[0], r[1], r[0] + r[2], r[1] + r[3])
-        font_name, font_size = _resolve_font_for_rect(page, hit)
-        mask_text = hit.mask_strategy or ('*' * len(hit.normalized))
-        # D-03: rect 宽度按 mask_strategy 字符数重算 + 居中
+
+    # 4. partial-mode item 写 mask_strategy 文字
+    for rect, mask_text, item_mode in normalized:
+        if item_mode != "partial":
+            continue
+        if not mask_text:
+            # 无 mask 文字 → 跳过（如 5-tuple blackout item）
+            continue
+        # 字号 / 字体：try PIIHit 路径的 font lookup（基于 normalized text）；
+        # 否则用 OCR / 占位 rect 的 fallback 估算
+        font_size = max(float(rect.height) - 4.0, 6.0)
+        font_name = "helv"
+        try:
+            d = page.get_text("dict")
+            for block in d.get("blocks", []):
+                for line in block.get("lines", []):
+                    for span in line.get("spans", []):
+                        txt = span.get("text", "")
+                        if txt and mask_text and (
+                            mask_text[:6] in txt or any(c in txt for c in mask_text[:3])
+                        ):
+                            raw_font = span.get("font", "helv")
+                            font_name = _FONT_NAME_MAP.get(raw_font, "helv")
+                            raw_size = span.get("size", font_size)
+                            try:
+                                font_size = float(raw_size)
+                            except (TypeError, ValueError):
+                                pass
+                            font_size = max(font_size, 6.0)
+                            break
+        except Exception:
+            pass
+
+        # D-03: rect 宽度按 mask_text 字符数重算 + 居中
         resized_rect = _resize_rect_for_mask(rect, mask_text, font_size)
         text_width = font_size * len(mask_text) * 0.6
         x_center = resized_rect.x0 + (resized_rect.width - text_width) / 2
@@ -231,4 +320,6 @@ __all__ = [
     # Phase 2 (02-01-tracer)
     'write_partial_masks',
     'clear_pdf_metadata',
+    # Phase 2 (02-04-gap-closure) — CR-01 fix
+    'PartialMaskItem',
 ]
