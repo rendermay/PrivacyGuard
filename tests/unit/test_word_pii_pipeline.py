@@ -8,6 +8,11 @@
 - TestWordDocumentPropertiesCleared — clear_word_doc_props 清 5 core + revision=1
 - TestWordMergePriorityRulePiManualOcr — priority 锁定 rule > pii > manual > ocr
 - TestWordPIIPanelHighlights — cp27 增量 patch 契约 + 短码徽章 + partial mask 渲染
+
+Wave 3 (03-03) 新增 3 个测试类共 9 个测试方法 — WordCandidateDialog UI 行为 + 翻页 + 跨翻页持久化：
+- TestWordCandidateDialog — 基础 UI + 实体类型 / 来源筛选 + confirmed 信号 payload
+- TestWordCandidateDialogPagination — 50 条分页 + 筛选组合 + 行 label 截断 30 字符
+- TestWordCandidateDialogSelectionAcrossPages — 跨翻页选择持久化（per BLOCKER 4）
 """
 import os
 import tempfile
@@ -16,10 +21,12 @@ from types import MethodType
 from unittest.mock import Mock
 
 from docx import Document
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 from privacyguard.pii.engine import PIIEngine
-from privacyguard.pii.hits import TextUnit
+from privacyguard.pii.hits import PIIHit, TextUnit
 from privacyguard.pii.mask import mask_for_entity
 
 from tests.fixtures.fake_pii import (
@@ -32,6 +39,11 @@ from tests.fixtures.fake_pii import (
     fake_vat_invoice_20,
 )
 from tests.fixtures.fake_word import build_fake_docx
+
+
+# PyQt6 必须在导入 QWidget 派生类前创建 QApplication 实例。
+# 这对所有 TestWordCandidateDialog* 测试类至关重要。
+_APP = QApplication.instance() or QApplication([])
 
 
 class TestWordAdapterCollectUnits(unittest.TestCase):
@@ -362,6 +374,388 @@ class TestWordPIIPanelHighlights(unittest.TestCase):
         self.assertEqual(ENTITY_TYPE_SHORT_CODE['CN_TAXPAYER_ID_15'], 'TAX15')
         self.assertEqual(ENTITY_TYPE_SHORT_CODE['CN_VAT_INVOICE'], 'VAT')
         self.assertEqual(ENTITY_TYPE_SHORT_CODE['CN_BANK_ACCOUNT'], 'ACCT')
+
+
+# ----------------------------------------------------------------------
+# Wave 3 (03-03) — WordCandidateDialog UI 行为测试 (UX-01 / UX-02 / BLOCKER 3 / BLOCKER 4)
+# ----------------------------------------------------------------------
+
+
+def _ensure_qapp():
+    """确保 QApplication 单例存在（PyQt6 必须在创建 QDialog 前有 QApplication）。"""
+    return QApplication.instance() or QApplication([])
+
+
+def _build_pii_hit(entity_type, key='paragraph_5', page_offset=4, page_length=18,
+                   mask_strategy='530102********011X', normalized='53010219200508011X'):
+    """构造一条 PIIHit 命中（page_offset / page_length 默认对正 CN_ID_CARD 18 位）。"""
+    return PIIHit(
+        entity_type=entity_type,
+        page_offset=page_offset,
+        page_length=page_length,
+        page_rect=(0.0, 0.0, 108.0, 12.0),
+        confidence_tier='HIGH',
+        source='text',
+        mask_strategy=mask_strategy,
+        normalized=normalized,
+    )
+
+
+def _build_manual_match(start, end, text, replacement='[手动]'):
+    """构造一条 manual 命中 dict（与 main.py:word_data[key]['manual'] 形态一致）。"""
+    return {'start': start, 'end': end, 'text': text, 'replacement': replacement}
+
+
+class TestWordCandidateDialog(unittest.TestCase):
+    """WordCandidateDialog 基础 UI 行为（UX-01 / UX-02 最低功能 + D-11 / D-25 锁）。"""
+
+    def setUp(self):
+        _ensure_qapp()
+
+    def test_dialog_opens_with_all_hits_in_word_data(self):
+        """word_data 三通道 (pii + ocr + manual) 总命中应全部进入 _all_hits + 初始页 0 + window title。"""
+        from privacyguard.word.candidate_dialog import WordCandidateDialog
+
+        word_data = {
+            "paragraph_5": {
+                "text": "身份证 53010219200508011X 手机 13812345678",
+                "ocr": [],
+                "manual": [],
+                "pii": [
+                    _build_pii_hit('CN_ID_CARD', key='paragraph_5',
+                                   page_offset=4, page_length=18,
+                                   mask_strategy=mask_for_entity('CN_ID_CARD', '53010219200508011X'),
+                                   normalized='53010219200508011X'),
+                    _build_pii_hit('CN_PHONE', key='paragraph_5',
+                                   page_offset=27, page_length=11,
+                                   mask_strategy=mask_for_entity('CN_PHONE', '13812345678'),
+                                   normalized='13812345678'),
+                ],
+            },
+            "table_0_cell_0_0": {
+                "text": "53010219200508011X",
+                "ocr": [],
+                "manual": [_build_manual_match(0, 18, '53010219200508011X')],
+                "pii": [],
+            },
+        }
+
+        dlg = WordCandidateDialog(word_data)
+
+        # 三通道总命中数 = 2 pii + 1 manual = 3
+        self.assertEqual(len(dlg._all_hits), 3)
+        self.assertEqual(dlg.windowTitle(), 'Word 候选审阅')
+        self.assertEqual(dlg._page, 0)
+
+    def test_entity_filter_changes_visible_rows(self):
+        """实体类型筛选切换 → list_widget 行数随之变化（D-25 + UX-02）。"""
+        from privacyguard.word.candidate_dialog import WordCandidateDialog
+
+        word_data = {"paragraph_5": {"text": "x", "ocr": [], "manual": [], "pii": []}}
+        # 3 个 CN_ID_CARD + 2 个 CN_PHONE = 5 个 pii hit
+        pii_hits = []
+        offset = 0
+        for i in range(3):
+            pii_hits.append(_build_pii_hit(
+                'CN_ID_CARD', key=f'paragraph_{i}', page_offset=offset, page_length=18,
+                mask_strategy=mask_for_entity('CN_ID_CARD', '53010219200508011X'),
+                normalized='53010219200508011X',
+            ))
+            offset += 20
+        for i in range(3, 5):
+            pii_hits.append(_build_pii_hit(
+                'CN_PHONE', key=f'paragraph_{i}', page_offset=offset, page_length=11,
+                mask_strategy=mask_for_entity('CN_PHONE', '13812345678'),
+                normalized='13812345678',
+            ))
+            offset += 15
+        word_data['paragraph_5']['pii'] = pii_hits
+
+        dlg = WordCandidateDialog(word_data)
+        dlg._refresh()
+        # 全部 5 条可见
+        self.assertEqual(dlg.list_widget.count(), 5)
+        # 切到 CN_PHONE → 仅 2 条
+        phone_idx = dlg.entity_filter.findData('CN_PHONE')
+        self.assertGreaterEqual(phone_idx, 0)
+        dlg.entity_filter.setCurrentIndex(phone_idx)
+        dlg._refresh()
+        self.assertEqual(dlg.list_widget.count(), 2)
+        # 切回 "全部类型"（data == ''） → 5 条
+        dlg.entity_filter.setCurrentIndex(0)
+        dlg._refresh()
+        self.assertEqual(dlg.list_widget.count(), 5)
+
+    def test_source_filter_changes_visible_rows(self):
+        """来源筛选切换 → list_widget 行数随之变化（D-25 + UX-02）。"""
+        from privacyguard.word.candidate_dialog import WordCandidateDialog
+
+        word_data = {
+            "paragraph_5": {
+                "text": "x",
+                "ocr": [
+                    _build_manual_match(0, 11, '13812345678'),
+                    _build_manual_match(15, 18, 'ABC'),
+                ],
+                "manual": [_build_manual_match(0, 18, '53010219200508011X')],
+                "pii": [
+                    _build_pii_hit('CN_ID_CARD', page_offset=0, page_length=18,
+                                   mask_strategy=mask_for_entity('CN_ID_CARD', '53010219200508011X'),
+                                   normalized='53010219200508011X'),
+                    _build_pii_hit('CN_PHONE', page_offset=20, page_length=11,
+                                   mask_strategy=mask_for_entity('CN_PHONE', '13812345678'),
+                                   normalized='13812345678'),
+                    _build_pii_hit('CN_EMAIL', page_offset=35, page_length=12,
+                                   mask_strategy='a***@b.com',
+                                   normalized='abc@def.com'),
+                ],
+            },
+        }
+
+        dlg = WordCandidateDialog(word_data)
+        dlg._refresh()
+        # 全部 6 条
+        self.assertEqual(dlg.list_widget.count(), 6)
+        # 切到 ocr → 2 条
+        ocr_idx = dlg.source_filter.findData('ocr')
+        self.assertGreaterEqual(ocr_idx, 0)
+        dlg.source_filter.setCurrentIndex(ocr_idx)
+        dlg._refresh()
+        self.assertEqual(dlg.list_widget.count(), 2)
+        # 切到 pii → 3 条
+        pii_idx = dlg.source_filter.findData('pii')
+        self.assertGreaterEqual(pii_idx, 0)
+        dlg.source_filter.setCurrentIndex(pii_idx)
+        dlg._refresh()
+        self.assertEqual(dlg.list_widget.count(), 3)
+
+    def test_confirmed_hit_emits_to_main_window(self):
+        """点击 '确认选中的 N 项' → confirmed 信号 emit list[dict{key, hit, source}] payload。"""
+        from privacyguard.word.candidate_dialog import WordCandidateDialog
+
+        secret_id = '53010219200508011X'
+        word_data = {
+            "paragraph_5": {
+                "text": f"原文 {secret_id}",
+                "ocr": [],
+                "manual": [],
+                "pii": [_build_pii_hit(
+                    'CN_ID_CARD', key='paragraph_5', page_offset=3, page_length=18,
+                    mask_strategy=mask_for_entity('CN_ID_CARD', secret_id),
+                    normalized=secret_id,
+                )],
+            },
+        }
+        dlg = WordCandidateDialog(word_data)
+        dlg._refresh()
+        self.assertEqual(dlg.list_widget.count(), 1)
+
+        captured = []
+        dlg.confirmed.connect(lambda payload: captured.append(payload))
+
+        dlg._on_confirm_clicked()
+
+        self.assertEqual(len(captured), 1)
+        payload = captured[0]
+        self.assertIsInstance(payload, list)
+        self.assertEqual(len(payload), 1)
+        entry = payload[0]
+        self.assertIsInstance(entry, dict)
+        self.assertEqual(entry.get('key'), 'paragraph_5')
+        # hit_dict 应含 entity_type + mask_strategy 字段（D-18 契约）
+        hit_dict = entry.get('hit') or {}
+        self.assertEqual(hit_dict.get('entity_type'), 'CN_ID_CARD')
+        self.assertEqual(hit_dict.get('mask_strategy'),
+                         mask_for_entity('CN_ID_CARD', secret_id))
+        self.assertEqual(entry.get('source'), 'pii')
+
+    def test_empty_state_when_all_hits_filtered_out(self):
+        """过滤后 0 条但 _all_hits 非空 → 显示空态文案 + 主 CTA disabled（per E3 covered·partial）。"""
+        from privacyguard.word.candidate_dialog import WordCandidateDialog
+
+        word_data = {"paragraph_5": {"text": "x", "ocr": [], "manual": [], "pii": [
+            _build_pii_hit('CN_ID_CARD', page_offset=0, page_length=18,
+                           mask_strategy=mask_for_entity('CN_ID_CARD', '53010219200508011X'),
+                           normalized='53010219200508011X'),
+        ]}}
+
+        dlg = WordCandidateDialog(word_data)
+        phone_idx = dlg.entity_filter.findData('CN_PHONE')
+        self.assertGreaterEqual(phone_idx, 0)
+        dlg.entity_filter.setCurrentIndex(phone_idx)
+        dlg._refresh()
+        # list_widget 无可见行
+        self.assertEqual(dlg.list_widget.count(), 0)
+        # page_label 含 '0'（页数 / 条数）
+        self.assertIn('0', dlg.page_label.text())
+        # 主 CTA disabled
+        self.assertFalse(dlg.btn_confirm.isEnabled())
+
+
+class TestWordCandidateDialogPagination(unittest.TestCase):
+    """WordCandidateDialog 50 条分页 + 筛选组合 + 行 label 截断 30 字符（D-25 + UX-02）。"""
+
+    def setUp(self):
+        _ensure_qapp()
+
+    def test_pagination_over_50_entries(self):
+        """60 个 hit 应分为 2 页；第一页 50 条 + 第二页 10 条 + 翻页按钮 enable 状态正确。"""
+        from privacyguard.word.candidate_dialog import PAGE_SIZE, WordCandidateDialog
+
+        self.assertEqual(PAGE_SIZE, 50)
+
+        # 60 个 pii hit（每个 key 1 个 hit，60 个不同 key）
+        word_data = {"paragraph_5": {"text": "x", "ocr": [], "manual": [], "pii": []}}
+        pii_hits = []
+        for i in range(60):
+            offset = i * 19
+            pii_hits.append(_build_pii_hit(
+                'CN_ID_CARD', key=f'paragraph_{i}', page_offset=offset, page_length=18,
+                mask_strategy=mask_for_entity('CN_ID_CARD', '53010219200508011X'),
+                normalized='53010219200508011X',
+            ))
+        word_data['paragraph_5']['pii'] = pii_hits
+
+        dlg = WordCandidateDialog(word_data)
+        dlg._refresh()
+        # 第一页 50 条
+        self.assertEqual(dlg.list_widget.count(), 50)
+        # page_label 含 '第 1 / 2 页（共 60 条）'
+        page_text = dlg.page_label.text()
+        self.assertIn('1', page_text)
+        self.assertIn('2', page_text)
+        self.assertIn('60', page_text)
+        # 翻页按钮 enable 状态
+        self.assertTrue(dlg.btn_next.isEnabled())
+        self.assertFalse(dlg.btn_prev.isEnabled())
+        # 翻到第二页
+        dlg._next_page()
+        dlg._refresh()
+        # 第二页 10 条
+        self.assertEqual(dlg.list_widget.count(), 10)
+        # 末页 btn_next disabled
+        self.assertFalse(dlg.btn_next.isEnabled())
+        self.assertTrue(dlg.btn_prev.isEnabled())
+
+    def test_pagination_filter_combination(self):
+        """30 CN_ID_CARD + 30 CN_PHONE = 60；筛选 CN_ID_CARD 后只 30 条全部可见、无分页。"""
+        from privacyguard.word.candidate_dialog import WordCandidateDialog
+
+        word_data = {"paragraph_5": {"text": "x", "ocr": [], "manual": [], "pii": []}}
+        pii_hits = []
+        for i in range(30):
+            pii_hits.append(_build_pii_hit(
+                'CN_ID_CARD', key=f'paragraph_{i}', page_offset=i * 19, page_length=18,
+                mask_strategy=mask_for_entity('CN_ID_CARD', '53010219200508011X'),
+                normalized='53010219200508011X',
+            ))
+        for i in range(30, 60):
+            pii_hits.append(_build_pii_hit(
+                'CN_PHONE', key=f'paragraph_{i}', page_offset=i * 12, page_length=11,
+                mask_strategy=mask_for_entity('CN_PHONE', '13812345678'),
+                normalized='13812345678',
+            ))
+        word_data['paragraph_5']['pii'] = pii_hits
+
+        dlg = WordCandidateDialog(word_data)
+        id_idx = dlg.entity_filter.findData('CN_ID_CARD')
+        dlg.entity_filter.setCurrentIndex(id_idx)
+        dlg._refresh()
+        # 30 条全部可见，无需分页
+        self.assertEqual(dlg.list_widget.count(), 30)
+        page_text = dlg.page_label.text()
+        self.assertIn('1', page_text)
+        self.assertIn('30', page_text)
+        # 末页 → btn_next disabled
+        self.assertFalse(dlg.btn_next.isEnabled())
+
+    def test_row_label_truncates_normalized_at_30_chars(self):
+        """行 label 截断 normalized[:30] + '...'；normalized[30:] 不暴露。"""
+        from privacyguard.word.candidate_dialog import WordCandidateDialog
+
+        normalized_50 = '1234567890123456789012345678901234567890ABCDEFGHIJ'
+        word_data = {"paragraph_5": {"text": "x", "ocr": [], "manual": [], "pii": [
+            _build_pii_hit('CN_ID_CARD', page_offset=0, page_length=50,
+                           mask_strategy='[MASK]', normalized=normalized_50),
+        ]}}
+
+        dlg = WordCandidateDialog(word_data)
+        dlg._refresh()
+        self.assertEqual(dlg.list_widget.count(), 1)
+        row_text = dlg.list_widget.item(0).text()
+
+        # normalized[:30] 应在行文本中
+        self.assertIn(normalized_50[:30], row_text)
+        # normalized[30:] 不应在行文本中（隐私截断锁）
+        self.assertNotIn(normalized_50[30:], row_text)
+        # 截断标识符 '...' 或 '…'
+        self.assertTrue(('...' in row_text) or ('…' in row_text),
+                        f"行 label 必须含 '...'/'…' 截断标识符；实际：{row_text!r}")
+
+
+class TestWordCandidateDialogSelectionAcrossPages(unittest.TestCase):
+    """WordCandidateDialog 跨翻页选择持久化（per BLOCKER 4）。"""
+
+    def setUp(self):
+        _ensure_qapp()
+
+    def test_selection_persists_across_pages(self):
+        """60 个 hit；翻到第 2 页 → 取消 5 项 → 翻回第 1 页 → 那 5 项仍 Unchecked → confirm 时只 emit 55 项。"""
+        from privacyguard.word.candidate_dialog import WordCandidateDialog
+
+        word_data = {"paragraph_5": {"text": "x", "ocr": [], "manual": [], "pii": []}}
+        pii_hits = []
+        for i in range(60):
+            pii_hits.append(_build_pii_hit(
+                'CN_ID_CARD', key=f'paragraph_{i}', page_offset=i * 19, page_length=18,
+                mask_strategy=mask_for_entity('CN_ID_CARD', '53010219200508011X'),
+                normalized='53010219200508011X',
+            ))
+        word_data['paragraph_5']['pii'] = pii_hits
+
+        dlg = WordCandidateDialog(word_data)
+        dlg._refresh()
+        self.assertEqual(dlg.list_widget.count(), 50)
+
+        # 翻到第 2 页 + 取消前 5 个 checkbox
+        dlg._next_page()
+        dlg._refresh()
+        for i in range(5):
+            dlg.list_widget.item(i).setCheckState(Qt.CheckState.Unchecked)
+        # 同步进 self._selection（per BLOCKER 4）
+        dlg._sync_selection_from_list()
+
+        # 翻回第 1 页 + 断言那 5 个 checkbox 仍 Unchecked
+        dlg._prev_page()
+        dlg._refresh()
+        self.assertEqual(dlg.list_widget.count(), 50)
+        for i in range(5):
+            self.assertEqual(
+                dlg.list_widget.item(i).checkState(), Qt.CheckState.Unchecked,
+                f"第 1 页第 {i} 项应保持 Unchecked（per BLOCKER 4 跨翻页持久化）"
+            )
+
+        # 翻到第 3 页（不存在，应停在末页即第 2 页）+ confirm
+        dlg._next_page()
+        dlg._next_page()
+        dlg._refresh()
+        captured = []
+        dlg.confirmed.connect(lambda payload: captured.append(payload))
+        dlg._on_confirm_clicked()
+
+        self.assertEqual(len(captured), 1)
+        payload = captured[0]
+        # 60 - 5 = 55 项确认
+        self.assertEqual(len(payload), 55)
+        # 所有 payload 项含 entity_type + key + page_offset + page_length 四元组
+        for entry in payload:
+            self.assertIn('key', entry)
+            self.assertIn('hit', entry)
+            self.assertIn('source', entry)
+            hit_dict = entry['hit']
+            self.assertEqual(hit_dict['entity_type'], 'CN_ID_CARD')
+            self.assertIn('page_offset', hit_dict)
+            self.assertIn('page_length', hit_dict)
 
 
 if __name__ == "__main__":
