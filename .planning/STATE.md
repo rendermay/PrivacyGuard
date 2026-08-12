@@ -4,13 +4,13 @@ milestone: v37.7.6
 milestone_name: milestone
 status: shipped
 stopped_at: Phase 3 UI-SPEC approved
-last_updated: "2026-08-12T04:08:45.842Z"
+last_updated: "2026-08-12T07:32:11.103Z"
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 11
-  completed_plans: 7
-current_phase_name: PDF 增加银行卡/邮箱/财税实体识别与部分掩码
+  completed_plans: 11
+current_phase_name: Excel 工作簿支持（全表散点扫描 + 11 隐藏通道 + 列名驱动升级）
 ---
 
 # PrivacyGuard v38.x — Project State

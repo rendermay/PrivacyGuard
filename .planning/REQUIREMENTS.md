@@ -56,7 +56,7 @@
 ### 格式支持 (FMT)
 
 - [x] **FMT-01**: PDF 文字层与 OCR 路径接入识别引擎，识别结果并入现有页面命中数据而非另起结构
-- [ ] **FMT-02**: Word 处理路径接入识别引擎，识别候选在双栏对比预览中高亮
+- [x] **FMT-02**: Word 处理路径接入识别引擎，识别候选在双栏对比预览中高亮
 - [ ] **FMT-03**: 用户可打开 `.xlsx` 工作簿并对全表执行敏感信息扫描
 - [ ] **FMT-04**: 系统在识别出整列同类型实体时提示按列批量处置
 - [ ] **FMT-05**: Excel 脱敏写回后保留公式、单元格样式、合并区域与命名区域
@@ -64,8 +64,8 @@
 
 ### 审阅交互与误报控制 (UX)
 
-- [ ] **UX-01**: 用户可在候选审阅列表中查看所有待确认识别项，并逐条决定是否脱敏
-- [ ] **UX-02**: 候选列表支持按实体类型与来源筛选，且在候选数量较多时分页展示
+- [x] **UX-01**: 用户可在候选审阅列表中查看所有待确认识别项，并逐条决定是否脱敏
+- [x] **UX-02**: 候选列表支持按实体类型与来源筛选，且在候选数量较多时分页展示
 - [ ] **UX-03**: 用户可按实体类型开关识别能力
 - [ ] **UX-04**: 用户可忽略单条识别结果而不影响同类型其他结果
 - [ ] **UX-05**: 用户可维护文档级白名单，命中白名单的内容不再产生候选
@@ -154,13 +154,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MASK-01 | Phase 2 | Pending |
 | MASK-02 | Phase 2 | Pending |
 | FMT-01 | Phase 1 | Complete |
-| FMT-02 | Phase 3 | Pending |
+| FMT-02 | Phase 3 | Complete |
 | FMT-03 | Phase 4 | Pending |
 | FMT-04 | Phase 4 | Pending |
 | FMT-05 | Phase 4 | Pending |
 | FMT-06 | Phase 5 | Pending |
-| UX-01 | Phase 3 | Pending |
-| UX-02 | Phase 3 | Pending |
+| UX-01 | Phase 3 | Complete |
+| UX-02 | Phase 3 | Complete |
 | UX-03 | Phase 7 | Pending |
 | UX-04 | Phase 7 | Pending |
 | UX-05 | Phase 7 | Pending |

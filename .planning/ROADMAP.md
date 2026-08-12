@@ -15,7 +15,7 @@
 
 - [x] **Phase 1: PDF 自动识别身份证号与手机号并真脱敏** - 首个端到端垂直切片（PDF + 号码类 + true redaction） (completed 2026-08-11)
 - [ ] **Phase 2: PDF 增加银行卡/邮箱/财税实体识别与部分掩码** - 扩展 PDF 检测覆盖 + 按实体定制部分掩码
-- [ ] **Phase 3: Word 文档接入识别引擎（双栏对比预览自动高亮）** - Word 格式垂直切片
+- [x] **Phase 3: Word 文档接入识别引擎（双栏对比预览自动高亮）** - Word 格式垂直切片 (completed 2026-08-12)
 - [ ] **Phase 4: Excel 工作簿支持（全表散点扫描 + 11 隐藏通道 + 列名驱动升级）** - Excel 格式垂直切片
 - [ ] **Phase 5: 独立图片文件支持（OCR + 像素级重绘 + EXIF 清除 + re-OCR 验证）** - 图片文件垂直切片
 - [ ] **Phase 6: 上下文型实体识别（姓名/机构/地址/业务敏感字段）** - LOW 档候选识别跨四格式落地
@@ -95,25 +95,25 @@ Plans:
   3. User can browse a per-block candidate list and confirm each entry before save; list filters by entity type and paginates when over 50 entries
   4. Exported Word doc retains paragraph/table formatting and no longer contains the original sensitive text in its body or document properties
 
-**Plans**: 4 plans drafted
+**Plans**: 1/4 plans executed drafted
 **UI hint**: yes
 
 Plans:
 **Wave 1**
 
-- [ ] 03-01-tracer-PLAN.md — Tracer: privacyguard/word/{adapter,worker,redact,clear_doc_props} 5 模块 + main.py 4 处接线 + 79/79 baseline 保持（Wave 1）
+- [x] 03-01-tracer-PLAN.md — Tracer: privacyguard/word/{adapter,worker,redact,clear_doc_props} 5 模块 + main.py 4 处接线 + 79/79 baseline 保持（Wave 1）
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-02-engine-expansion-and-ui-PLAN.md — cp27 增量 DOM patch: 左栏红色 <mark class="pii-highlight"> + 短码徽章 + 右栏绿色 <mark class="pii-mask"> partial mask（Wave 2）
+- [x] 03-02-engine-expansion-and-ui-PLAN.md — cp27 增量 DOM patch: 左栏红色 <mark class="pii-highlight"> + 短码徽章 + 右栏绿色 <mark class="pii-mask"> partial mask（Wave 2）
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03-03-candidate-dialog-and-packaging-PLAN.md — WordCandidateDialog 完整 UI（50 条分页 + 实体类型 / 来源筛选 + 4 CTAs）+ packaging/{windows,macos} 双 spec hiddenimports parity（Wave 3）
+- [x] 03-03-candidate-dialog-and-packaging-PLAN.md — WordCandidateDialog 完整 UI（50 条分页 + 实体类型 / 来源筛选 + 4 CTAs）+ packaging/{windows,macos} 双 spec hiddenimports parity（Wave 3）
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 03-04-tests-and-baseline-PLAN.md — TestWordDataKeySync + TestWordPartialMaskInComparePane + test_package_imports + test_convergence 扩展，基线 79/79 → 98+/98+（Wave 4）
+- [x] 03-04-tests-and-baseline-PLAN.md — TestWordDataKeySync + TestWordPartialMaskInComparePane + test_package_imports + test_convergence 扩展，基线 79/79 → 98+/98+（Wave 4）
 
 ---
 
@@ -217,7 +217,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. PDF 自动识别身份证号与手机号并真脱敏 | 3/3 | Complete    | 2026-08-11 |
 | 2. PDF 增加银行卡/邮箱/财税实体识别与部分掩码 | 0/3 | Plans drafted | - |
-| 3. Word 文档接入识别引擎 | 0/4 | Plans drafted | - |
+| 3. Word 文档接入识别引擎 | 4/4 | Complete    | 2026-08-12 |
 | 4. Excel 工作簿支持 | 0/TBD | Not started | - |
 | 5. 独立图片文件支持 | 0/TBD | Not started | - |
 | 6. 上下文型实体识别 | 0/TBD | Not started | - |
