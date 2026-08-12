@@ -150,6 +150,15 @@ page.insert_text in main.py: 1                  (only a docstring comment)
 - **Files modified:** `tests/unit/test_pii_validators.py`
 - **Commit:** `5da17f2`
 
+### Pre-existing Issues (Out of Scope)
+
+**1. Flaky test: `test_pii_engine.TestEngineTaxpayerId15.test_detects_15_digit_with_admin_prefix`**
+- **Frequency:** ~1 in 10 runs (10/10 last check showed 1 failure)
+- **Root cause:** `fake_taxpayer_id_15()` in `tests/fixtures/fake_pii.py` uses unconstrained `random.choice('0123456789')` for the 13 body digits. The engine's 15-digit taxpayer ID detection has specific validation rules that can occasionally reject random bodies.
+- **Pre-existing in:** commit `a8ab75d` (Phase 2 docs commit before gap-closure work). Verified by checking out the original state — flake rate identical.
+- **Not caused by gap-closure:** This plan did not touch `fake_taxpayer_id_15()` or the engine's taxpayer ID detection logic.
+- **Recommendation for future plan:** Add validation loop to `fake_taxpayer_id_15()` (similar to `fake_id_card` / `fake_uscc` / `fake_bank_card` patterns) — generate + validate until accepted.
+
 ### Architectural Decisions
 
 None — plan executed as designed. WR-01 chose option (a) as documented in plan frontmatter.
