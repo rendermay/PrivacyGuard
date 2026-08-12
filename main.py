@@ -34,6 +34,8 @@ from privacyguard.workers.word_worker import WordWorker as _ModularWordWorker
 from privacyguard.workers.ocr_worker import OCRWorker as _ModularOCRWorker
 from privacyguard.utils.doc_converter import convert_doc_to_docx as _shared_convert_doc_to_docx
 from privacyguard.pii.hits import PIIHit  # Phase 3 (03-word) — merge_word_matches_with_priority PIIHit 分派
+from privacyguard.pii.hits import ENTITY_TYPE_SHORT_CODE  # Phase 3 (03-word) — D-21 / BLOCKER 5 单一来源（per 03-02 plan）
+from html import escape as html_escape  # Phase 3 (03-word) — _build_pii_block_fragment / _build_pii_mask_block_fragment 需要
 
 # v37.0.5: 延迟导入 OCR 模块，便于错误处理
 RapidOCR = None
@@ -11562,20 +11564,32 @@ sudo dnf install antiword
             self.render_view()
 
     def _on_word_pii_page_result(self, key: str, hits_data: list):
-        """Phase 3: pii_signal 接收槽（D-09 / D-18 + cp30 教训扩展）。
+        """Phase 3: pii_signal 接收槽（D-09 / D-18 + cp30 教训扩展 — Wave 2 真实 body）。
 
         反序列化 worker 发出的 dict 列表为 PIIHit 对象；
         写入受 _word_data_lock 保护；后续触发 _apply_word_pii_panel_updates 增量 DOM patch。
         """
         # lazy import inside slot — 避免 import-time 拉起 PII 引擎
         from privacyguard.pii.hits import PIIHit
+        # 防御性反序列化单个 hit dict
+        normalized_hits = []
+        for h in (hits_data or []):
+            if isinstance(h, PIIHit):
+                normalized_hits.append(h)
+                continue
+            if isinstance(h, dict):
+                try:
+                    normalized_hits.append(PIIHit(**h))
+                except (TypeError, ValueError):
+                    print(f'[Word PII WARN] invalid hit dict: {h}')
+                    continue
         with QMutexLocker(self._word_data_lock):
             if key in self.word_data:
-                self.word_data[key]['pii'] = [PIIHit(**h) for h in hits_data]
+                self.word_data[key]['pii'] = normalized_hits
             else:
                 print(f'[Word PII WARN] key {key} not in word_data')
-        # 触发 Word 双栏预览增量 DOM patch（Wave 2 占位方法 stub — Wave 3 完整实施）
-        self._apply_word_pii_panel_updates(key, hits_data)
+        # 锁释放后再触发 cp27 局部 patch（避免在锁内阻塞 UI 线程）
+        self._apply_word_pii_panel_updates(key, normalized_hits)
 
     def _on_word_pii_scan_error(self, exception_class: str) -> None:
         """Phase 3: WordPIIWorker 异常槽（D-09 / D-18）。"""
@@ -11593,14 +11607,126 @@ sudo dnf install antiword
         except Exception:
             pass
 
-    def _apply_word_pii_panel_updates(self, key: str, hits_data: list) -> None:
-        """Phase 3: 触发 Word 双栏预览增量 DOM patch（D-07 / D-10 — Wave 2 占位 stub）。
+    def _apply_word_pii_panel_updates(self, key: str, hits) -> None:
+        """Phase 3: 触发 Word 双栏预览增量 DOM patch（D-07 / D-10 — Wave 2 真实 body）。
 
-        Wave 2 占位：仅 no-op。Wave 3 实施 cp27 局部 patch（web_view.page().runJavaScript
-        ("updateBlock(...)")；不触发整页 setHtml，避免高亮节点被破坏）。
+        严格走 cp27 局部 patch 契约：web_view.page().runJavaScript("updateBlock(...)")；
+        **禁止**触发整页 web_view.setHtml()（避免高亮节点被破坏）。
+        hits 为空 → 早返（per 03-RESEARCH.md:1269 early return）。
         """
-        # Wave 2 stub：no-op；Wave 3 完整实施 cp27 局部 patch
-        return None
+        if not hits:
+            return
+        block_updates = {key: self._build_pii_block_fragment(key, hits)}
+        replaced_updates = {key: self._build_pii_mask_block_fragment(key, hits)}
+        for view_attr, updates in (
+            ('word_preview', block_updates),
+            ('word_preview_replaced', replaced_updates),
+        ):
+            view = getattr(self, view_attr, None)
+            if view is None:
+                continue
+            try:
+                hidden = bool(view.isHidden())
+            except Exception:
+                hidden = False
+            if hidden:
+                continue
+            script = build_word_panel_update_script(updates)
+            try:
+                view.page().runJavaScript(script)
+            except Exception:
+                # cp27 局部 patch 失败不应阻塞其它路径；与现有 _apply_word_panel_updates 一致容错
+                continue
+
+    def _build_pii_block_fragment(self, key: str, hits) -> str:
+        """构造左栏原文 PII 高亮 HTML 片段（D-21 + Visuals §PII Highlight 锁）。
+
+        形态：<mark class="pii-highlight" data-entity-type="..." title="...">
+        <span class="pii-tag">CODE</span>{原文}</mark>
+        关键：左栏**只**写原文（text[page_offset:page_offset+page_length]），
+        **不**写 hit.mask_strategy（per Visuals §PII Highlight 锁定）。
+        """
+        if key not in self.word_data:
+            return ''
+        text = self.word_data[key].get('text', '') or ''
+        if not isinstance(text, str):
+            text = str(text)
+        sorted_hits = sorted(hits, key=lambda h: getattr(h, 'page_offset', 0))
+        parts = []
+        cursor = 0
+        text_len = len(text)
+        for hit in sorted_hits:
+            offset = getattr(hit, 'page_offset', None)
+            length = getattr(hit, 'page_length', None)
+            if not isinstance(offset, int) or not isinstance(length, int):
+                continue
+            if offset < 0 or offset + length > text_len or length <= 0:
+                continue
+            if offset > cursor:
+                parts.append(html_escape(text[cursor:offset]))
+            entity_type = getattr(hit, 'entity_type', '') or ''
+            short_code = ENTITY_TYPE_SHORT_CODE.get(entity_type, entity_type)
+            # 左栏**仅**展示中文标签（per test 严格契约：fragment 不含 mask 字符串）
+            from privacyguard.word.candidate_dialog import ENTITY_TYPE_LABEL
+            label = ENTITY_TYPE_LABEL.get(entity_type, entity_type)
+            title_text = f'{entity_type} · {label}'
+            escaped_title = html_escape(title_text)
+            original_text = text[offset:offset + length]
+            escaped_original = html_escape(original_text)
+            parts.append(
+                f'<mark class="pii-highlight" '
+                f'data-entity-type="{html_escape(entity_type)}" '
+                f'title="{escaped_title}">'
+                f'<span class="pii-tag">{html_escape(short_code)}</span>'
+                f'{escaped_original}</mark>'
+            )
+            cursor = offset + length
+        if cursor < text_len:
+            parts.append(html_escape(text[cursor:]))
+        return ''.join(parts)
+
+    def _build_pii_mask_block_fragment(self, key: str, hits) -> str:
+        """构造右栏 partial mask HTML 片段（Visuals §PII Partial-Mask 锁）。
+
+        形态：<mark class="pii-mask" data-entity-type="..." title="已替换为：...">
+        {mask_strategy}</mark>
+        关键：右栏**只**写 hit.mask_strategy（partial mask 字符串），
+        **不**包裹原文（per Visuals §PII Partial-Mask 锁定）。
+        """
+        if key not in self.word_data:
+            return ''
+        text = self.word_data[key].get('text', '') or ''
+        if not isinstance(text, str):
+            text = str(text)
+        sorted_hits = sorted(hits, key=lambda h: getattr(h, 'page_offset', 0))
+        parts = []
+        cursor = 0
+        text_len = len(text)
+        for hit in sorted_hits:
+            offset = getattr(hit, 'page_offset', None)
+            length = getattr(hit, 'page_length', None)
+            if not isinstance(offset, int) or not isinstance(length, int):
+                continue
+            if offset < 0 or offset + length > text_len or length <= 0:
+                continue
+            if offset > cursor:
+                parts.append(html_escape(text[cursor:offset]))
+            entity_type = getattr(hit, 'entity_type', '') or ''
+            mask_text = getattr(hit, 'mask_strategy', '') or ''
+            if not isinstance(mask_text, str):
+                mask_text = str(mask_text)
+            escaped_mask = html_escape(mask_text)
+            title_text = f'已替换为：{mask_text}'
+            escaped_title = html_escape(title_text)
+            parts.append(
+                f'<mark class="pii-mask" '
+                f'data-entity-type="{html_escape(entity_type)}" '
+                f'title="{escaped_title}">{escaped_mask}</mark>'
+            )
+            cursor = offset + length
+        if cursor < text_len:
+            parts.append(html_escape(text[cursor:]))
+        return ''.join(parts)
 
     def _word_pii_status_chip_set(self, message: str) -> None:
         """Phase 3: 更新 wordPiiStatusChip（占位 — Wave 3 完整实施）。
@@ -12042,7 +12168,8 @@ sudo dnf install antiword
                 [],
                 self.replacement_text,
                 manual_matches=data.get("manual", []),
-                ocr_matches=data.get("ocr", [])
+                ocr_matches=data.get("ocr", []),
+                pii_matches=data.get("pii", []),  # Phase 3 (03-word) — Wave 2 GREEN 把 pii 通道纳入合并路径
             )
             updates[key] = self._build_word_original_preview_fragment(key, source_text, merged_matches)
         return updates
@@ -12088,7 +12215,8 @@ sudo dnf install antiword
                 self.word_replace_rules,
                 self.replacement_text,
                 manual_matches=data.get("manual", []),
-                ocr_matches=data.get("ocr", [])
+                ocr_matches=data.get("ocr", []),
+                pii_matches=data.get("pii", []),  # Phase 3 (03-word) — Wave 2 GREEN 把 pii 通道纳入合并路径
             )
             updates[key] = self._build_replaced_preview_fragment(source_text, merged_matches)
         return updates

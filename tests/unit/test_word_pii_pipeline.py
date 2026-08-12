@@ -305,7 +305,6 @@ class TestWordPIIPanelHighlights(unittest.TestCase):
         # cp27 反向断言: 禁止整页 setHtml
         stub.word_preview.setHtml.assert_not_called()
         stub.word_preview_replaced.setHtml.assert_not_called()
-        self.fail("Wave 2 GREEN 实施后此测试应 pass")
 
     def test_build_pii_block_fragment_contains_short_code_badge(self):
         """_build_pii_block_fragment 构造左栏原文高亮 + 短码徽章 HTML 片段。"""
@@ -324,7 +323,6 @@ class TestWordPIIPanelHighlights(unittest.TestCase):
         self.assertNotIn(
             mask_for_entity('CN_ID_CARD', '53010219200508011X'), fragment,
         )
-        self.fail("Wave 2 GREEN 实施后此测试应 pass")
 
     def test_build_pii_mask_block_fragment_contains_mask_string_not_original(self):
         """_build_pii_mask_block_fragment 构造右栏 partial mask 片段。"""
@@ -342,7 +340,6 @@ class TestWordPIIPanelHighlights(unittest.TestCase):
         self.assertIn("已替换为：", fragment)
         # 右栏**不**含原文（Visuals §PII Partial-Mask 锁定）
         self.assertNotIn("53010219200508011X", fragment)
-        self.fail("Wave 2 GREEN 实施后此测试应 pass")
 
     def test_entity_type_short_code_covers_all_9_locked_types(self):
         """ENTITY_TYPE_SHORT_CODE 9 短码字典覆盖 9 类 entity（D-21 单一来源锁）。
@@ -365,7 +362,6 @@ class TestWordPIIPanelHighlights(unittest.TestCase):
         self.assertEqual(ENTITY_TYPE_SHORT_CODE['CN_TAXPAYER_ID_15'], 'TAX15')
         self.assertEqual(ENTITY_TYPE_SHORT_CODE['CN_VAT_INVOICE'], 'VAT')
         self.assertEqual(ENTITY_TYPE_SHORT_CODE['CN_BANK_ACCOUNT'], 'ACCT')
-        self.fail("Wave 2 GREEN 实施后此测试应 pass")
 
 
 if __name__ == "__main__":
