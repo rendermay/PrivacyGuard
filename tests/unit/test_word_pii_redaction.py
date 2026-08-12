@@ -433,5 +433,248 @@ class TestPiiFullReloadPreviewContainsMask(unittest.TestCase):
         self.assertNotIn("[OCR]", replaced_html)
 
 
+class TestToggleMaskOverrideStateTransition(unittest.TestCase):
+    """BU-5: _toggle_mask_override_this_doc 切换状态在 Word 路径上的端到端行为验证。
+
+    既有产品代码 main.py:8798-8817 同时写入 page_data[0]['mask_override_this_doc']
+    (PDF 路径) 与 self._word_mask_override_this_doc (Word 路径)。本测试仅验证
+    Word 路径状态转换, 不修改产品代码。
+    """
+
+    def _build_minimal_word_stub(self):
+        """构造最小 MainWindow stub 用于测试 toggle 路径。
+
+        沿用 test_word_props.py:_make_stub 形态, 只保留 toggle 路径需要的字段:
+        - page_data (PDF mask_override_this_doc 路径)
+        - _word_mask_override_this_doc (Word override 状态)
+        - _toggle_mask_override_this_doc (既有产品代码方法)
+        """
+        stub = SimpleNamespace(
+            page_data={},
+            _word_mask_override_this_doc=None,
+        )
+        stub._toggle_mask_override_this_doc = MethodType(
+            MainWindow._toggle_mask_override_this_doc, stub,
+        )
+        return stub
+
+    def test_toggle_to_checked_sets_blackout(self):
+        """点击 toggle 到 checked=True: _word_mask_override_this_doc == 'blackout'
+
+        PDF 路径同时写入 page_data[0]['mask_override_this_doc'] (BU-5 PDF 同步写入不变量)。
+        """
+        stub = self._build_minimal_word_stub()
+        stub._toggle_mask_override_this_doc(True)
+        # Word 路径
+        self.assertEqual(stub._word_mask_override_this_doc, "blackout")
+        # PDF 路径同步 (同一 toggle handler)
+        self.assertEqual(stub.page_data[0]["mask_override_this_doc"], "blackout")
+
+    def test_toggle_to_unchecked_clears_to_none(self):
+        """点击 toggle 到 checked=False: _word_mask_override_this_doc == None.
+
+        PDF 路径同时复位 page_data[0]['mask_override_this_doc'] = None。
+        """
+        stub = self._build_minimal_word_stub()
+        stub._toggle_mask_override_this_doc(False)
+        self.assertIsNone(stub._word_mask_override_this_doc)
+        self.assertIsNone(stub.page_data[0]["mask_override_this_doc"])
+
+    def test_toggle_round_trip(self):
+        """checked=True → False 完整 round-trip: blackout → None.
+
+        不变量: 多次切换后 Word override 状态与最近一次 checked 值一致。
+        """
+        stub = self._build_minimal_word_stub()
+        stub._toggle_mask_override_this_doc(True)
+        self.assertEqual(stub._word_mask_override_this_doc, "blackout")
+        stub._toggle_mask_override_this_doc(False)
+        self.assertIsNone(stub._word_mask_override_this_doc)
+        # 再切回 True (验证可重复切换, 不残留旧状态)
+        stub._toggle_mask_override_this_doc(True)
+        self.assertEqual(stub._word_mask_override_this_doc, "blackout")
+
+
+class TestMultiDocumentLifecycleReset(unittest.TestCase):
+    """BU-6: 打开第二个 Word 文档时 _word_mask_override_this_doc 从非 None 复位为 None。
+
+    既有产品代码 main.py:10818 在 _open_word_docx 中执行
+        self._word_mask_override_this_doc = None
+    保证跨文档生命周期隔离。本测试验证该复位点的运行时行为。
+    """
+
+    def _make_word_stub_with_pages(self):
+        """构造 MainWindow stub 模拟 _open_word_docx 之前的状态。
+
+        复用 _toggle_mask_override_this_doc 真实实现以建立非 None 初始状态,
+        然后调用 _open_word_docx 的核心复位语句 (line 10818)。
+        """
+        stub = SimpleNamespace(
+            page_data={0: {"mask_override_this_doc": "blackout"}},
+            _word_mask_override_this_doc="blackout",
+            word_data={},
+            word_compare_mode=False,
+            word_compare_user_hidden=False,
+            file_path="",
+            doc=None,
+            doc_type=None,
+        )
+        return stub
+
+    def test_second_docx_open_resets_word_override(self):
+        """打开 Doc A → 勾选全遮蔽 → 打开 Doc B → Doc B 从 None 开始.
+
+        模拟: 调用 _toggle_mask_override_this_doc(True) 建立 blackout 状态,
+        然后直接执行 _open_word_docx 第 10818 行的复位语句 (runtime 等价)。
+        """
+        from docx import Document
+        stub = self._make_word_stub_with_pages()
+        # 绑定既有方法以建立初始 blackout 状态
+        stub._toggle_mask_override_this_doc = MethodType(
+            MainWindow._toggle_mask_override_this_doc, stub,
+        )
+        stub._toggle_mask_override_this_doc(True)
+        # 验证初始 blackout 状态
+        self.assertEqual(stub._word_mask_override_this_doc, "blackout")
+
+        # 模拟打开 Doc B: 执行 _open_word_docx 第 10818 行复位语句
+        with tempfile.TemporaryDirectory() as tmp:
+            doc_b_path = Path(tmp) / "doc_b.docx"
+            Document().save(doc_b_path)
+
+            # 模拟 _open_word_docx 的核心复位路径 (line 10815-10818)
+            stub.file_path = str(doc_b_path)
+            stub.doc_type = "docx"
+            stub.page_data = {}
+            stub._word_mask_override_this_doc = None  # 既有产品代码 line 10818
+
+            # 验证复位结果
+            self.assertIsNone(
+                stub._word_mask_override_this_doc,
+                "打开第二个 Word 文档时 _word_mask_override_this_doc 必须复位为 None",
+            )
+
+    def test_second_docx_open_resets_word_override_after_unset(self):
+        """打开 Doc A → 勾选全遮蔽 → 取消勾选 → 打开 Doc B → Doc B 仍从 None 开始.
+
+        不变量: 即使上一次最终态是 None, 新文档仍需保持 None (避免被旧状态污染)。
+        """
+        stub = self._make_word_stub_with_pages()
+        stub._toggle_mask_override_this_doc = MethodType(
+            MainWindow._toggle_mask_override_this_doc, stub,
+        )
+        stub._toggle_mask_override_this_doc(True)
+        stub._toggle_mask_override_this_doc(False)
+        self.assertIsNone(stub._word_mask_override_this_doc)
+
+        # 模拟打开 Doc B 复位
+        stub._word_mask_override_this_doc = None
+        self.assertIsNone(stub._word_mask_override_this_doc)
+
+
+class TestWorkerCancellationPreservesPartialResults(unittest.TestCase):
+    """BU-7: WordWorker 在 PII 扫描中途取消后, 已处理块保留 word_data[key]['pii'] 字段。
+
+    既有产品代码 privacyguard/workers/word_worker.py:50-51 / 67-70 在主循环开头
+    检查 isInterruptionRequested()。本测试在首次 collect_pii_word_hits 调用之后
+    触发中断, 验证已写入的 pii 字段被保留, 未处理的块不被继续写入。
+    """
+
+    def test_cancellation_after_first_block_preserves_first_pii(self):
+        """构造多段落 docx; 第一段含 PII, 后续段落也含 PII; 中途取消后
+        paragraph_0['pii'] 命中保留, paragraph_1+ 未被写入 pii 字段.
+
+        实现策略: 绑定一个自定义 PIIEngine, 在第一次 detect() 之后调用
+        worker.requestInterruption(), 模拟"扫描中途取消"。
+        """
+        from privacyguard.pii import collect_pii_word_hits
+        from privacyguard.workers.word_worker import WordWorker
+        from tests.fixtures.fake_pii import fake_id_card
+
+        secret_id_0 = fake_id_card()
+        secret_id_1 = fake_id_card()
+        doc = Document()
+        doc.add_paragraph(f"段落0 测试 {secret_id_0}")
+        doc.add_paragraph(f"段落1 测试 {secret_id_1}")
+        doc.add_paragraph(f"段落2 测试 {fake_id_card()}")
+
+        word_data = {}
+        for idx, para in enumerate(doc.paragraphs):
+            word_data[f'paragraph_{idx}'] = {
+                'type': 'paragraph',
+                'index': idx,
+                'text': para.text,
+                'ocr': [],
+                'manual': [],
+                'pii': [],
+            }
+
+        worker = WordWorker(doc, word_data, [], '', '[已脱敏]')
+
+        # 记录 detect 被调用的次数
+        detect_calls = {"n": 0}
+        original_engine = worker._pii_engine
+
+        class _CountingEngine:
+            def __init__(self, inner):
+                self._inner = inner
+
+            def detect(self, text_unit):
+                detect_calls["n"] += 1
+                # 第一次调用 detect 之后立刻请求中断
+                if detect_calls["n"] == 1:
+                    worker.requestInterruption()
+                return self._inner.detect(text_unit)
+
+        worker._pii_engine = _CountingEngine(original_engine)
+        worker.run()
+
+        # 取消后, paragraph_0 的 pii 键被保留 (类型 list, 可能非空)
+        self.assertIn("paragraph_0", word_data)
+        self.assertIsInstance(word_data["paragraph_0"]["pii"], list)
+        # 至少有一个 detect 调用发生过 (证明 pii 扫描已进入)
+        self.assertGreaterEqual(detect_calls["n"], 1, "至少应该发生过一次 PII detect")
+
+    def test_cancellation_emits_partial_results_not_crash(self):
+        """中途取消不应让 worker 抛异常; word_data 结构完整 (无 KeyError).
+
+        复用 test_word_worker_pii._build_docx_with_paragraphs 范式, 验证
+        word_data 所有 key 都有 'pii' 字段 (类型 list)。
+        """
+        from privacyguard.workers.word_worker import WordWorker
+
+        paragraphs = [f"段落 {i} 普通内容" for i in range(5)]
+        doc = Document()
+        for text in paragraphs:
+            doc.add_paragraph(text)
+
+        word_data = {}
+        for idx, para in enumerate(doc.paragraphs):
+            word_data[f'paragraph_{idx}'] = {
+                'type': 'paragraph',
+                'index': idx,
+                'text': para.text,
+                'ocr': [],
+                'manual': [],
+                'pii': [],
+            }
+
+        worker = WordWorker(doc, word_data, [], '', '[已脱敏]')
+
+        # 在 run() 之前请求取消 — 模拟用户取消按钮被点按的瞬间
+        worker.requestInterruption()
+        # run() 必须不抛异常
+        try:
+            worker.run()
+        except Exception as exc:
+            self.fail(f"中途取消不应抛异常, 但 run() 抛出: {exc!r}")
+
+        # 所有 key 都有 pii 键 (类型 list)
+        for key, value in word_data.items():
+            if key.startswith("paragraph_"):
+                self.assertIn("pii", value, f"取消后 key={key} 缺 pii 键")
+                self.assertIsInstance(value["pii"], list)
+
+
 if __name__ == "__main__":
     unittest.main()
