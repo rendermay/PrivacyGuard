@@ -1336,7 +1336,7 @@ class SettingsDialog(QDialog):
         for index, (name, pattern) in enumerate(rule_items):
             cb = QCheckBox(name)
             if current_rules and pattern in current_rules: cb.setChecked(True)
-            elif not current_rules and name in ["身份证号", "手机号码"]: cb.setChecked(True)
+            elif not current_rules: cb.setChecked(True)
             self.checks[name] = cb
             cb.toggled.connect(self._refresh_rule_summary)
             if index < split_index:
