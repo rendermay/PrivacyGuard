@@ -387,5 +387,69 @@ class TestPiiConvergence(unittest.TestCase):
         )
 
 
+class TestActiveRulesDefaultAllEnabled(unittest.TestCase):
+    """Phase 3 follow-up: MainWindow.__init__ 中 active_rules 应默认包含全部 DEFAULT_RULES，
+    保证「高级设置 → 1. 通用规则」首次打开时全部勾选（用户偏好：默认时全部选中）。
+
+    Regression guard: 防止有人把 line 5207 改回硬编码 2 项导致 SettingsDialog 看到残缺 current_rules。
+    """
+
+    def test_main_py_active_rules_initialization_uses_all_default_rules(self):
+        """main.py 应通过 list(DEFAULT_RULES.values()) 初始化 active_rules，而非硬编码 2 项。"""
+        source = MAIN_PY.read_text(encoding="utf-8")
+        # 不接受硬编码的旧形式
+        forbidden_pattern = re.compile(
+            r"self\.active_rules\s*=\s*\[DEFAULT_RULES\.get\(\s*[\"']身份证号[\"']"
+        )
+        self.assertIsNone(
+            forbidden_pattern.search(source),
+            "main.py 中 self.active_rules 不应硬编码 [身份证号, 手机号码] 两项；"
+            "应改为 list(DEFAULT_RULES.values()) 以保证默认全选。",
+        )
+
+    def test_main_py_active_rules_initialization_covers_all_default_rule_keys(self):
+        """通过 AST 找到 active_rules 初始化行，确认其值覆盖 DEFAULT_RULES 全部 key 的 values。"""
+        source = MAIN_PY.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        # 找到 MainWindow.__init__ 中 self.active_rules = ... 这一行
+        target_assign = None
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef) or node.name != "MainWindow":
+                continue
+            for child in ast.walk(node):
+                if (
+                    isinstance(child, ast.Assign)
+                    and len(child.targets) == 1
+                    and isinstance(child.targets[0], ast.Attribute)
+                    and child.targets[0].attr == "active_rules"
+                ):
+                    target_assign = child
+                    break
+            if target_assign is not None:
+                break
+        self.assertIsNotNone(
+            target_assign,
+            "main.py MainWindow 中未找到 self.active_rules 赋值语句",
+        )
+        # 取出赋值的源码并验证是 DEFAULT_RULES 全集形态
+        import_line = ast.unparse(target_assign.value)
+        self.assertIn(
+            "DEFAULT_RULES",
+            import_line,
+            f"self.active_rules 赋值应引用 DEFAULT_RULES（实际：{import_line}）",
+        )
+        self.assertIn(
+            "values",
+            import_line,
+            f"self.active_rules 赋值应取 DEFAULT_RULES.values()（实际：{import_line}）",
+        )
+        # 关键反例：不能是 2 项硬编码切片
+        self.assertNotIn(
+            '身份证号',
+            import_line,
+            f"self.active_rules 赋值不应再硬编码 '身份证号' 字面量（实际：{import_line}）",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
