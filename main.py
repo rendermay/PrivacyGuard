@@ -5204,7 +5204,7 @@ class MainWindow(QMainWindow):
         self.toolbar_density_mode = "wide"
         self._bound_window_handle = None
         self._button_density_metrics = {}
-        self.active_rules = [DEFAULT_RULES.get("身份证号", ""), DEFAULT_RULES.get("手机号码", "")]
+        self.active_rules = list(DEFAULT_RULES.values())
         self.use_enhance = False
         self.current_color = QColor(0, 0, 0)
         self.dual_view = False
