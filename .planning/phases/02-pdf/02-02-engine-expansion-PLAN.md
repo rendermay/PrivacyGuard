@@ -38,7 +38,7 @@ must_haves:
     - A synthetic PDF containing one 20-character VAT invoice number (digital invoice 全电发票) with a context anchor (e.g. "全电发票号码 23110000000012345678") → `PIIEngine.detect` returns 1 PIIHit with entity_type="CN_VAT_INVOICE" and confidence_tier="HIGH"; mask_strategy shows first 2 + last 2 of the 20 digits.
     - A synthetic PDF containing one 15-character taxpayer ID number with a valid admin prefix → `PIIEngine.detect` returns 1 PIIHit with entity_type="CN_TAXPAYER_ID_15" and confidence_tier="MEDIUM" (D-09: no strong checksum for 15-digit).
     - A synthetic PDF containing one 9-21 digit bank account number with a context anchor (e.g. "账号 6222021234567890") → `PIIEngine.detect` returns 1 PIIHit with entity_type="CN_BANK_ACCOUNT" and confidence_tier="HIGH".
-    - A bank account number WITHOUT any context anchor (e.g. plain "6222021234567890" with no surrounding "账号/账户/银行" keyword) → `PIIEngine.detect` returns ZERO hits (D-08 strict context-required).
+    - A bank account number WITHOUT any context anchor (e.g. plain "6222021234567890" with no surrounding "账号/账户/银行" keyword) → `PIIEngine.detect` returns ZERO hits (D-08 strict context-required). `BANK_ACCOUNT_CONTEXTS` lives locally in `privacyguard/pii/validators/bank_account.py` and `VAT_INVOICE_CONTEXTS` lives locally in `privacyguard/pii/validators/vat_invoice.py` (D-20 context anchors local to each validator, not centralized in rules.json).
     - `partial_mask_vat_invoice("12345678")` returns `"12****78"` (first 2 + last 2).
     - `partial_mask_bank_account("622202123456789012")` returns `"6222**********9012"` (first 4 + last 4).
     - `partial_mask_taxpayer_id_15("110101800101001")` returns `"110101*****1001"` (first 6 + last 4).
