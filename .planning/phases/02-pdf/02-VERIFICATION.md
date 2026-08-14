@@ -1,16 +1,57 @@
 ---
 phase: 02-pdf
-verified: 2026-08-11T14:55:00Z
-status: gaps_found
-score: 8/9 must-haves verified
+verified: 2026-08-14T00:00:00Z
+status: passed
+score: 11/11 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
-  previous_status: null
-  previous_score: null
-  gaps_closed: []
+  previous_status: gaps_found
+  previous_score: 8/9
+  verified_at: 2026-08-11T14:55:00Z
+  re_verified_at: 2026-08-14T00:00:00Z
+  re_verified_by: gsd-plan-checker (via /gsd-plan-phase 02 --gaps) + gsd-verify-work 02
+  gaps_closed:
+    - id: CR-01
+      closed_by: 02-04-gap-closure-PLAN.md
+      closed_at: 2026-08-12
+      evidence: "AST walk: main.py::save_pdf contains ast.Call(func.id='write_partial_masks') at line 13071 + clear_pdf_metadata at line 13075. Inline page.insert_text references = 0 (only docstring comment)."
+    - id: WR-01
+      closed_by: 02-04-gap-closure-PLAN.md (option a)
+      closed_at: 2026-08-12
+      evidence: "engine.py module docstring documents eager validator imports + OPS-03 strict contract preservation. import privacyguard still loads 0 PII modules."
+    - id: WR-02
+      closed_by: 02-04-gap-closure-PLAN.md (side-effect of CR-01)
+      closed_at: 2026-08-12
+      evidence: "pdf_adapter.py contains _FONT_NAME_MAP (line 39), _resize_rect_for_mask (line 281), max(rect.height-4, 6) OCR font-size fallback. Inline main.py font='helv' + flat 11.0 + no resize all removed."
+    - id: WR-03
+      closed_by: 02-04-gap-closure-PLAN.md
+      closed_at: 2026-08-12
+      evidence: "tests/unit/test_convergence.py::test_main_py_uses_write_partial_masks_in_save_loop now uses ast.walk(save_pdf_func) + ast.Call(func.id=='write_partial_masks') check. Integration test test_main_window_save_pdf_routes_pii_through_write_partial_masks_and_clears_metadata actually calls write_partial_masks(doc_save, 0, [pii_hit], mode='partial')."
+    - id: WR-04
+      closed_by: 02-04-gap-closure-PLAN.md
+      closed_at: 2026-08-12
+      evidence: "privacyguard/pii/validators/bank_account.py implements while True: idx = text.find(target, start); ...; start = idx + 1 multi-occurrence loop. TestBankAccountContextMultipleOccurrences (4 methods) PASS."
   gaps_remaining: []
   regressions: []
+  requirements:
+    NUM-04: satisfied
+    NUM-05: satisfied
+    FIN-01: satisfied
+    FIN-02: satisfied
+    FIN-03: satisfied
+    FIN-04: satisfied
+    MASK-01: satisfied
+    MASK-02: satisfied
+    SAFE-03: satisfied
+  ops_constraints:
+    OPS-03: "import privacyguard loads [] PII modules — strict contract preserved"
+    OPS-04: "Windows + macOS specs both list 6 new validators; bin_prefixes.json shipped in both bundles"
+    OPS-07: "286/286 tests OK (skipped=2); Phase 1 baseline 80/80 preserved"
+  v3776_convergence: "main.py delegates to privacyguard.pii.pdf_adapter (write_partial_masks + clear_pdf_metadata). No inline re-implementations."
+  test_count: 286
+  test_status: OK
+  test_skipped: 2
 gaps:
   - truth: "MainWindow.save_pdf routes pii_list through write_partial_masks(doc_save, i, partial_hits, mode=\"partial\") + write_partial_masks(doc_save, i, blackout_hits, mode=\"blackout\")"
     status: failed
