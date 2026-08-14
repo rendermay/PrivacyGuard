@@ -126,5 +126,330 @@ class TestVersionFallbackAlignment(unittest.TestCase):
                          "两处版本回退值应一致")
 
 
+class TestPiiConvergence(unittest.TestCase):
+    """验证 PII 逻辑在 privacyguard.pii.* 内，main.py 不应重复实现。"""
+
+    def test_main_py_does_not_inline_pii_detection(self):
+        """main.py 不应包含内联 PII 检测函数（v37.7.6 收敛原则）。"""
+        source = MAIN_PY.read_text(encoding="utf-8")
+        self.assertNotIn("def detect_pii(self)", source,
+                         "main.py 不应保留内联 PII 检测函数")
+        self.assertNotIn("def validate_id_card(", source,
+                         "main.py 不应保留内联身份证校验函数")
+
+    def test_main_py_does_not_inline_pii_hit_class(self):
+        """main.py 不应包含内联 PIIHit 类定义。"""
+        source = MAIN_PY.read_text(encoding="utf-8")
+        for i, line in enumerate(source.splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith("class PIIHit"):
+                self.fail(f"main.py 第 {i} 行仍包含内联 PIIHit 类定义: {stripped}")
+
+    def test_pii_package_has_no_qt_dependency(self):
+        """privacyguard/pii/*.py 不应 import PyQt6（保持纯 Python / 不引入 GUI 依赖）。"""
+        pii_dir = Path(__file__).resolve().parents[2] / "privacyguard" / "pii"
+        self.assertTrue(pii_dir.exists(), "privacyguard/pii 应存在")
+        forbidden = ("PyQt6", "PyQt5", "QThread", "QObject", "pyqtSignal", "QWidget")
+        for py_file in pii_dir.rglob("*.py"):
+            # 跳过 __init__.py 的注释/文档字符串可能提及 Qt；只扫描 import / from 行
+            source = py_file.read_text(encoding="utf-8")
+            for i, line in enumerate(source.splitlines(), 1):
+                stripped = line.strip()
+                if stripped.startswith("import ") or stripped.startswith("from "):
+                    for kw in forbidden:
+                        if kw in stripped:
+                            self.fail(
+                                f"{py_file.relative_to(pii_dir.parent.parent)} 第 {i} 行含禁用的 Qt 依赖 '{kw}': {stripped}"
+                            )
+
+    def test_pii_package_has_no_network_dependency(self):
+        """ENGINE-08: privacyguard/pii/*.py 不应 import 网络库（零网络）。"""
+        pii_dir = Path(__file__).resolve().parents[2] / "privacyguard" / "pii"
+        forbidden = ("urllib", "requests", "httpx", "socket", "aiohttp")
+        for py_file in pii_dir.rglob("*.py"):
+            source = py_file.read_text(encoding="utf-8")
+            for i, line in enumerate(source.splitlines(), 1):
+                stripped = line.strip()
+                if stripped.startswith("import ") or stripped.startswith("from "):
+                    for kw in forbidden:
+                        if kw in stripped:
+                            self.fail(
+                                f"{py_file.relative_to(pii_dir.parent.parent)} 第 {i} 行含禁用的网络依赖 '{kw}': {stripped}"
+                            )
+
+    def test_pii_engine_uses_pdf_redact_image_pixels(self):
+        """SAFE-01: pdf_adapter.apply_pii_redactions 必须显式传 images=fitz.PDF_REDACT_IMAGE_PIXELS（=2）。"""
+        adapter_path = Path(__file__).resolve().parents[2] / "privacyguard" / "pii" / "pdf_adapter.py"
+        source = adapter_path.read_text(encoding="utf-8")
+        self.assertIn(
+            "PDF_REDACT_IMAGE_PIXELS",
+            source,
+            "apply_pii_redactions 必须显式传 images=fitz.PDF_REDACT_IMAGE_PIXELS（=2，非默认 0）",
+        )
+        # 仅扫描模块 docstring 之外的行；docstring 中允许提及 page.draw_rect 作为禁止说明
+        # 通过 ast 提取 docstring 范围之外的代码行
+        import ast as _ast
+        tree = _ast.parse(source)
+        doc_end = 0
+        if tree.body and isinstance(tree.body[0], _ast.Expr) and isinstance(tree.body[0].value, _ast.Constant):
+            doc_end = tree.body[0].end_lineno  # type: ignore[attr-defined]
+        for i, line in enumerate(source.splitlines(), 1):
+            if i <= doc_end:
+                continue
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            if "page.draw_rect" in line:
+                self.fail(
+                    f"pdf_adapter.py 第 {i} 行调用了 page.draw_rect（假脱敏，违反 SAFE-01）: {stripped}"
+                )
+
+    def test_pii_hit_field_order_is_locked(self):
+        """D-05: PIIHit 字段顺序锁定（entity_type, page_offset, page_length, page_rect, confidence_tier, source, mask_strategy）。"""
+        import inspect
+        from privacyguard.pii.hits import PIIHit
+        sig = inspect.signature(PIIHit)
+        names = list(sig.parameters.keys())
+        expected = [
+            'entity_type', 'page_offset', 'page_length', 'page_rect',
+            'confidence_tier', 'source', 'mask_strategy',
+        ]
+        self.assertEqual(names[:7], expected,
+                         f"PIIHit 前 7 字段顺序应为 {expected}，实际为 {names[:7]}")
+
+    # ------------------------------------------------------------------
+    # Phase 2 (02-01-tracer) — convergence 扩展
+    # ------------------------------------------------------------------
+
+    def test_main_py_does_not_inline_new_validators(self):
+        """Phase 2: main.py 不应包含内联 USCC / 银行卡 / 邮箱 / partial mask / metadata clear 函数。"""
+        source = MAIN_PY.read_text(encoding="utf-8")
+        forbidden_patterns = [
+            "def validate_uscc(",
+            "def validate_bank_card(",
+            "def validate_email(",
+            "def write_partial_masks(",
+            "def clear_pdf_metadata(",
+        ]
+        for pat in forbidden_patterns:
+            self.assertNotIn(
+                pat, source,
+                f"main.py 不应保留内联 {pat} 实现（v37.7.6 收敛原则）",
+            )
+
+    def test_pii_package_no_inline_partial_mask_writer(self):
+        """Phase 2: write_partial_masks + clear_pdf_metadata 必须在 pdf_adapter.py。"""
+        from pathlib import Path as _Path
+        pdf_adapter_path = _Path(__file__).resolve().parents[2] / "privacyguard" / "pii" / "pdf_adapter.py"
+        source = pdf_adapter_path.read_text(encoding="utf-8")
+        self.assertIn(
+            "def write_partial_masks(", source,
+            "write_partial_masks 必须在 pdf_adapter.py",
+        )
+        self.assertIn(
+            "def clear_pdf_metadata(", source,
+            "clear_pdf_metadata 必须在 pdf_adapter.py",
+        )
+        # 扫描 pii 子包其他 .py 文件 — write_partial_masks / clear_pdf_metadata 不应被定义在其他文件
+        pii_dir = _Path(__file__).resolve().parents[2] / "privacyguard" / "pii"
+        for py_file in pii_dir.rglob("*.py"):
+            if py_file.name == "pdf_adapter.py":
+                continue
+            # 跳过 __init__.py 的 lazy import 注册条目
+            other_source = py_file.read_text(encoding="utf-8")
+            self.assertNotIn(
+                "def write_partial_masks(", other_source,
+                f"{py_file.relative_to(pii_dir.parent.parent)} 不应定义 write_partial_masks",
+            )
+            self.assertNotIn(
+                "def clear_pdf_metadata(", other_source,
+                f"{py_file.relative_to(pii_dir.parent.parent)} 不应定义 clear_pdf_metadata",
+            )
+
+    # ------------------------------------------------------------------
+    # Phase 2 (02-03-main-py-settings-packaging) — main.py 必须调用 helpers
+    # ------------------------------------------------------------------
+
+    def test_main_py_uses_write_partial_masks_in_save_loop(self):
+        """Phase 2 (02-04): main.py save_pdf must have write_partial_masks as ast.Call inside def save_pdf.
+
+        WR-03 fix: previous string-presence check ('write_partial_masks' in source) let CR-01 slip through
+        because main.py imported write_partial_masks but never called it. AST-rewrite ensures that the
+        function is actually called (ast.Call with func.id=='write_partial_masks') inside def save_pdf.
+        """
+        source = MAIN_PY.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        # Find def save_pdf function
+        save_pdf_func = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "save_pdf":
+                save_pdf_func = node
+                break
+        self.assertIsNotNone(save_pdf_func, "main.py must define def save_pdf(...)")
+        # Walk body of save_pdf; find any ast.Call with func.id == 'write_partial_masks'
+        found = False
+        for node in ast.walk(save_pdf_func):
+            if isinstance(node, ast.Call):
+                # func could be ast.Name (write_partial_masks(...)) or ast.Attribute (mod.write_partial_masks(...))
+                func = node.func
+                if isinstance(func, ast.Name) and func.id == "write_partial_masks":
+                    found = True
+                    break
+                if isinstance(func, ast.Attribute) and func.attr == "write_partial_masks":
+                    found = True
+                    break
+        self.assertTrue(
+            found,
+            "main.py::save_pdf must contain a Call to write_partial_masks (02-04 CR-01 fix; "
+            "string-presence check is insufficient)",
+        )
+        # ALSO check clear_pdf_metadata is called inside save_pdf
+        found_clear = False
+        for node in ast.walk(save_pdf_func):
+            if isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Name) and func.id == "clear_pdf_metadata":
+                    found_clear = True
+                    break
+        self.assertTrue(found_clear, "main.py::save_pdf must call clear_pdf_metadata")
+        # D-12 mask_override_this_doc reference preserved
+        self.assertIn("mask_override_this_doc", source, "D-12 toggle key must still be referenced")
+        # D-13 per_entity_default reference preserved
+        self.assertIn("per_entity_default", source, "D-13 config field must still be referenced")
+        # v37.7.6 convergence: NO inline def write_partial_masks( in main.py
+        self.assertNotIn("def write_partial_masks(", source, "main.py must not inline write_partial_masks")
+        self.assertNotIn("def clear_pdf_metadata(", source, "main.py must not inline clear_pdf_metadata")
+
+    # ------------------------------------------------------------------
+    # Phase 3 (03-word) — D-05 v37.7.6 收敛原则扩展
+    # ------------------------------------------------------------------
+
+    def test_no_word_adapter_in_main_py(self):
+        """Phase 3 (03-word) — D-05 v37.7.6 收敛原则扩展：main.py 不含 inline Word adapter /
+        redact / clear_doc_props 实现。所有这些实现必须位于 privacyguard/word/* 子包。
+
+        AST 解析 main.py；扫描 7 个目标函数体内是否含 forbidden_literals 字符串字面量
+        或内嵌函数定义（'redact_word_docx' / 'clear_word_doc_props_docx' / 'collect_word_units'）。
+        允许 ast.ImportFrom / ast.Import / ast.Call 节点。
+        """
+        source = MAIN_PY.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(MAIN_PY))
+
+        functions = {
+            node.name: node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef)
+        }
+
+        target_functions = [
+            "_open_word_docx",
+            "_save_word",
+            "_on_word_pii_page_result",
+            "_on_word_candidate_dialog_accept",
+            "_apply_word_pii_panel_updates",
+            "_build_pii_block_fragment",
+            "_build_pii_mask_block_fragment",
+        ]
+
+        forbidden_literals = [
+            "redact_word_docx",
+            "clear_word_doc_props_docx",
+            "collect_word_units",
+        ]
+
+        violations = []
+        for func_name in target_functions:
+            func_node = functions.get(func_name)
+            if func_node is None:
+                continue
+            for node in ast.walk(func_node):
+                if (
+                    isinstance(node, ast.Constant)
+                    and isinstance(node.value, str)
+                    and node.value in forbidden_literals
+                ):
+                    violations.append(
+                        f"{func_name} at line {node.lineno}: forbidden literal \"{node.value}\""
+                    )
+                if (
+                    isinstance(node, ast.FunctionDef)
+                    and node.name in forbidden_literals
+                ):
+                    violations.append(
+                        f"{func_name} at line {node.lineno}: forbidden inline def {node.name}"
+                    )
+
+        self.assertEqual(
+            violations,
+            [],
+            f"main.py contains inline Word adapter/redact/clear_doc_props implementations: {violations}. "
+            f"All such implementations MUST live in privacyguard/word/* (D-05 v37.7.6 convergence).",
+        )
+
+
+class TestActiveRulesDefaultAllEnabled(unittest.TestCase):
+    """Phase 3 follow-up: MainWindow.__init__ 中 active_rules 应默认包含全部 DEFAULT_RULES，
+    保证「高级设置 → 1. 通用规则」首次打开时全部勾选（用户偏好：默认时全部选中）。
+
+    Regression guard: 防止有人把 line 5207 改回硬编码 2 项导致 SettingsDialog 看到残缺 current_rules。
+    """
+
+    def test_main_py_active_rules_initialization_uses_all_default_rules(self):
+        """main.py 应通过 list(DEFAULT_RULES.values()) 初始化 active_rules，而非硬编码 2 项。"""
+        source = MAIN_PY.read_text(encoding="utf-8")
+        # 不接受硬编码的旧形式
+        forbidden_pattern = re.compile(
+            r"self\.active_rules\s*=\s*\[DEFAULT_RULES\.get\(\s*[\"']身份证号[\"']"
+        )
+        self.assertIsNone(
+            forbidden_pattern.search(source),
+            "main.py 中 self.active_rules 不应硬编码 [身份证号, 手机号码] 两项；"
+            "应改为 list(DEFAULT_RULES.values()) 以保证默认全选。",
+        )
+
+    def test_main_py_active_rules_initialization_covers_all_default_rule_keys(self):
+        """通过 AST 找到 active_rules 初始化行，确认其值覆盖 DEFAULT_RULES 全部 key 的 values。"""
+        source = MAIN_PY.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        # 找到 MainWindow.__init__ 中 self.active_rules = ... 这一行
+        target_assign = None
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef) or node.name != "MainWindow":
+                continue
+            for child in ast.walk(node):
+                if (
+                    isinstance(child, ast.Assign)
+                    and len(child.targets) == 1
+                    and isinstance(child.targets[0], ast.Attribute)
+                    and child.targets[0].attr == "active_rules"
+                ):
+                    target_assign = child
+                    break
+            if target_assign is not None:
+                break
+        self.assertIsNotNone(
+            target_assign,
+            "main.py MainWindow 中未找到 self.active_rules 赋值语句",
+        )
+        # 取出赋值的源码并验证是 DEFAULT_RULES 全集形态
+        import_line = ast.unparse(target_assign.value)
+        self.assertIn(
+            "DEFAULT_RULES",
+            import_line,
+            f"self.active_rules 赋值应引用 DEFAULT_RULES（实际：{import_line}）",
+        )
+        self.assertIn(
+            "values",
+            import_line,
+            f"self.active_rules 赋值应取 DEFAULT_RULES.values()（实际：{import_line}）",
+        )
+        # 关键反例：不能是 2 项硬编码切片
+        self.assertNotIn(
+            '身份证号',
+            import_line,
+            f"self.active_rules 赋值不应再硬编码 '身份证号' 字面量（实际：{import_line}）",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

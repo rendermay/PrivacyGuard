@@ -33,6 +33,9 @@ from privacyguard.workers.image_merge import ImageMergeWorker
 from privacyguard.workers.word_worker import WordWorker as _ModularWordWorker
 from privacyguard.workers.ocr_worker import OCRWorker as _ModularOCRWorker
 from privacyguard.utils.doc_converter import convert_doc_to_docx as _shared_convert_doc_to_docx
+from privacyguard.pii.hits import PIIHit  # Phase 3 (03-word) — merge_word_matches_with_priority PIIHit 分派
+from privacyguard.pii.hits import ENTITY_TYPE_SHORT_CODE  # Phase 3 (03-word) — D-21 / BLOCKER 5 单一来源（per 03-02 plan）
+from html import escape as html_escape  # Phase 3 (03-word) — _build_pii_block_fragment / _build_pii_mask_block_fragment 需要
 
 # v37.0.5: 延迟导入 OCR 模块，便于错误处理
 RapidOCR = None
@@ -93,7 +96,7 @@ def read_app_version():
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except OSError:
-        return "37.7.6"
+        return "1.0.0"
 
 class SimpleConfig:
     """简化配置管理器 - 直接从 config.json 读取"""
@@ -174,7 +177,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 # v37.0: 从配置读取，失败时使用硬编码后备
 APP_NAME = config.get("app.name", "PrivacyGuard 脱敏卫士") if config else "PrivacyGuard 脱敏卫士"
 APP_VERSION = read_app_version()
-VERSION = f"{APP_VERSION} - Engineering Remediation"
+VERSION = APP_VERSION
 PREVIEW_FONT_STACK = '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif'
 WORD_PREVIEW_IMAGE_EXTENSION_MAP = {
     "image/png": ".png",
@@ -197,6 +200,20 @@ PROGRESS_UPDATE_INTERVAL = config.get("ocr.progress_update_interval", 0.05) if c
 ZOOM_MIN = config.get("ocr.zoom_min", 0.5) if config else 0.5
 ZOOM_MAX = config.get("ocr.zoom_max", 4.0) if config else 4.0
 DEBUG_MODE = os.getenv('PRIVACYGUARD_DEBUG', 'False').lower() == 'true' if not config else config.get("advanced.debug_mode", False)
+
+# Phase 2 (02-03): per-entity partial/blackout 默认矩阵（D-13 字段命名锁）
+# 顺序锁定：CN_TAXPAYER_ID 在 CN_TAXPAYER_ID_15 之前（18 位先于 15 位）
+PHASE2_ENTITY_MODE_ROWS = [
+    ("CN_ID_CARD", "身份证号"),
+    ("CN_PHONE", "手机号"),
+    ("CN_BANK_CARD", "银行卡"),
+    ("CN_EMAIL", "邮箱"),
+    ("CN_USCC", "统一社会信用代码"),
+    ("CN_TAXPAYER_ID", "纳税人识别号 (18位)"),
+    ("CN_TAXPAYER_ID_15", "纳税人识别号 (15位)"),
+    ("CN_VAT_INVOICE", "增值税发票号"),
+    ("CN_BANK_ACCOUNT", "银行账号"),
+]
 
 # === 默认规则库 ===
 # v37.0: 从配置读取，支持新旧两种格式
@@ -847,10 +864,20 @@ def resolve_settings_density_mode(width, height=0, scale=1.0):
 
 
 def merge_word_matches_with_priority(text, rules, default_replacement_text,
-                                     manual_matches=None, ocr_matches=None):
-    """合并规则替换、手动脱敏、OCR 脱敏区间，优先级：规则 > 手动 > OCR。"""
+                                     manual_matches=None, ocr_matches=None,
+                                     pii_matches=None):
+    """合并规则替换、手动脱敏、OCR 脱敏区间，优先级：规则 > 手动 > OCR。
+
+    Phase 3 (03-word): 第六参数 pii_matches=None（默认 back-compat）；
+    Wave 2 GREEN 启用 priority 顺序 rule > pii > manual > ocr（D-19 锁）。
+
+    PIIHit dataclass 实例分派：通过 page_offset / page_length / normalized / mask_strategy
+    映射为内部 dict 形态，再走通用 _append_candidates 路径。
+    """
     manual_matches = manual_matches or []
     ocr_matches = ocr_matches or []
+    # Phase 3 (03-word) — Wave 2 启用 pii_matches 处理（D-19 priority 锁）
+    pii_matches = pii_matches or []
     text_len = len(text) if isinstance(text, str) else 0
     fallback_text = default_replacement_text if isinstance(default_replacement_text, str) and default_replacement_text else "[已脱敏]"
 
@@ -859,8 +886,26 @@ def merge_word_matches_with_priority(text, rules, default_replacement_text,
 
     def _append_candidates(candidates, source_name):
         for item in candidates:
-            start = item.get("start")
-            end = item.get("end")
+            # Phase 3 (03-word) — PIIHit dataclass 实例分派（D-19 priority 锁）
+            if isinstance(item, PIIHit):
+                start = item.page_offset
+                end = item.page_offset + item.page_length
+                replacement = item.mask_strategy or fallback_text
+                if not isinstance(replacement, str):
+                    replacement = str(replacement)
+                text_for_range = item.normalized or (text[start:end] if isinstance(text, str) else "")
+                item_dict = {
+                    "start": start,
+                    "end": end,
+                    "text": text_for_range,
+                    "replacement": replacement,
+                    "mode": "global",
+                    "rule_name": "",
+                }
+            else:
+                item_dict = item
+            start = item_dict.get("start")
+            end = item_dict.get("end")
             if not isinstance(start, int) or not isinstance(end, int):
                 continue
             if start < 0 or end > text_len or start >= end:
@@ -868,7 +913,7 @@ def merge_word_matches_with_priority(text, rules, default_replacement_text,
             if _range_overlaps(start, end, occupied_ranges):
                 continue
 
-            replacement = item.get("replacement", fallback_text)
+            replacement = item_dict.get("replacement", fallback_text)
             if replacement is None:
                 replacement = fallback_text
             if not isinstance(replacement, str):
@@ -877,15 +922,17 @@ def merge_word_matches_with_priority(text, rules, default_replacement_text,
             merged.append({
                 "start": start,
                 "end": end,
-                "text": item.get("text", text[start:end] if isinstance(text, str) else ""),
+                "text": item_dict.get("text", text[start:end] if isinstance(text, str) else ""),
                 "replacement": replacement,
                 "source": source_name,
-                "mode": item.get("mode", "global"),
-                "rule_name": item.get("rule_name", "")
+                "mode": item_dict.get("mode", "global"),
+                "rule_name": item_dict.get("rule_name", "")
             })
             occupied_ranges.append((start, end))
 
     _append_candidates(build_word_rule_matches(text, rules, fallback_text), "rule")
+    # Phase 3 (03-word) — D-19 priority 顺序 rule > pii > manual > ocr
+    _append_candidates(pii_matches, "pii")
     _append_candidates(manual_matches, "manual")
     _append_candidates(ocr_matches, "ocr")
     merged.sort(key=lambda item: item["start"])
@@ -1289,7 +1336,7 @@ class SettingsDialog(QDialog):
         for index, (name, pattern) in enumerate(rule_items):
             cb = QCheckBox(name)
             if current_rules and pattern in current_rules: cb.setChecked(True)
-            elif not current_rules and name in ["身份证号", "手机号码"]: cb.setChecked(True)
+            elif not current_rules: cb.setChecked(True)
             self.checks[name] = cb
             cb.toggled.connect(self._refresh_rule_summary)
             if index < split_index:
@@ -1598,6 +1645,109 @@ class SettingsDialog(QDialog):
         v_ocr.addWidget(adjust_card)
         layout.addWidget(box_ocr)
 
+        # v38.x: Phase 1 — 5. 隐私识别（PIID-08 锁定，新增第五 tab）
+        box_pii = QFrame()
+        box_pii.setObjectName("settingsSectionCard")
+        v_pii = QVBoxLayout(box_pii)
+        v_pii.setContentsMargins(16, 16, 16, 16)
+        v_pii.setSpacing(12)
+        pii_lead = QLabel("打开 PDF 后自动扫描身份证号与手机号，并在保存时真脱敏。所有匹配纯本地完成。")
+        pii_lead.setObjectName("settingsSectionLead")
+        pii_lead.setWordWrap(True)
+        self.lbl_pii_summary = QLabel("")
+        self.lbl_pii_summary.setObjectName("settingsSectionSummary")
+        self.lbl_pii_summary.setWordWrap(True)
+        v_pii.addWidget(self._create_settings_section_header("5. 隐私识别", pii_lead, self.lbl_pii_summary))
+
+        # 读取当前 pii_settings
+        pii_settings_cur = {}
+        if self.config:
+            pii_settings_cur = {
+                "engine_enabled": self.config.get("pii_settings.engine_enabled", True),
+                "auto_redact": self.config.get("pii_settings.auto_redact", True),
+                "require_confirmation": self.config.get("pii_settings.require_confirmation", False),
+            }
+        else:
+            pii_settings_cur = {
+                "engine_enabled": True,
+                "auto_redact": True,
+                "require_confirmation": False,
+            }
+
+        # 三个 QCheckBox（UI-SPEC 锁定标签与 tooltip）
+        self.cb_pii_engine_enabled = QCheckBox("启用隐私识别引擎")
+        self.cb_pii_engine_enabled.setChecked(pii_settings_cur["engine_enabled"])
+        self.cb_pii_engine_enabled.setToolTip("关闭后，PDF 打开时不再扫描敏感项。仅影响 PII 自动识别，不影响现有 OCR 与手动框选。")
+        v_pii.addWidget(self.cb_pii_engine_enabled)
+
+        self.cb_pii_auto_redact = QCheckBox("扫描后自动真脱敏")
+        self.cb_pii_auto_redact.setChecked(pii_settings_cur["auto_redact"])
+        self.cb_pii_auto_redact.setToolTip("HIGH 档命中直接进入脱敏列表，保存 PDF 时一次性真删除。关闭后命中仅高亮，需手动确认。")
+        v_pii.addWidget(self.cb_pii_auto_redact)
+
+        self.cb_pii_require_confirm = QCheckBox("HIGH 档命中需手动确认")
+        self.cb_pii_require_confirm.setChecked(pii_settings_cur["require_confirmation"])
+        self.cb_pii_require_confirm.setToolTip("开启后，HIGH 档命中弹出确认对话框，由您决定每条是否脱敏。仅在该确认路径下生效。")
+        v_pii.addWidget(self.cb_pii_require_confirm)
+
+        v_pii.addSpacing(14)
+
+        # Phase 2 (02-03-main-py-settings-packaging): per-entity partial/blackout 表（D-11 + D-13）
+        lbl_mode = QLabel("脱敏方式（每个实体类型独立设置）：")
+        lbl_mode.setObjectName("settingsFieldLabel")
+        v_pii.addWidget(lbl_mode)
+        # 从 config 读取 per_entity_default；缺失则全部默认 "partial"
+        per_entity_default = {}
+        if self.config:
+            loaded = self.config.get("pii_settings.per_entity_default", {}) or {}
+            if isinstance(loaded, dict):
+                per_entity_default = dict(loaded)
+        self.entity_mode_widgets = {}
+        for entity_type, label in PHASE2_ENTITY_MODE_ROWS:
+            row = QHBoxLayout()
+            cb = QCheckBox(f"启用 {label}")
+            cb.setChecked(per_entity_default.get(f"{entity_type}_enabled", True))
+            combo = QComboBox()
+            combo.addItems(["部分掩码", "全遮蔽"])
+            combo.setCurrentText("部分掩码" if per_entity_default.get(entity_type, "partial") == "partial" else "全遮蔽")
+            combo.setEnabled(cb.isChecked())
+            cb.toggled.connect(lambda checked, c=combo: c.setEnabled(checked))
+            row.addWidget(cb)
+            row.addWidget(combo, stretch=1)
+            v_pii.addLayout(row)
+            self.entity_mode_widgets[entity_type] = (cb, combo)
+        v_pii.addSpacing(10)
+        btn_bulk_layout = QHBoxLayout()
+        btn_all_blackout = QPushButton("全部设为全遮蔽")
+        btn_all_blackout.setObjectName("settingsSecondaryButton")
+        btn_all_blackout.clicked.connect(self._bulk_set_entity_mode_blackout)
+        btn_all_partial = QPushButton("全部设为部分掩码")
+        btn_all_partial.setObjectName("settingsSecondaryButton")
+        btn_all_partial.clicked.connect(self._bulk_set_entity_mode_partial)
+        btn_bulk_layout.addWidget(btn_all_blackout)
+        btn_bulk_layout.addWidget(btn_all_partial)
+        btn_bulk_layout.addStretch(1)
+        v_pii.addLayout(btn_bulk_layout)
+
+        # 只读范围标签（UI-SPEC §E1）— Phase 2 扩展为 9 类实体
+        lbl_scope = QLabel("扫描范围：9 类实体（身份证 / 手机 / 银行卡 / 邮箱 / USCC / 纳税人识别号 / VAT 发票号 / 银行账号）")
+        lbl_scope.setObjectName("settingsFieldNote")
+        v_pii.addWidget(lbl_scope)
+
+        # 同步：engine_enabled OFF → 后两个不可点
+        def _sync_pii_toggle_state():
+            enabled = self.cb_pii_engine_enabled.isChecked()
+            self.cb_pii_auto_redact.setEnabled(enabled)
+            self.cb_pii_require_confirm.setEnabled(enabled)
+
+        self.cb_pii_engine_enabled.toggled.connect(lambda _checked: _sync_pii_toggle_state())
+        _sync_pii_toggle_state()
+
+        # Phase 2 (02-03-main-py-settings-packaging): engine_enabled 关闭 → per-entity 行不可点
+        self.cb_pii_engine_enabled.toggled.connect(self._sync_per_entity_widgets_state)
+
+        layout.addWidget(box_pii)
+
         layout.addStretch(1)
         content_scroll.setWidget(content_widget)
         body_layout.addWidget(content_scroll, stretch=1)
@@ -1634,7 +1784,7 @@ class SettingsDialog(QDialog):
         footer_actions.addWidget(btn_ok)
         footer_layout.addLayout(footer_actions)
         outer_layout.addWidget(footer)
-        self._settings_sections = [box_rules, box_custom, box_enhance, box_ocr]
+        self._settings_sections = [box_rules, box_custom, box_enhance, box_ocr, box_pii]
         self._settings_nav_syncing = False
         self.settings_nav.currentRowChanged.connect(self._scroll_to_settings_section)
         self.content_scroll.verticalScrollBar().valueChanged.connect(self._sync_settings_nav_from_scroll)
@@ -2598,6 +2748,45 @@ class SettingsDialog(QDialog):
         self.input_replacement_text.setText(dlg.default_replacement_text)
         self._refresh_word_rule_summary()
 
+    # ----------------------------------------------------------------------
+    # Phase 2 (02-03-main-py-settings-packaging): per-entity partial/blackout 表（D-11 + D-13）
+    # ----------------------------------------------------------------------
+
+    def _sync_per_entity_widgets_state(self, enabled: bool):
+        """Phase 2: engine_enabled OFF → 所有 per-entity 行不可点。"""
+        if not hasattr(self, "entity_mode_widgets"):
+            return
+        for _entity_type, (cb, combo) in self.entity_mode_widgets.items():
+            cb.setEnabled(enabled)
+            combo.setEnabled(enabled and cb.isChecked())
+
+    def _load_per_entity_default(self) -> dict:
+        """Phase 2: 从 self.config 读 pii_settings.per_entity_default；缺失字段用 'partial' 兜底。"""
+        if not self.config:
+            return {entity: "partial" for entity, _ in PHASE2_ENTITY_MODE_ROWS}
+        loaded = self.config.get("pii_settings.per_entity_default", {}) or {}
+        if not isinstance(loaded, dict):
+            loaded = {}
+        # 9 个 key 全部列出（缺失 → 'partial' 兜底）
+        return {entity: (loaded.get(entity, "partial") if loaded.get(entity, "partial") in ("partial", "blackout") else "partial")
+                for entity, _ in PHASE2_ENTITY_MODE_ROWS}
+
+    def _bulk_set_entity_mode_blackout(self):
+        """Phase 2: 「全部设为全遮蔽」按钮 handler — 9 行同时勾选 + 全遮蔽。"""
+        if not hasattr(self, "entity_mode_widgets"):
+            return
+        for _entity_type, (cb, combo) in self.entity_mode_widgets.items():
+            cb.setChecked(True)
+            combo.setCurrentText("全遮蔽")
+
+    def _bulk_set_entity_mode_partial(self):
+        """Phase 2: 「全部设为部分掩码」按钮 handler — 9 行同时勾选 + 部分掩码。"""
+        if not hasattr(self, "entity_mode_widgets"):
+            return
+        for _entity_type, (cb, combo) in self.entity_mode_widgets.items():
+            cb.setChecked(True)
+            combo.setCurrentText("部分掩码")
+
     def save_settings(self):
         self.selected_rules = [DEFAULT_RULES[name] for name, cb in self.checks.items() if cb.isChecked()]
         # v37.5.0: 添加调试输出
@@ -2625,6 +2814,17 @@ class SettingsDialog(QDialog):
                 self.config.set("redaction.custom_keywords", self.custom_keywords, persist=False)
                 self.config.set("redaction.replacement_text", self.replacement_text, persist=False)
                 self.config.set("ocr.box_adjust_ratio", self.box_adjust_ratio, persist=False)
+                # v38.x: Phase 1 PII 引擎设置持久化
+                self.config.set("pii_settings.engine_enabled", self.cb_pii_engine_enabled.isChecked(), persist=False)
+                self.config.set("pii_settings.auto_redact", self.cb_pii_auto_redact.isChecked(), persist=False)
+                self.config.set("pii_settings.require_confirmation", self.cb_pii_require_confirm.isChecked(), persist=False)
+                # Phase 2 (02-03-main-py-settings-packaging): per-entity partial/blackout 默认矩阵持久化（D-13 字段命名锁）
+                per_entity_default_new = {}
+                if hasattr(self, "entity_mode_widgets"):
+                    for entity_type, (cb, combo) in self.entity_mode_widgets.items():
+                        # 整行未勾选 → "blackout"（关掉 entity 默认行为更安全；与 enabled 默认 True 一致：用户主动关掉表示不要 partial mask）
+                        per_entity_default_new[entity_type] = "blackout" if combo.currentText() == "全遮蔽" or not cb.isChecked() else "partial"
+                self.config.set("pii_settings.per_entity_default", per_entity_default_new, persist=False)
                 self.config.save()
             except Exception as e:
                 print(f"[设置] 保存配置失败: {e}")
@@ -4006,7 +4206,7 @@ class SinglePageCanvas(QLabel):
     zoom_request = pyqtSignal(float)
     page_change_request = pyqtSignal(int)  # 翻页请求信号：正值=下一页，负值=上一页
 
-    def __init__(self, page_index=0, parent=None):
+    def __init__(self, page_index=0, parent=None, main_window=None):
         super().__init__(parent)
         # 完全复制 v7.0 的初始化
         self.setMouseTracking(True)
@@ -4018,6 +4218,9 @@ class SinglePageCanvas(QLabel):
         self.rects_ocr = []
         self.rects_manual = []
         self.mask_color = QColor(0, 0, 0)
+
+        # v38.x: Plan 01-03 — Phase 1 接入 PII 画布渲染（C5）
+        self.main_window = main_window  # 用于访问 page_data['pii']
 
         self.drawing = False
         self.start_point = QPointF()
@@ -4098,7 +4301,7 @@ class SinglePageCanvas(QLabel):
         return base_rect.adjusted(-2, -2, 2, 2)
 
     def paintEvent(self, event):
-        """v7.0 实现"""
+        """v7.0 实现 + Phase 1 PII 第四绘制循环"""
         super().paintEvent(event)
         if not self.pixmap(): return
 
@@ -4124,6 +4327,36 @@ class SinglePageCanvas(QLabel):
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(self.current_rect)
+
+        # 4. Phase 1: 绘制 PII 自动识别命中（深红 danger 颜色 + 标签）
+        # 仅当 main_window 已注入；未注入时跳过（防御性 — C5）
+        main_window = getattr(self, 'main_window', None)
+        if main_window is None:
+            return
+        page_pii = main_window.page_data.get(self.page_index, {}).get('pii', [])
+        if not page_pii:
+            return
+        pii_pen = QPen(QColor("#D64545"), 2)
+        pii_brush = QColor("#D64545")
+        pii_brush.setAlphaF(0.18)
+        painter.setPen(pii_pen)
+        painter.setBrush(pii_brush)
+        for hit in page_pii:
+            try:
+                pr = hit.page_rect
+            except Exception:
+                continue
+            r = QRectF(pr[0], pr[1], pr[2], pr[3])
+            sr = self.pdf_to_screen(r)
+            painter.drawRect(sr)
+            # 标签徽章
+            entity_type = getattr(hit, 'entity_type', '') or ''
+            label = "ID" if entity_type == "CN_ID_CARD" else "PHONE"
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor("#D64545"))
+            painter.drawRect(QRectF(sr.x() - 2, sr.y() - 18, len(label) * 8 + 8, 16))
+            painter.setPen(QColor("#FFFFFF"))
+            painter.drawText(QPointF(sr.x() + 2, sr.y() - 5), label)
 
     def mouseMoveEvent(self, event):
         """v7.0 实现"""
@@ -4189,15 +4422,21 @@ class SinglePageCanvas(QLabel):
 # === OCR 线程 ===
 # v37.7.6: 改为使用模块化 OCRWorker，自动注入 box_adjust_ratio
 class OCRWorker(_ModularOCRWorker):
-    """OCR 处理线程（兼容层：自动注入 config 中的 box_adjust_ratio）"""
+    """OCR 处理线程（兼容层：自动注入 config 中的 box_adjust_ratio）
+
+    v38.x: Plan 01-03 — 扩展 pii_engine_enabled / pii_settings kwargs（B6）
+    """
 
     def __init__(self, pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
-                 use_char_level_ocr: bool = False, seal_detection_enabled: bool = False):
+                 use_char_level_ocr: bool = False, seal_detection_enabled: bool = False,
+                 pii_engine_enabled: bool = False, pii_settings: dict = None):
         box_adjust_ratio = config.get("ocr.box_adjust_ratio", 0.0) if config else 0.0
         super().__init__(pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
                          use_char_level_ocr=use_char_level_ocr,
                          seal_detection_enabled=seal_detection_enabled,
-                         box_adjust_ratio=box_adjust_ratio)
+                         box_adjust_ratio=box_adjust_ratio,
+                         pii_engine_enabled=pii_engine_enabled,
+                         pii_settings=pii_settings)
 
 # === WebView Bridge：Python 与 JavaScript 通信 ===
 class WebViewBridge(QObject):
@@ -4885,10 +5124,11 @@ _INTERACTIVE_JS_CODE = r"""
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"{APP_NAME} v{VERSION} - Powered by li (汪立律师)")
+        self.setWindowTitle(f"{APP_NAME} v{VERSION}")
 
         # v37.0: 从配置读取窗口尺寸，失败时使用硬编码后备
         # v37.2.0: 读取 OCR 引擎配置
+        # v38.x: Phase 1 接入 PII 引擎 — 读取 pii_settings 块
         if config:
             min_width = config.get("app.window.min_width", 900)
             min_height = config.get("app.window.min_height", 600)
@@ -4899,6 +5139,12 @@ class MainWindow(QMainWindow):
             self.offset_x = config.get("redaction.offset.default_x", 0)
             self.offset_w = config.get("redaction.offset.default_w", 0)
             self.custom_keywords = config.get("redaction.custom_keywords", "")
+            # Phase 1: PII 引擎设置
+            self.pii_settings = {
+                "engine_enabled": config.get("pii_settings.engine_enabled", True),
+                "auto_redact": config.get("pii_settings.auto_redact", True),
+                "require_confirmation": config.get("pii_settings.require_confirmation", False),
+            }
             # v37.4.0: 移除 OCR 引擎配置，只使用 RapidOCR
         else:
             min_width, min_height = 900, 600
@@ -4908,6 +5154,15 @@ class MainWindow(QMainWindow):
             self.offset_x = 0
             self.offset_w = 0
             self.custom_keywords = ""
+            # Phase 1: PII 引擎设置（无 config 时的 fallback）
+            self.pii_settings = {
+                "engine_enabled": True,
+                "auto_redact": True,
+                "require_confirmation": False,
+            }
+
+        # Phase 1: PII 数据锁（保护 page_data[page]["pii"] 写入）
+        self._pii_data_lock = QMutex()
 
         # 窗口尺寸设置：最小尺寸 + 默认尺寸
         self.setMinimumSize(min_width, min_height)
@@ -4929,6 +5184,9 @@ class MainWindow(QMainWindow):
         self.word_compare_mode = False  # Word 预览是否开启原文/替换后对比
         self.word_compare_user_hidden = False  # 用户主动隐藏右侧对比预览
         self._word_data_lock = QMutex()  # v36.5: 保护 word_data 线程安全
+        # Phase 3 (03-word) — UX-01 取消语义持久状态（per BLOCKER 3）
+        self.confirmed_hits: set = set()  # 已确认 hit 四元组集合；(entity_type, key, page_offset, page_length)
+        self.candidate_only_pii: dict = {}  # 未确认候选存储；**永不**写入 word_data[key]['pii']（per BLOCKER 3）
         self.doc_type = None  # 'pdf', 'docx', 'doc'
         self.current_ui_mode = "idle"  # idle / pdf / word / batch / image_merge
         self.batch_stage = "idle"  # idle / rule_setup / running / finished / stopped
@@ -4946,7 +5204,7 @@ class MainWindow(QMainWindow):
         self.toolbar_density_mode = "wide"
         self._bound_window_handle = None
         self._button_density_metrics = {}
-        self.active_rules = [DEFAULT_RULES.get("身份证号", ""), DEFAULT_RULES.get("手机号码", "")]
+        self.active_rules = list(DEFAULT_RULES.values())
         self.use_enhance = False
         self.current_color = QColor(0, 0, 0)
         self.dual_view = False
@@ -5670,6 +5928,14 @@ class MainWindow(QMainWindow):
         self.cb_dual.setCheckable(True)
         self.toolbar_pdf_layout.addWidget(self.cb_dual)
 
+        # Phase 2 (02-03-main-py-settings-packaging): D-12 文档级 override toggle
+        self.btn_mask_override = self.create_btn("本文件全遮蔽", self._toggle_mask_override_this_doc, style="toggle")
+        self.btn_mask_override.setObjectName("toolbarToggleButton")
+        self.btn_mask_override.setCheckable(True)
+        self.btn_mask_override.setChecked(False)
+        self.btn_mask_override.setToolTip("勾选后，当前 PDF 临时覆盖全局 per_entity 设置，强制全部 entity 走全遮蔽。切换状态随当前 PDF 生命周期，不持久化到 config.json（D-12 锁定）。")
+        self.toolbar_pdf_layout.addWidget(self.btn_mask_override)
+
         self.btn_fit = self.create_btn("适应", self.fit_page, style="secondary")
         self.toolbar_pdf_layout.addWidget(self.btn_fit)
         self.btn_fit.hide()
@@ -5739,8 +6005,9 @@ class MainWindow(QMainWindow):
         )
 
         # v22.9: 使用固定的 canvas_container，通过隐藏/显示实现单/双页切换
-        self.canvas_left = SinglePageCanvas(0)
-        self.canvas_right = SinglePageCanvas(1)
+        # v38.x: Plan 01-03 — 传 main_window=self 让画布可读 page_data['pii']（C5）
+        self.canvas_left = SinglePageCanvas(0, main_window=self)
+        self.canvas_right = SinglePageCanvas(1, main_window=self)
 
         # 容器始终作为 scroll 的 widget
         self.canvas_container = QWidget()
@@ -5914,20 +6181,6 @@ class MainWindow(QMainWindow):
         idle_support_layout = QVBoxLayout(self.idle_support_card)
         idle_support_layout.setContentsMargins(18, 16, 18, 16)
         idle_support_layout.setSpacing(8)
-        self.lbl_idle_support_title = QLabel("开发者与支持")
-        self.lbl_idle_support_title.setObjectName("idleSupportTitle")
-        self.lbl_idle_support_text = QLabel("汪立 · 安徽始信律师事务所执业律师")
-        self.lbl_idle_support_text.setObjectName("idleSupportText")
-        self.lbl_idle_support_text.setWordWrap(True)
-        self.lbl_idle_support_meta = QLabel("全栈律师｜前教师｜退伍军人")
-        self.lbl_idle_support_meta.setObjectName("idleSupportMeta")
-        self.lbl_idle_support_email = QLabel("<a href='mailto:491445490@qq.com'>491445490@qq.com</a>")
-        self.lbl_idle_support_email.setObjectName("idleSupportEmail")
-        self.lbl_idle_support_email.setTextFormat(Qt.TextFormat.RichText)
-        self.lbl_idle_support_email.setOpenExternalLinks(True)
-        self.lbl_idle_support_note = QLabel("遇到问题、想看手册或支持更新，都可以直接从这里进入。")
-        self.lbl_idle_support_note.setObjectName("idleSupportNote")
-        self.lbl_idle_support_note.setWordWrap(True)
         idle_support_actions_layout = QGridLayout()
         idle_support_actions_layout.setContentsMargins(0, 0, 0, 0)
         idle_support_actions_layout.setHorizontalSpacing(10)
@@ -5948,11 +6201,6 @@ class MainWindow(QMainWindow):
         self.btn_idle_donate.setObjectName("idleDonateActionButton")
         self.btn_idle_donate.setProperty("btn_style", "success")
         self.btn_idle_donate.setStyleSheet(self._get_button_style("success"))
-        idle_support_layout.addWidget(self.lbl_idle_support_title)
-        idle_support_layout.addWidget(self.lbl_idle_support_text)
-        idle_support_layout.addWidget(self.lbl_idle_support_meta)
-        idle_support_layout.addWidget(self.lbl_idle_support_email)
-        idle_support_layout.addWidget(self.lbl_idle_support_note)
         idle_support_layout.addStretch(1)
         idle_support_layout.addLayout(idle_support_actions_layout)
         idle_action_buttons_layout.addWidget(self.idle_start_card, 0, 0)
@@ -6002,9 +6250,9 @@ class MainWindow(QMainWindow):
         idle_section_header_layout.setSpacing(8)
         self.idle_section_header_layout = idle_section_header_layout
 
-        self.lbl_idle_section = QLabel("四大功能")
+        self.lbl_idle_section = QLabel("核心能力")
         self.lbl_idle_section.setObjectName("idleSectionLabel")
-        self.lbl_idle_section_hint = QLabel("按文件类型自动进入")
+        self.lbl_idle_section_hint = QLabel("覆盖脱敏全流程")
         self.lbl_idle_section_hint.setObjectName("idleSectionHint")
         idle_section_header_layout.addWidget(self.lbl_idle_section)
         idle_section_header_layout.addStretch()
@@ -6012,10 +6260,10 @@ class MainWindow(QMainWindow):
         idle_section_layout.addLayout(idle_section_header_layout)
 
         route_specs = [
-            ("PDF 脱敏", "单文档", "打开 PDF，智能脱敏或手动画框。", "pdf"),
-            ("Word 替换", "单文档", "打开 Word，替换并对比预览。", "word"),
-            ("批量 Word", "批量处理", "导入多份 Word，确认规则后批量执行。", "batch"),
-            ("图片合并 PDF", "图片工具", "导入图片，排序后生成 PDF。", "image"),
+            ("智能识别", "自动扫描", "文本层与正则规则自动匹配敏感字段，命中后一键打码。", "pdf"),
+            ("OCR 扫描", "扫描件识别", "图片型 PDF / 扫描件自动 OCR 后再识别敏感内容。", "image"),
+            ("手动框选", "精准控制", "在预览页直接画框，圈选任意区域做精准脱敏。", "word"),
+            ("批量处理", "一次多份", "一套规则同时处理多份文档，结果按原目录输出。", "batch"),
         ]
 
         idle_routes_container = QWidget()
@@ -8531,6 +8779,12 @@ class MainWindow(QMainWindow):
             compare_action.setEnabled(bool(self.word_doc) and self._has_word_replacement_candidates())
             has_item = True
 
+            # Phase 3 (03-word) — Word 候选审阅入口（UX-01 / UX-02 — Wave 3 完整实施）
+            review_action = self.toolbar_more_menu.addAction(
+                "查看全部候选", self._open_word_candidate_dialog
+            )
+            review_action.setEnabled(bool(self.word_doc))
+
         if is_pdf and not getattr(self, "btn_fit_utility", None).isVisible():
             self.toolbar_more_menu.addAction("适应页面", self.fit_page)
             has_item = True
@@ -8565,6 +8819,24 @@ class MainWindow(QMainWindow):
         self.toggle_dual_view(checked)
         self._refresh_toolbar_responsiveness()
         self._refresh_workbench_context()
+
+    def _toggle_mask_override_this_doc(self, checked: bool):
+        """D-12: 工具栏「本文件全遮蔽」toggle handler — 临时覆盖全局 per_entity 设置。
+
+        状态写入 self.page_data[0]["mask_override_this_doc"] = "blackout" | None。
+        仅在内存存活，不写入 config.json（D-12 锁定）；打开新 PDF 时由 _open_pdf_file 重置。
+        """
+        # 兜底：page_data 尚未初始化时不写入（main_window 启动期态）
+        if not isinstance(getattr(self, "page_data", None), dict):
+            return
+        if not self.page_data:
+            self.page_data = {0: {}}
+        if 0 not in self.page_data:
+            self.page_data[0] = {}
+        self.page_data[0]["mask_override_this_doc"] = "blackout" if checked else None
+        if DEBUG_MODE:
+            print(f"[PII OVERRIDE] page_data[0] mask_override_this_doc = "
+                  f"{self.page_data[0].get('mask_override_this_doc')}")
 
     def _refresh_toolbar_responsiveness(self):
         """根据窗口宽度做工具栏响应式降级，保证缩放时仍可读。"""
@@ -10518,7 +10790,15 @@ class MainWindow(QMainWindow):
         self.doc = fitz.open(fname)
         self.doc_type = 'pdf'
         total = len(self.doc)
-        self.page_data = {i: {'ocr': [], 'manual': []} for i in range(total)}
+        self.page_data = {i: {'ocr': [], 'manual': [], 'pii': []} for i in range(total)}
+        # Phase 2 (02-03): D-12 重置 mask_override_this_doc 到 None（不持久化到 config.json）
+        if 0 in self.page_data:
+            self.page_data[0]["mask_override_this_doc"] = None
+        # 同步工具栏 toggle 按钮状态（确保打开新 PDF 时按钮回到未勾选态）
+        if hasattr(self, "btn_mask_override"):
+            self.btn_mask_override.blockSignals(True)
+            self.btn_mask_override.setChecked(False)
+            self.btn_mask_override.blockSignals(False)
         self.current_page = 0
         self.word_doc = None
         self.word_data = {}
@@ -10548,6 +10828,11 @@ class MainWindow(QMainWindow):
             self._reset_batch_session_state()
             self.word_compare_mode = False
             self.word_compare_user_hidden = False
+            # Phase 3 (03-word) — UX-01 取消语义持久状态重置（per BLOCKER 3）
+            self.confirmed_hits = set()
+            self.candidate_only_pii = {}
+            # Phase 3 (03-word) — WordPIIWorker 自动启动（D-09）
+            self._word_pii_worker = None
             self.word_doc = Document(fname)
             self.file_path = fname
             self.doc_type = 'docx'
@@ -10590,6 +10875,14 @@ class MainWindow(QMainWindow):
 
             # 显示 HTML 预览
             self.render_word_preview()
+
+            # Phase 3 (03-word) — WordPIIWorker 自动启动（D-09 / D-18 + cp30 教训扩展）
+            from privacyguard.word.worker import WordPIIWorker
+            self._word_pii_worker = WordPIIWorker(self.word_data, parent=self)
+            self._word_pii_worker.pii_signal.connect(self._on_word_pii_page_result)
+            self._word_pii_worker.error_signal.connect(self._on_word_pii_scan_error)
+            self._word_pii_worker.finished_signal.connect(self._on_word_pii_scan_complete)
+            self._word_pii_worker.start()
 
             self._clear_info_bar_message()
 
@@ -11127,15 +11420,20 @@ sudo dnf install antiword
             print(f"[OCR] 印章检测启用: {seal_detection_enabled}")
             self._ocr_processed_pages = set()
             # v37.4.0: 只使用 RapidOCR，移除 use_char_level_ocr 参数
+            # v38.x: Phase 1 接入 PII 引擎 — pii_engine_enabled / pii_settings
             self.worker = OCRWorker(self.file_path, self.active_rules, self.use_enhance, self.custom_keywords,
                                     self.scan_level, self.offset_x, self.offset_w,
-                                    seal_detection_enabled=seal_detection_enabled)
+                                    seal_detection_enabled=seal_detection_enabled,
+                                    pii_engine_enabled=self.pii_settings.get("engine_enabled", True),
+                                    pii_settings=self.pii_settings)
             self.active_worker = self.worker  # 追踪线程
             self.worker.progress_signal.connect(self.progress.setValue)
             # v36.4: 使用线程安全的逐页结果信号
             self.worker.page_result_signal.connect(self._on_ocr_page_result)
             # v37.0.5: 连接错误信号
             self.worker.error_signal.connect(self._on_ocr_error)
+            # Phase 1: 连接 PII 信号（D-04 wire）
+            self.worker.pii_signal.connect(self._on_pii_page_result)
             # 先连接原有的完成处理，再连接清理
             self.worker.finished_signal.connect(self._on_ocr_finished_safe)
             self.worker.finished_signal.connect(self._on_worker_finished)
@@ -11261,6 +11559,260 @@ sudo dnf install antiword
             self.page_data[page_num]['ocr'] = deduped
             if DEBUG_MODE and len(rects) != len(deduped):
                 print(f"[DEBUG] 页面{page_num}: 去重前{len(rects)}个矩形, 去重后{len(deduped)}个")
+
+    def _on_pii_page_result(self, page_num: int, pii_hits: list):
+        """Phase 1: PII 命中写入 page_data[page_num]['pii']（D-04 wire）。
+
+        反序列化 worker 发出的 dict 列表为 PIIHit 对象；写入受 _pii_data_lock 保护；
+        当前页时调用 render_view() 触发画布重绘。
+        """
+        if page_num not in self.page_data:
+            return
+        # lazy import inside slot — 避免 import-time 拉起 PII 引擎
+        from privacyguard.pii.hits import PIIHit
+        with QMutexLocker(self._pii_data_lock):
+            self.page_data[page_num]['pii'] = [PIIHit(**h) for h in pii_hits]
+        if self.current_page == page_num:
+            self.render_view()
+
+    def _on_word_pii_page_result(self, key: str, hits_data: list):
+        """Phase 3: pii_signal 接收槽（D-09 / D-18 + cp30 教训扩展 — Wave 2 真实 body）。
+
+        反序列化 worker 发出的 dict 列表为 PIIHit 对象；
+        写入受 _word_data_lock 保护；后续触发 _apply_word_pii_panel_updates 增量 DOM patch。
+        """
+        # lazy import inside slot — 避免 import-time 拉起 PII 引擎
+        from privacyguard.pii.hits import PIIHit
+        # 防御性反序列化单个 hit dict
+        normalized_hits = []
+        for h in (hits_data or []):
+            if isinstance(h, PIIHit):
+                normalized_hits.append(h)
+                continue
+            if isinstance(h, dict):
+                try:
+                    normalized_hits.append(PIIHit(**h))
+                except (TypeError, ValueError):
+                    print(f'[Word PII WARN] invalid hit dict: {h}')
+                    continue
+        with QMutexLocker(self._word_data_lock):
+            if key in self.word_data:
+                self.word_data[key]['pii'] = normalized_hits
+            else:
+                print(f'[Word PII WARN] key {key} not in word_data')
+        # 锁释放后再触发 cp27 局部 patch（避免在锁内阻塞 UI 线程）
+        self._apply_word_pii_panel_updates(key, normalized_hits)
+
+    def _on_word_pii_scan_error(self, exception_class: str) -> None:
+        """Phase 3: WordPIIWorker 异常槽（D-09 / D-18）。"""
+        try:
+            self._word_pii_status_chip_set(
+                f'Word 隐私识别 引擎初始化失败：{exception_class}。已自动关闭本会话识别。'
+            )
+        except Exception:
+            pass
+
+    def _on_word_pii_scan_complete(self) -> None:
+        """Phase 3: WordPIIWorker 完成槽（D-09 / D-18）。"""
+        try:
+            self._refresh_word_pii_status_chip()
+        except Exception:
+            pass
+
+    def _apply_word_pii_panel_updates(self, key: str, hits) -> None:
+        """Phase 3: 触发 Word 双栏预览增量 DOM patch（D-07 / D-10 — Wave 2 真实 body）。
+
+        严格走 cp27 局部 patch 契约：web_view.page().runJavaScript("updateBlock(...)")；
+        **禁止**触发整页 web_view.setHtml()（避免高亮节点被破坏）。
+        hits 为空 → 早返（per 03-RESEARCH.md:1269 early return）。
+        """
+        if not hits:
+            return
+        block_updates = {key: self._build_pii_block_fragment(key, hits)}
+        replaced_updates = {key: self._build_pii_mask_block_fragment(key, hits)}
+        for view_attr, updates in (
+            ('word_preview', block_updates),
+            ('word_preview_replaced', replaced_updates),
+        ):
+            view = getattr(self, view_attr, None)
+            if view is None:
+                continue
+            try:
+                hidden = bool(view.isHidden())
+            except Exception:
+                hidden = False
+            if hidden:
+                continue
+            script = build_word_panel_update_script(updates)
+            try:
+                view.page().runJavaScript(script)
+            except Exception:
+                # cp27 局部 patch 失败不应阻塞其它路径；与现有 _apply_word_panel_updates 一致容错
+                continue
+
+    def _build_pii_block_fragment(self, key: str, hits) -> str:
+        """构造左栏原文 PII 高亮 HTML 片段（D-21 + Visuals §PII Highlight 锁）。
+
+        形态：<mark class="pii-highlight" data-entity-type="..." title="...">
+        <span class="pii-tag">CODE</span>{原文}</mark>
+        关键：左栏**只**写原文（text[page_offset:page_offset+page_length]），
+        **不**写 hit.mask_strategy（per Visuals §PII Highlight 锁定）。
+        """
+        if key not in self.word_data:
+            return ''
+        text = self.word_data[key].get('text', '') or ''
+        if not isinstance(text, str):
+            text = str(text)
+        sorted_hits = sorted(hits, key=lambda h: getattr(h, 'page_offset', 0))
+        parts = []
+        cursor = 0
+        text_len = len(text)
+        for hit in sorted_hits:
+            offset = getattr(hit, 'page_offset', None)
+            length = getattr(hit, 'page_length', None)
+            if not isinstance(offset, int) or not isinstance(length, int):
+                continue
+            if offset < 0 or offset + length > text_len or length <= 0:
+                continue
+            if offset > cursor:
+                parts.append(html_escape(text[cursor:offset]))
+            entity_type = getattr(hit, 'entity_type', '') or ''
+            short_code = ENTITY_TYPE_SHORT_CODE.get(entity_type, entity_type)
+            # 左栏**仅**展示中文标签（per test 严格契约：fragment 不含 mask 字符串）
+            from privacyguard.word.candidate_dialog import ENTITY_TYPE_LABEL
+            label = ENTITY_TYPE_LABEL.get(entity_type, entity_type)
+            title_text = f'{entity_type} · {label}'
+            escaped_title = html_escape(title_text)
+            original_text = text[offset:offset + length]
+            escaped_original = html_escape(original_text)
+            parts.append(
+                f'<mark class="pii-highlight" '
+                f'data-entity-type="{html_escape(entity_type)}" '
+                f'title="{escaped_title}">'
+                f'<span class="pii-tag">{html_escape(short_code)}</span>'
+                f'{escaped_original}</mark>'
+            )
+            cursor = offset + length
+        if cursor < text_len:
+            parts.append(html_escape(text[cursor:]))
+        return ''.join(parts)
+
+    def _build_pii_mask_block_fragment(self, key: str, hits) -> str:
+        """构造右栏 partial mask HTML 片段（Visuals §PII Partial-Mask 锁）。
+
+        形态：<mark class="pii-mask" data-entity-type="..." title="已替换为：...">
+        {mask_strategy}</mark>
+        关键：右栏**只**写 hit.mask_strategy（partial mask 字符串），
+        **不**包裹原文（per Visuals §PII Partial-Mask 锁定）。
+        """
+        if key not in self.word_data:
+            return ''
+        text = self.word_data[key].get('text', '') or ''
+        if not isinstance(text, str):
+            text = str(text)
+        sorted_hits = sorted(hits, key=lambda h: getattr(h, 'page_offset', 0))
+        parts = []
+        cursor = 0
+        text_len = len(text)
+        for hit in sorted_hits:
+            offset = getattr(hit, 'page_offset', None)
+            length = getattr(hit, 'page_length', None)
+            if not isinstance(offset, int) or not isinstance(length, int):
+                continue
+            if offset < 0 or offset + length > text_len or length <= 0:
+                continue
+            if offset > cursor:
+                parts.append(html_escape(text[cursor:offset]))
+            entity_type = getattr(hit, 'entity_type', '') or ''
+            mask_text = getattr(hit, 'mask_strategy', '') or ''
+            if not isinstance(mask_text, str):
+                mask_text = str(mask_text)
+            escaped_mask = html_escape(mask_text)
+            title_text = f'已替换为：{mask_text}'
+            escaped_title = html_escape(title_text)
+            parts.append(
+                f'<mark class="pii-mask" '
+                f'data-entity-type="{html_escape(entity_type)}" '
+                f'title="{escaped_title}">{escaped_mask}</mark>'
+            )
+            cursor = offset + length
+        if cursor < text_len:
+            parts.append(html_escape(text[cursor:]))
+        return ''.join(parts)
+
+    def _word_pii_status_chip_set(self, message: str) -> None:
+        """Phase 3: 更新 wordPiiStatusChip（占位 — Wave 3 完整实施）。
+
+        Wave 2 stub：仅 print；Wave 3 完整实施 wordPiiStatusChip 状态机 7 阶段。
+        """
+        print(f'[Word PII Chip] {message}')
+
+    def _refresh_word_pii_status_chip(self) -> None:
+        """Phase 3: 刷新 wordPiiStatusChip（占位 — Wave 3 完整实施）。
+
+        Wave 2 stub：no-op；Wave 3 完整实施 wordPiiStatusChip 状态机 7 阶段。
+        """
+        return None
+
+    def _open_word_candidate_dialog(self):
+        """Phase 3 (03-word) — 打开 Word 候选审阅对话框（UX-01 / UX-02 — Wave 3 完整实施）。
+
+        触发入口：菜单 / 工具栏 action_word_candidate_review。
+        D-25 锁：极简版（50 条分页 + 实体类型 / 来源筛选 + 4 CTAs）；
+        不含 Phase 7 实体（实体类型全局开关 UX-03 / 文档级白名单 UX-05 / 撤销栈 UX-06）。
+        """
+        if not self.word_data:
+            QMessageBox.information(self, '提示', '请先打开 Word 文档')
+            return
+        # lazy import 避免 import-time 拉起 PyQt6.WebEngineWidgets + candidate_dialog
+        from privacyguard.word.candidate_dialog import WordCandidateDialog
+        dlg = WordCandidateDialog(self.word_data, parent=self)
+        dlg.confirmed.connect(self._on_word_candidate_dialog_accept)
+        dlg.exec()
+
+    def _on_word_candidate_dialog_accept(self, payload: list):
+        """Phase 3 (03-word) — 候选审阅对话框 accepted 槽（UX-01 取消语义 per BLOCKER 3）。
+
+        payload 形态（D-18 契约）：list[dict{key, hit_dict, source}]
+        - key: word_data 的 key（paragraph_N / table_T_cell_R_C）
+        - hit_dict: PIIHit dataclass 的 dict 形态（asdict 后）
+        - source: 'pii' / 'ocr' / 'manual'
+
+        UX-01 取消语义：
+        - 用户确认的 hit 才写入 word_data[key]['confirmed'] + self.confirmed_hits 持久集合
+        - 未确认候选存储在 self.candidate_only_pii，但**永不**进入 _save_word 路径（per BLOCKER 3）
+        - QMutexLocker 保护 word_data 写；锁释放后再触发 cp27 局部 patch（避免锁内阻塞 UI 线程）
+        """
+        # lazy import inside slot — 避免 import-time 拉起 PII 引擎
+        from privacyguard.pii.hits import PIIHit
+
+        hits_by_key = {}
+        for entry in (payload or []):
+            if not isinstance(entry, dict):
+                continue
+            key = entry.get('key')
+            hit_dict = entry.get('hit') or {}
+            if not isinstance(hit_dict, dict):
+                continue
+            try:
+                hit = PIIHit(**hit_dict)
+            except (TypeError, ValueError) as e:
+                print(f'[Word PII WARN] invalid hit dict: {e}')
+                continue
+            # 更新 confirmed_hits 持久集合（per BLOCKER 3）
+            hit_id = (hit.entity_type, key, hit.page_offset, hit.page_length)
+            self.confirmed_hits.add(hit_id)
+            hits_by_key.setdefault(key, []).append(hit)
+
+        with QMutexLocker(self._word_data_lock):
+            for key, hits in hits_by_key.items():
+                if key in self.word_data:
+                    # 写入 word_data[key]['confirmed']（per BLOCKER 3 替代 pii）
+                    self.word_data[key]['confirmed'] = list(hits)
+        # 锁释放后再触发 cp27 局部 patch（避免在锁内阻塞 UI 线程）
+        for key, hits in hits_by_key.items():
+            if key in self.word_data:
+                self._apply_word_pii_panel_updates(key, hits)
 
     def _on_ocr_finished_safe(self, _):
         """v36.4: 线程安全 - OCR 完成处理（在主线程执行）
@@ -11688,7 +12240,8 @@ sudo dnf install antiword
                 [],
                 self.replacement_text,
                 manual_matches=data.get("manual", []),
-                ocr_matches=data.get("ocr", [])
+                ocr_matches=data.get("ocr", []),
+                pii_matches=data.get("pii", []),  # Phase 3 (03-word) — Wave 2 GREEN 把 pii 通道纳入合并路径
             )
             updates[key] = self._build_word_original_preview_fragment(key, source_text, merged_matches)
         return updates
@@ -11734,7 +12287,8 @@ sudo dnf install antiword
                 self.word_replace_rules,
                 self.replacement_text,
                 manual_matches=data.get("manual", []),
-                ocr_matches=data.get("ocr", [])
+                ocr_matches=data.get("ocr", []),
+                pii_matches=data.get("pii", []),  # Phase 3 (03-word) — Wave 2 GREEN 把 pii 通道纳入合并路径
             )
             updates[key] = self._build_replaced_preview_fragment(source_text, merged_matches)
         return updates
@@ -12351,30 +12905,65 @@ sudo dnf install antiword
                     doc_save = fitz.open(self.file_path)
                     fill_col = (0, 0, 0) if self.current_color.name() == "#000000" else (1, 1, 1)
 
+                    # Phase 2 (02-03-main-py-settings-packaging): 文档级 override + per-entity 默认（D-12 + D-13）
+                    # 锁定：mask_override_this_doc 仅在 page_data[0] 内存中存活；不持久化到 config.json
+                    override = None
+                    if 0 in self.page_data:
+                        override = self.page_data[0].get("mask_override_this_doc")
+                    per_entity_default = {}
+                    if self.config:
+                        loaded = self.config.get("pii_settings.per_entity_default", {}) or {}
+                        if isinstance(loaded, dict):
+                            per_entity_default = dict(loaded)
+
+                    # Phase 2 (02-03-main-py-settings-packaging): 懒加载 partial mask + metadata clear helper
+                    # 在 save loop 入口处一次性导入；hot path 不重复 import
+                    from privacyguard.pii.pdf_adapter import (
+                        write_partial_masks,
+                        clear_pdf_metadata,
+                    )
+
                     for i in range(len(doc_save)):
                         page = doc_save[i]
 
                         # v37.3.1: 修复内部编辑功能 - 使用副本避免修改原始数据
                         # 从 page_data 中获取脱敏区域列表
+                        # v38.x: Phase 1 加入 pii_list（与 ocr_list + manual_list 合并后一次性 apply）
                         ocr_list = self.page_data[i].get('ocr', [])
                         manual_list = self.page_data[i].get('manual', [])
+                        pii_list = self.page_data[i].get('pii', [])
 
-                        # 1. 添加脱敏注释
-                        # v37.3.1: 重建 QRectF 确保不修改原始对象
+                        # ------------------------------------------------------------------
+                        # Phase 2 (02-04-gap-closure) — CR-01 fix: single delegation call
+                        # ------------------------------------------------------------------
+                        # 关键不变式（D-22）：PyMuPDF page.apply_redactions() 是 one-shot per page；
+                        # 必须 OCR + manual + PII partial + PII blackout 合并到同一次 add_redact_annot
+                        # + apply_redactions。partial mode 的 mask text 在 apply_redactions 销毁底层
+                        # 文本后通过 page.insert_text 在色块上追加。
+                        # ------------------------------------------------------------------
+
+                        # 收集所有 item（OCR / manual / PII）到统一列表
+                        # OCR / manual → (QRectF, "blackout") 2-tuple via PIIHit form → 实际转为 rect 元组
+                        all_pi_items = []
                         for r in ocr_list + manual_list:
-                            # 从 QRectF 提取坐标并重建，避免引用问题
-                            x, y, w, h = r.x(), r.y(), r.width(), r.height()
-                            rect = fitz.Rect(x, y, x + w, y + h)
-                            annot = page.add_redact_annot(rect)
-                            annot.set_colors(stroke=fill_col, fill=fill_col)
-                            annot.update()
+                            all_pi_items.append((r.x(), r.y(), r.width(), r.height(), "blackout"))
+                        # PII 路径按 per_entity_default + mask_override_this_doc 决策 mode
+                        for hit in pii_list:
+                            if override == "blackout":
+                                all_pi_items.append((hit, "blackout"))
+                            elif per_entity_default.get(hit.entity_type, "partial") == "partial":
+                                all_pi_items.append((hit, "partial"))
+                            else:
+                                all_pi_items.append((hit, "blackout"))
 
-                        # v37.3: 安全加固 - 修改图像像素，彻底销毁原始内容
-                        page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_PIXELS)
+                        # CR-01 fix: 单次委托调用（write_partial_masks 内部统一处理）
+                        # 替代之前 60+ 行 inline add_redact_annot + apply_redactions +
+                        # delete_annot + insert_text 重复实现（v37.7.6 收敛原则）。
+                        write_partial_masks(doc_save, i, all_pi_items)
 
-                        # v37.3: 安全加固 - 删除所有注释对象，防止被 PDF 编辑器修改
-                        for annot in page.annots():
-                            page.delete_annot(annot)
+                    # Phase 2 (02-03-main-py-settings-packaging): SAFE-03 元数据清除（D-14 + D-15 + D-16）
+                    # 仅清 5 字段；写空字符串；不写占位字符串
+                    clear_pdf_metadata(doc_save)
 
                     # v37.3: 安全加固 - 使用垃圾回收和压缩彻底删除未引用对象
                     doc_save.save(
@@ -12408,6 +12997,8 @@ sudo dnf install antiword
         try:
             import shutil
             from docx import Document
+            from privacyguard.word.redact import redact_word
+            from privacyguard.word.clear_doc_props import clear_word_doc_props
 
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
@@ -12424,19 +13015,33 @@ sudo dnf install antiword
                 if key in self.word_data:
                     data = self.word_data[key]
                     source_text = data.get("text", "")
+                    # Phase 3 (03-word) — UX-01 取消语义 guard（per BLOCKER 3）
+                    # 仅写 confirmed_hits 中的 PII 命中；candidate_only_pii 永不进入 save 路径
+                    confirmed_hits_set = (
+                        self.confirmed_hits if hasattr(self, 'confirmed_hits') else set()
+                    )
+                    if confirmed_hits_set:
+                        pii_for_save = [
+                            h for h in (data.get("pii", []) or [])
+                            if (h.entity_type, key, h.page_offset, h.page_length)
+                            in confirmed_hits_set
+                        ]
+                    else:
+                        # 未触发 dialog 确认 → pii 路径为空（per BLOCKER 3）
+                        pii_for_save = []
                     merged_matches = merge_word_matches_with_priority(
                         source_text,
                         self.word_replace_rules,
                         self.replacement_text,
                         manual_matches=data.get("manual", []),
-                        ocr_matches=data.get("ocr", [])
+                        ocr_matches=data.get("ocr", []),
+                        # Phase 3 (03-word) — D-19 priority 第六参数 PII 命中（仅 confirmed）
+                        pii_matches=pii_for_save,
                     )
                     if merged_matches:
-                        replace_matches_in_paragraph(
-                            para,
-                            merged_matches,
-                            text_offset=0,
-                            fallback_replacement_text=self.replacement_text
+                        redact_word(
+                            new_doc, key, merged_matches,
+                            fallback_replacement_text=self.replacement_text,
                         )
 
             # 遍历表格进行 run 级别的文本替换
@@ -12447,30 +13052,36 @@ sudo dnf install antiword
                         if key in self.word_data:
                             data = self.word_data[key]
                             source_text = data.get("text", "")
+                            # Phase 3 (03-word) — UX-01 取消语义 guard（per BLOCKER 3）
+                            confirmed_hits_set = (
+                                self.confirmed_hits if hasattr(self, 'confirmed_hits') else set()
+                            )
+                            if confirmed_hits_set:
+                                pii_for_save = [
+                                    h for h in (data.get("pii", []) or [])
+                                    if (h.entity_type, key, h.page_offset, h.page_length)
+                                    in confirmed_hits_set
+                                ]
+                            else:
+                                pii_for_save = []
                             merged_matches = merge_word_matches_with_priority(
                                 source_text,
                                 self.word_replace_rules,
                                 self.replacement_text,
                                 manual_matches=data.get("manual", []),
-                                ocr_matches=data.get("ocr", [])
+                                ocr_matches=data.get("ocr", []),
+                                # Phase 3 (03-word) — D-19 priority 第六参数 PII 命中（仅 confirmed）
+                                pii_matches=pii_for_save,
                             )
 
                             if merged_matches:
-                                # 处理单元格内的所有段落（按 cell.text 的偏移映射）
-                                para_offset = 0
-                                paragraphs = list(cell.paragraphs)
-                                for idx, para in enumerate(paragraphs):
-                                    original_para_len = len(''.join(run.text for run in para.runs))
-                                    replace_matches_in_paragraph(
-                                        para,
-                                        merged_matches,
-                                        text_offset=para_offset,
-                                        fallback_replacement_text=self.replacement_text
-                                    )
-                                    para_offset += original_para_len
-                                    if idx < len(paragraphs) - 1:
-                                        # python-docx 的 cell.text 使用换行拼接段落
-                                        para_offset += 1
+                                redact_word(
+                                    new_doc, key, merged_matches,
+                                    fallback_replacement_text=self.replacement_text,
+                                )
+
+            # Phase 3 (03-word) — D-08 / D-24 — 与 Phase 2 SAFE-03 clear_pdf_metadata 对称
+            clear_word_doc_props(new_doc)
 
             # 保存文档
             new_doc.save(fname)

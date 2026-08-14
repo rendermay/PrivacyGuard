@@ -154,6 +154,28 @@ privacyguard_hiddenimports.extend([
     'privacyguard.workers.image_merge',
     'privacyguard.core',
     'privacyguard.ui',
+    # v38.x: Phase 1 PII 引擎（cp30 防回归 — frozen 启动必须能找到 rules.json）
+    'privacyguard.pii',
+    'privacyguard.pii.engine',
+    'privacyguard.pii.hits',
+    'privacyguard.pii.validators',
+    'privacyguard.pii.validators.id_card',
+    'privacyguard.pii.validators.phone_segment',
+    'privacyguard.pii.pdf_adapter',
+    # Phase 2 (02-03): 6 new validator submodules (B5 parity with macOS spec)
+    'privacyguard.pii.validators.bank_card',
+    'privacyguard.pii.validators.email',
+    'privacyguard.pii.validators.uscc',
+    'privacyguard.pii.validators.vat_invoice',
+    'privacyguard.pii.validators.bank_account',
+    'privacyguard.pii.validators.taxpayer_id',
+    # Phase 3 (03-word): 6 Word 子模块 hiddenimports（cp30 parity with macOS spec）
+    'privacyguard.word',
+    'privacyguard.word.adapter',
+    'privacyguard.word.worker',
+    'privacyguard.word.redact',
+    'privacyguard.word.clear_doc_props',
+    'privacyguard.word.candidate_dialog',
 ])
 
 # 去重
@@ -182,6 +204,8 @@ a = Analysis(
         (os.path.join(project_root, 'config.json'), '.'),
         # 包含 assets 目录（二维码图片等）
         (os.path.join(project_root, 'assets'), 'assets'),
+        # v38.x: Phase 1 PII 引擎数据文件（cp30 防回归 — rules.json 必须随 frozen 包发布）
+        (os.path.join(project_root, 'privacyguard', 'pii', 'data'), 'privacyguard/pii/data'),
     ] + onnx_datas + rapid_datas + numpy_datas + numpy_compat_datas + bs4_datas + copy_metadata('numpy'),  # 注意：不要包含 privacyguard_datas_all！
     hiddenimports=[
         # PyQt6
@@ -246,6 +270,28 @@ a = Analysis(
         'privacyguard.workers.image_merge',
         'privacyguard.core',
         'privacyguard.ui',
+        # v38.x: Phase 1 PII 引擎 hiddenimports
+        'privacyguard.pii',
+        'privacyguard.pii.engine',
+        'privacyguard.pii.hits',
+        'privacyguard.pii.validators',
+        'privacyguard.pii.validators.id_card',
+        'privacyguard.pii.validators.phone_segment',
+        'privacyguard.pii.pdf_adapter',
+        # Phase 2 (02-03): 6 new validator submodules (B5 parity with macOS spec)
+        'privacyguard.pii.validators.bank_card',
+        'privacyguard.pii.validators.email',
+        'privacyguard.pii.validators.uscc',
+        'privacyguard.pii.validators.vat_invoice',
+        'privacyguard.pii.validators.bank_account',
+        'privacyguard.pii.validators.taxpayer_id',
+        # Phase 3 (03-word): 6 Word 子模块 hiddenimports（cp30 教训扩展 — 双 spec 字段级一致）
+        'privacyguard.word',
+        'privacyguard.word.adapter',
+        'privacyguard.word.worker',
+        'privacyguard.word.redact',
+        'privacyguard.word.clear_doc_props',
+        'privacyguard.word.candidate_dialog',
     ] + onnx_hiddenimports + rapid_hiddenimports + numpy_hiddenimports + bs4_hiddenimports + privacyguard_hiddenimports,
     hookspath=[current_dir],  # 包含 hook-privacyguard.py
     hooksconfig={},
