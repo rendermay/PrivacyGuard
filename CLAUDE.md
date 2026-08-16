@@ -67,6 +67,7 @@ When resuming work, read these files in order:
 - Runtime currently uses `SimpleConfig` in `main.py`
 - Shared config utilities also exist in `privacyguard/utils/config.py`
 - Do not assume `ConfigManager` is the active runtime path unless you have explicitly switched the app over
+- **v37.7.x 中文姓名启发式识别 (jieba X3)**：新增 `redaction.enable_name_recognition` 键，默认 False；详见 `docs/current/PHASE_NAME_RECOGNITION.md`
 
 ### OCR dependency behavior
 
@@ -169,7 +170,18 @@ python3 -m unittest \
   -v
 ```
 
-Current verified baseline: `79/79`.
+Current verified baseline: `114/114` (含步骤 1 + 步骤 4 jieba X3 集成)。
+
+### Extended regression (Chinese name recognition)
+
+```bash
+python3 -m unittest \
+  tests.unit.test_redaction_rule_patterns \
+  tests.unit.test_name_recognizer \
+  tests.unit.test_worker_name_recognition \
+  tests.unit.test_enable_name_recognition_persistence \
+  -v
+```
 
 ### Version check
 

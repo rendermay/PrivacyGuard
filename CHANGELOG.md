@@ -11,6 +11,53 @@
 - 真机截图驱动的最后一轮观感抛光
 - 正式发布前的 Windows / macOS 产物验收
 
+### 🆕 中文姓名启发式识别 (jieba X3 方案)
+
+针对法律文书等含姓名角色的场景，新增**可选的中文人名启发式识别**能力。
+
+#### 新增模块
+
+- **`privacyguard/pii/name_recognizer.py`** — `ChineseNameRecognizer` 单例 + 便捷函数 `extract_person_names(text)`
+  - jieba 0.42.1 词性标注（`nr`/`nrfg`/...）+ 姓氏表准入 + 黑名单过滤
+  - 默认懒加载，jieba 不可用时静默回退到空列表
+  - 线程安全，识别结果去重保序
+
+#### 新增脱敏规则（步骤 1：纯正则基础）
+
+- **地址（含门牌号）**：匹配"省级行政区+...+门牌号"，覆盖 `河北省保定市唐县迷城乡西迷城村二区144号`
+- **固定电话**：匹配 `0xx-xxxxxxxx` 座机，容忍 OCR 误识（允许字母出现在数字中）
+- **法定代表人**：匹配"法定代表人"+冒号（全角/半角）+姓名
+
+#### Worker 接入（步骤 4：Wave 2）
+
+- `OCRWorker.__init__` / `WordWorker.__init__` 新增 `enable_name_recognition: bool = False` 参数
+- **默认 OFF 等价现状**（不破坏既有 109 测试基线）
+- 启用后从整页文本提取候选姓名，经 `re.escape` 追加到命中规则
+
+#### UI + 持久化（Wave 3）
+
+- SettingsDialog 新增 `cb_name_recognition` checkbox，默认未勾选
+- 持久化键 `redaction.enable_name_recognition`，首次启动默认为 False
+- `PrivacyGuard_verify.spec`：`collect_data_files('jieba')` + hiddenimports `['jieba', 'jieba.posseg', 'jieba._compat']`
+- `requirements.txt`：`jieba==0.42.1`
+
+#### 测试
+
+- 新增 `tests/unit/test_name_recognizer.py`（17 例，覆盖 11+ 法律文书姓名样例）
+- 新增 `tests/unit/test_worker_name_recognition.py`（7 例，覆盖 Worker 默认 OFF 等价性 + 启用后 flag 透传）
+- 新增 `tests/unit/test_enable_name_recognition_persistence.py`（5 例，覆盖配置 round-trip）
+- **全量回归：109 → 114 测试 PASS**（基线 + 29 新增）
+
+#### 关键设计取舍
+
+- **默认 OFF**：未启用时与 v37.7.6 完全等价，避免非法律文书场景的误识
+- **PyInstaller 影响**：+42MB（仅启用时），冷启动 ~800ms（一次性）
+- **不破坏既有基线**：`test_default_rules_names_match` / `test_config_alignment` 等三处对齐测试零变更通过
+
+#### 关联 Phase 文档
+
+- `docs/current/PHASE_NAME_RECOGNITION.md` — 完整 GSD 实施计划（Wave 0-4）
+
 ---
 
 ## [37.7.6] - 2026-05-16

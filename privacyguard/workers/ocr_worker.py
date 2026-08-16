@@ -46,7 +46,7 @@ class OCRWorker(QThread):
 
     def __init__(self, pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
                  use_char_level_ocr: bool = False, seal_detection_enabled: bool = False,
-                 box_adjust_ratio: float = 0.0):
+                 box_adjust_ratio: float = 0.0, enable_name_recognition: bool = False):
         super().__init__()
         self.pdf_path = pdf_path
         self.rules = rules
@@ -56,6 +56,10 @@ class OCRWorker(QThread):
         self.scan_scale = scan_scale
         self.off_x = off_x
         self.off_w = off_w
+
+        # v37.7.x: 中文姓名启发式识别开关 (默认 False,向后兼容)
+        # 启用后从整页文本提取候选姓名,经 re.escape 后追加到 custom_keywords 列表
+        self.enable_name_recognition = enable_name_recognition
 
         # v37.4.0: 只使用 RapidOCR，不再使用字符级 OCR
         self.use_char_level_ocr = False
@@ -79,6 +83,18 @@ class OCRWorker(QThread):
         except cv2.error as e:
             print(f"图像处理错误: {e}")
             return img_np
+
+    def _render_full_page_bgr(self, page, scan_scale):
+        """v37.7.x: 把整页 PDF 渲染为 BGR 图像 (供全页 OCR 用).
+
+        与 render_pdf_clip_to_bgr 的区别: 不带 clip, 整页 0..width 0..height.
+        """
+        pix = page.get_pixmap(
+            matrix=fitz.Matrix(scan_scale, scan_scale),
+            alpha=False,
+        )
+        img_data = np.frombuffer(pix.tobytes("png"), dtype=np.uint8)
+        return cv2.imdecode(img_data, cv2.IMREAD_COLOR)
 
     def _get_seal_detector(self):
         """v37.5.0: 印章检测器（使用 OpenCV，无需额外依赖）"""
@@ -389,6 +405,46 @@ class OCRWorker(QThread):
                     page_text = page.get_text()
                     page_dict = page.get_text("dict")
                     image_clip_rects = collect_embedded_image_clip_rects(page_dict)
+
+                    # v37.7.x 修订: 中文姓名启发式识别同时覆盖 文本通道 和 图片通道.
+                    # 原实现 (page_text 非空才注入) 在扫描型 PDF (page_text="") 上完全失效.
+                    # 修复: 即使 page_text 为空, 也先用 RapidOCR 全页扫一次,把行级文本拼起来
+                    # 喂给 jieba 抽取人名,然后 re.escape 追加到 all_patterns (image 通道后续会用到).
+                    if self.enable_name_recognition:
+                        jieba_source_text = page_text or ""
+                        if not jieba_source_text and image_clip_rects:
+                            try:
+                                _ocr_for_names = ocr_engine.recognize(
+                                    self._render_full_page_bgr(page, SCAN_SCALE)
+                                )
+                                _line_texts = [
+                                    getattr(r, "text", "")
+                                    for r in (_ocr_for_names or [])
+                                ]
+                                jieba_source_text = "\n".join(
+                                    t for t in _line_texts if t
+                                )
+                            except Exception as _exc:
+                                # 永不向调用方抛异常; 静默回退到空字符串即可
+                                print(f"[OCRWorker] 全页 OCR (姓名抽取用) 失败: {_exc}")
+                                jieba_source_text = ""
+
+                        if jieba_source_text:
+                            try:
+                                from privacyguard.pii.name_recognizer import (
+                                    extract_person_names,
+                                )
+                                _names = extract_person_names(jieba_source_text)
+                                if _names:
+                                    _existing = set(self.rules) | set(self.custom_keywords)
+                                    _extra = [
+                                        re.escape(n) for n in _names
+                                        if n not in _existing
+                                    ]
+                                    if _extra:
+                                        all_patterns = all_patterns + _extra
+                            except Exception as _exc:
+                                print(f"[OCRWorker] 姓名识别失败: {_exc}")
 
                     if page_text.strip():
                         hit_boxes = collect_text_pdf_hit_boxes(page, all_patterns, page_text=page_text)

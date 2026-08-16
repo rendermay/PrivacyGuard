@@ -215,7 +215,11 @@ else:
         "日期时间": r"\d{4}[年\-\.]\d{1,2}[月\-\.]\d{1,2}[日]?",
         "电子邮箱": r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
         "银行卡号": r"(?<!\d)([1-9]\d{12,18})(?!\d)",
-        "印章": "__SEAL_DETECTION__"  # v37.5.0: 印章检测特殊标记
+        "印章": "__SEAL_DETECTION__",  # v37.5.0: 印章检测特殊标记
+        # v37.7.x: 扩展规则 — 起诉讼书场景下常见漏脱敏字段
+        "地址（含门牌号）": r"[一-龥]{2,15}(?:省|市|自治区|特别行政区)[一-龥\d\s,]{4,40}\d+号",
+        "固定电话": r"(?<!\d)0[\w]{2,3}[-\s]?[\w]{7,8}(?!\d)",
+        "法定代表人": r"法定代表人\s*[::：]?\s*[一-龥]{2,4}(?:·[一-龥]{2,4})?",
     }
 
 WORD_RULE_SCHEMA_VERSION = 1
@@ -1011,7 +1015,8 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None, current_rules=None, use_enhance=False, custom_keywords="",
                  scan_level=2.0, offset_x=0, offset_w=0, replacement_text="[已脱敏]",
                  word_replace_rules=None,
-                 config_manager=None):
+                 config_manager=None,
+                 enable_name_recognition=False):
         super().__init__(parent)
         self.config = config_manager
 
@@ -1065,6 +1070,8 @@ class SettingsDialog(QDialog):
         self.word_replace_rules = normalize_word_replace_rules(word_replace_rules or [], self.replacement_text)
         self.default_replacement_text = "[已脱敏]"
         self.recommended_rule_names = ["身份证号", "手机号码"]
+        # v37.7.x: 中文姓名启发式识别开关(默认 False,向后兼容)
+        self.enable_name_recognition = bool(enable_name_recognition)
 
         # v37.0: 从配置读取范围和标签
         if self.config:
@@ -1289,7 +1296,7 @@ class SettingsDialog(QDialog):
         for index, (name, pattern) in enumerate(rule_items):
             cb = QCheckBox(name)
             if current_rules and pattern in current_rules: cb.setChecked(True)
-            elif not current_rules and name in ["身份证号", "手机号码"]: cb.setChecked(True)
+            elif not current_rules and name in ["身份证号", "手机号码", "地址（含门牌号）", "固定电话", "法定代表人"]: cb.setChecked(True)
             self.checks[name] = cb
             cb.toggled.connect(self._refresh_rule_summary)
             if index < split_index:
@@ -1345,6 +1352,16 @@ class SettingsDialog(QDialog):
         custom_actions.addWidget(btn_clear_keywords)
         custom_actions.addStretch()
         left_panel.addLayout(custom_actions)
+        # v37.7.x: 中文姓名启发式识别开关
+        self.cb_name_recognition = QCheckBox("启用中文姓名启发式识别 (jieba)")
+        self.cb_name_recognition.setObjectName("settingsInlineCheckbox")
+        self.cb_name_recognition.setChecked(self.enable_name_recognition)
+        self.cb_name_recognition.setToolTip(
+            "开启后,工具会调用 jieba 词性标注提取文本中的中文姓名,"
+            "追加到 OCR/Word 命中规则。\n"
+            "适用于法律文书等含姓名角色的场景;非中文或纯文本场景建议关闭。"
+        )
+        left_panel.addWidget(self.cb_name_recognition)
         self.txt_custom = QTextEdit()
         self.txt_custom.setPlaceholderText("例如：法院 张三 (支持多行)")
         self.txt_custom.setPlainText(custom_keywords)
@@ -2614,6 +2631,9 @@ class SettingsDialog(QDialog):
         # v37.4.0: 保存检测框调节比例
         self.box_adjust_ratio = self.slider_adjust.value() / 100.0
 
+        # v37.7.x: 中文姓名启发式识别开关
+        self.enable_name_recognition = self.cb_name_recognition.isChecked()
+
         # v37.0: 保存到配置文件
         if self.config:
             try:
@@ -2625,6 +2645,9 @@ class SettingsDialog(QDialog):
                 self.config.set("redaction.custom_keywords", self.custom_keywords, persist=False)
                 self.config.set("redaction.replacement_text", self.replacement_text, persist=False)
                 self.config.set("ocr.box_adjust_ratio", self.box_adjust_ratio, persist=False)
+                # v37.7.x: 姓名识别开关持久化
+                self.config.set("redaction.enable_name_recognition",
+                                self.enable_name_recognition, persist=False)
                 self.config.save()
             except Exception as e:
                 print(f"[设置] 保存配置失败: {e}")
@@ -4189,15 +4212,17 @@ class SinglePageCanvas(QLabel):
 # === OCR 线程 ===
 # v37.7.6: 改为使用模块化 OCRWorker，自动注入 box_adjust_ratio
 class OCRWorker(_ModularOCRWorker):
-    """OCR 处理线程（兼容层：自动注入 config 中的 box_adjust_ratio）"""
+    """OCR 处理线程（兼容层：自动注入 config 中的 box_adjust_ratio + enable_name_recognition）"""
 
     def __init__(self, pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
-                 use_char_level_ocr: bool = False, seal_detection_enabled: bool = False):
+                 use_char_level_ocr: bool = False, seal_detection_enabled: bool = False,
+                 enable_name_recognition: bool = False):
         box_adjust_ratio = config.get("ocr.box_adjust_ratio", 0.0) if config else 0.0
         super().__init__(pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
                          use_char_level_ocr=use_char_level_ocr,
                          seal_detection_enabled=seal_detection_enabled,
-                         box_adjust_ratio=box_adjust_ratio)
+                         box_adjust_ratio=box_adjust_ratio,
+                         enable_name_recognition=enable_name_recognition)
 
 # === WebView Bridge：Python 与 JavaScript 通信 ===
 class WebViewBridge(QObject):
@@ -4356,11 +4381,13 @@ class WebViewBridge(QObject):
 # === Word 文档处理线程 ===
 # v37.7.6: 改为使用模块化 WordWorker，补充 default_rules 参数
 class WordWorker(_ModularWordWorker):
-    """Word 文档智能脱敏线程（兼容层：自动注入 DEFAULT_RULES）"""
+    """Word 文档智能脱敏线程（兼容层：自动注入 DEFAULT_RULES + enable_name_recognition）"""
 
-    def __init__(self, word_doc, word_data, rules, custom_keywords, replacement_text):
+    def __init__(self, word_doc, word_data, rules, custom_keywords, replacement_text,
+                 enable_name_recognition: bool = False):
         super().__init__(word_doc, word_data, rules, custom_keywords,
-                         replacement_text, default_rules=DEFAULT_RULES)
+                         replacement_text, default_rules=DEFAULT_RULES,
+                         enable_name_recognition=enable_name_recognition)
 
 # === Word 预览交互式 JavaScript 代码常量 ===
 # v36.4: 提取为常量，避免 _inject_interactive_html 函数过长
@@ -4899,6 +4926,9 @@ class MainWindow(QMainWindow):
             self.offset_x = config.get("redaction.offset.default_x", 0)
             self.offset_w = config.get("redaction.offset.default_w", 0)
             self.custom_keywords = config.get("redaction.custom_keywords", "")
+            # v37.7.x: 中文姓名启发式识别开关(默认 False,向后兼容)
+            self.enable_name_recognition = config.get(
+                "redaction.enable_name_recognition", False)
             # v37.4.0: 移除 OCR 引擎配置，只使用 RapidOCR
         else:
             min_width, min_height = 900, 600
@@ -4908,6 +4938,8 @@ class MainWindow(QMainWindow):
             self.offset_x = 0
             self.offset_w = 0
             self.custom_keywords = ""
+            # v37.7.x: 姓名识别开关(无 config 时默认 False)
+            self.enable_name_recognition = False
 
         # 窗口尺寸设置：最小尺寸 + 默认尺寸
         self.setMinimumSize(min_width, min_height)
@@ -4946,7 +4978,14 @@ class MainWindow(QMainWindow):
         self.toolbar_density_mode = "wide"
         self._bound_window_handle = None
         self._button_density_metrics = {}
-        self.active_rules = [DEFAULT_RULES.get("身份证号", ""), DEFAULT_RULES.get("手机号码", "")]
+        self.active_rules = [
+            DEFAULT_RULES.get("身份证号", ""),
+            DEFAULT_RULES.get("手机号码", ""),
+            # v37.7.x: 起诉讼书场景常用字段
+            DEFAULT_RULES.get("地址（含门牌号）", ""),
+            DEFAULT_RULES.get("固定电话", ""),
+            DEFAULT_RULES.get("法定代表人", ""),
+        ]
         self.use_enhance = False
         self.current_color = QColor(0, 0, 0)
         self.dual_view = False
@@ -9916,7 +9955,8 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self, self.active_rules, self.use_enhance, self.custom_keywords,
                             self.scan_level, self.offset_x, self.offset_w, self.replacement_text,
                             self.word_replace_rules,
-                            config_manager=config)
+                            config_manager=config,
+                            enable_name_recognition=self.enable_name_recognition)
         if dlg.exec():
             self.active_rules = dlg.selected_rules
             self.use_enhance = dlg.use_enhance
@@ -9926,6 +9966,8 @@ class MainWindow(QMainWindow):
             self.offset_w = dlg.offset_w
             self.replacement_text = dlg.replacement_text
             self.word_replace_rules = dlg.word_replace_rules
+            # v37.7.x: 同步姓名识别开关
+            self.enable_name_recognition = dlg.enable_name_recognition
             if self.word_doc:
                 if not self._has_word_replacement_candidates():
                     self.word_compare_user_hidden = False
@@ -11129,7 +11171,8 @@ sudo dnf install antiword
             # v37.4.0: 只使用 RapidOCR，移除 use_char_level_ocr 参数
             self.worker = OCRWorker(self.file_path, self.active_rules, self.use_enhance, self.custom_keywords,
                                     self.scan_level, self.offset_x, self.offset_w,
-                                    seal_detection_enabled=seal_detection_enabled)
+                                    seal_detection_enabled=seal_detection_enabled,
+                                    enable_name_recognition=self.enable_name_recognition)
             self.active_worker = self.worker  # 追踪线程
             self.worker.progress_signal.connect(self.progress.setValue)
             # v36.4: 使用线程安全的逐页结果信号
@@ -11143,7 +11186,8 @@ sudo dnf install antiword
         # Word 处理
         elif self.word_doc:
             self.worker = WordWorker(self.word_doc, self.word_data, self.active_rules,
-                                     self.custom_keywords, self.replacement_text)
+                                     self.custom_keywords, self.replacement_text,
+                                     enable_name_recognition=self.enable_name_recognition)
             self.active_worker = self.worker  # 追踪线程
             self.worker.progress_signal.connect(self.progress.setValue)
             # 先连接原有的完成处理，再连接清理
@@ -12389,6 +12433,13 @@ sudo dnf install antiword
                 except (IOError, OSError, ValueError, RuntimeError) as e:
                     QApplication.restoreOverrideCursor()
                     QMessageBox.critical(self, "失败", str(e))
+                except Exception as e:
+                    # v37.7.x: 兜底捕获所有异常 (含 pymupdf.mupdf.FzErrorSystem 等非标准异常)
+                    QApplication.restoreOverrideCursor()
+                    err_msg = str(e)
+                    if "Permission denied" in err_msg or "cannot remove" in err_msg:
+                        err_msg += "\n\n可能原因: 目标 PDF 正在被其他程序 (PDF 阅读器/浏览器) 占用.\n请关闭后再试, 或另存为新文件名."
+                    QMessageBox.critical(self, "失败", err_msg)
                 finally:
                     if doc_save:
                         doc_save.close()

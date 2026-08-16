@@ -21,7 +21,8 @@ class WordWorker(QThread):
     finished_signal = pyqtSignal(dict)
     progress_signal = pyqtSignal(int)
 
-    def __init__(self, word_doc, word_data, rules, custom_keywords, replacement_text, default_rules=None):
+    def __init__(self, word_doc, word_data, rules, custom_keywords, replacement_text, default_rules=None,
+                 enable_name_recognition: bool = False):
         super().__init__()
         self.word_doc = word_doc
         self.word_data = word_data
@@ -30,6 +31,9 @@ class WordWorker(QThread):
         self.custom_keywords = [re.escape(k.strip()) for k in raw_keywords if k.strip()]
         self.replacement_text = replacement_text
         self.default_rules = default_rules or {}
+
+        # v37.7.x: 中文姓名启发式识别开关 (默认 False,向后兼容)
+        self.enable_name_recognition = enable_name_recognition
 
     def run(self):
         """主处理流程 - 支持取消并保存进度（v36.3）"""
@@ -109,6 +113,24 @@ class WordWorker(QThread):
         """查找匹配的敏感信息"""
         matches = []
         all_patterns = self.rules + self.custom_keywords
+
+        # v37.7.x: 中文姓名启发式识别 (默认 OFF)
+        if self.enable_name_recognition and text:
+            try:
+                from privacyguard.pii.name_recognizer import (
+                    extract_person_names,
+                )
+                _names = extract_person_names(text)
+                if _names:
+                    _existing = set(self.rules) | set(self.custom_keywords)
+                    _extra = [
+                        re.escape(n) for n in _names
+                        if n not in _existing
+                    ]
+                    if _extra:
+                        all_patterns = all_patterns + _extra
+            except Exception as _exc:
+                print(f"[WordWorker] 姓名识别失败: {_exc}")
 
         for pattern in all_patterns:
             try:

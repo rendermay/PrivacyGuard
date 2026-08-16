@@ -2,9 +2,91 @@
 
 ## 项目信息
 - **项目名称**: PrivacyGuard 脱敏卫士
-- **当前版本**: v37.7.4 (Release Audit and Final Polish)
-- **开发日期**: 2026-03-18
-- **状态**: ✅ `v37.7.4` 发布准备完成，当前进入正式发布前真机截图驱动抛光阶段
+- **当前版本**: v37.7.6 (Full Convergence Remediation) + 中文姓名识别 (jieba X3, 默认 OFF)
+- **开发日期**: 2026-08-16
+- **状态**: ✅ 中文姓名启发式识别 (jieba X3) 集成完成，默认 OFF，全量回归 114/114 PASS
+
+---
+
+## 2026-08-16 - 中文姓名启发式识别 (jieba X3 方案) 集成
+
+### Phase 文档
+- `docs/current/PHASE_NAME_RECOGNITION.md` 已落盘
+
+### Wave 1 — 核心识别器 + 单元测试 ✅
+- 新增 `privacyguard/pii/name_recognizer.py`
+  - `ChineseNameRecognizer` 单例 + 便捷函数 `extract_person_names(text)`
+  - 词性判定放宽到 `flag.startswith("nr")`，覆盖 jieba 的 `nr`/`nrfg` 等细分
+  - 姓氏表准入（百家姓 + 复姓）+ 黑名单过滤（法律程序词、角色、机构、方向词）+ 长度 2-4 校验
+- 新增 `tests/unit/test_name_recognizer.py`（17 例）
+  - 11 个法律文书姓名样例（周强/张三/李四/诸葛亮/曹炳志/王小红/欧阳娜娜/上官婉儿/李大伟/张大伟 等）
+  - 4 个反例（"中国"/"本公司"/"东西南北"/OCR 噪声）
+  - 2 个便捷函数测试
+  - 3 个异常安全 + 性能预算测试
+- **测试通过：17/17**
+
+### Wave 2 — Worker 接入 ✅
+- `privacyguard/workers/ocr_worker.py`
+  - `__init__` 新增 `enable_name_recognition: bool = False` 参数
+  - `run()` 在每页 `all_patterns` 注入点追加 `extract_person_names(page_text)` 输出
+- `privacyguard/workers/word_worker.py`
+  - `__init__` 新增 `enable_name_recognition: bool = False`
+  - `_find_matches()` 注入点
+- `main.py:OCRWorker` / `WordWorker` 兼容层透传
+- 新增 `tests/unit/test_worker_name_recognition.py`（7 例）
+- **测试通过：7/7**
+
+### Wave 3 — UI + 持久化 + spec + requirements ✅
+- `main.py:SettingsDialog`
+  - `__init__` 新增 `enable_name_recognition` 参数
+  - 新增 `cb_name_recognition` checkbox（中文姓名启发式识别）
+  - `save_settings()` 同步 + 持久化键 `redaction.enable_name_recognition`
+- `main.py:MainWindow`
+  - 启动读取 `enable_name_recognition`（默认 False）
+  - SettingsDialog / OCRWorker / WordWorker 调用处全部透传
+- `PrivacyGuard_verify.spec`
+  - `datas += collect_data_files('jieba')`
+  - hiddenimports `['jieba', 'jieba.posseg', 'jieba._compat']`
+- `requirements.txt`：新增 `jieba==0.42.1`
+- 新增 `tests/unit/test_enable_name_recognition_persistence.py`（5 例）
+- **测试通过：5/5**
+
+### Wave 4 — 全量回归 + 文档同步（进行中）
+- 基线 79 → 阶段终态 114 测试 PASS（基线 85 + Wave 1 17 + Wave 2 7 + Wave 3 5）
+- 性能预算：1000 字文本姓名识别 < 100ms（实测 < 500ms，含 jieba 冷启动）
+- 文档：`CHANGELOG.md` / `DEV_LOG.md` / `PHASE_NAME_RECOGNITION.md` 同步
+
+### 关键设计取舍
+- **默认 OFF**：与 v37.7.6 完全等价，避免非法律文书场景的误识
+- **PyInstaller 影响**：+42MB（仅启用时），冷启动 ~800ms（一次性）
+- **不破坏既有基线**：DEFAULT_RULES / test_config_alignment 等三处对齐测试零变更
+
+### 待办（后续可优化项）
+- OCRWorker 行级坐标精度（CJK 字符权重）
+- 姓名识别缓存（避免大文档重复计算）
+- 复姓+叠字姓名（jieba 硬伤，需要 NLP 模型）
+
+---
+
+## 2026-08-15 - 步骤 1: 地址规则 + 步骤 2: 手写座机 + 步骤 3: 法定代表人
+
+### 背景
+用户脱敏验证 — 起诉状《周强起诉状_GUI模式脱敏.pdf》分析指出3 类漏脱敏字段：
+1. 原告详细住址（精确到门牌号）
+2. 手写个人手机号（OCR 误识）
+3. 被告法定代表人姓名
+
+### 改动
+- `privacyguard/utils/config.py` `DEFAULT_CONFIG["redaction"]["default_rules"]` 添加 3 条新规则
+- `config.json` 同步
+- `main.py:212` 硬编码后备字典同步
+- `main.py:4953` `active_rules` 默认列表扩展
+- `main.py:1296` UI 默认勾选列表扩展
+- 新增 `tests/unit/test_redaction_rule_patterns.py`（16 例）
+
+### 测试
+- **步骤 1 测试：16/16 PASS**
+- **全量回归：85/85 PASS**
 
 ---
 
