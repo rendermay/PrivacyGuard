@@ -98,16 +98,6 @@ def read_app_version():
 class SimpleConfig:
     """简化配置管理器 - 直接从 config.json 读取"""
 
-    # v37.8.x: 缺省键补齐（仅含新增 override 相关键，其他键由 config.json 提供）
-    DEFAULT_CONFIG = {
-        "redaction": {
-            "enable_hit_override": True,
-            "overrides": {
-                "permanent": [],
-            },
-        },
-    }
-
     def __init__(self, config_path=None):
         self._config = {}
         if config_path is None:
