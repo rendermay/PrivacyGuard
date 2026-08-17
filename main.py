@@ -11736,6 +11736,7 @@ sudo dnf install antiword
             table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
             td, th {{ border: 1px solid #ddd; padding: 8px; vertical-align: top; }}
             mark.ocr-highlight {{ background-color: #ffeb3b; color: #000; display: inline; box-decoration-break: clone; -webkit-box-decoration-break: clone; }}
+            mark.ocr-hit--confirmed {{ background-color: #ff9800; color: #000; display: inline; box-decoration-break: clone; -webkit-box-decoration-break: clone; }}
             mark.manual-highlight {{ background-color: #ff6b6b; color: #fff; display: inline; cursor: pointer; box-shadow: 0 0 0 1px #e03131; box-decoration-break: clone; -webkit-box-decoration-break: clone; }}
             mark.manual-highlight:hover {{ box-shadow: 0 0 0 1px #e03131, 0 0 4px rgba(225, 49, 49, 0.5); }}
             mark.replace-preview-highlight {{
@@ -12033,14 +12034,27 @@ sudo dnf install antiword
 
     def _build_word_replaced_panel_updates(self):
         updates = {}
+        # v37.8.x: HitOverrideStore 过滤 — ignored OCR hit 不进入 merge
+        # (manual 永远保留;confirm 保留)。与 _save_word / _rects_for_page 保持一致。
+        store = getattr(self, "_override_store", None)
+        doc_hash = getattr(self, "_current_doc_hash", "") or ""
         for key, data in self.word_data.items():
             source_text = data.get("text", "")
+            raw_ocr = data.get("ocr", [])
+            if store is not None and doc_hash:
+                filtered_ocr = store.filtered_hits(
+                    list(raw_ocr),
+                    location=key,
+                    doc_hash=doc_hash,
+                )
+            else:
+                filtered_ocr = list(raw_ocr)
             merged_matches = merge_word_matches_with_priority(
                 source_text,
                 self.word_replace_rules,
                 self.replacement_text,
                 manual_matches=data.get("manual", []),
-                ocr_matches=data.get("ocr", [])
+                ocr_matches=filtered_ocr
             )
             updates[key] = self._build_replaced_preview_fragment(source_text, merged_matches)
         return updates

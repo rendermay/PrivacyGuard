@@ -106,6 +106,26 @@ class BridgeOverrideSlotsTest(unittest.TestCase):
             "revert_override 应从 store 删除该 override")
         self.mock_mw.render_word_preview.assert_called_once()
 
+    def test_ignore_ocr_hit_corrupt_hit_id_does_not_raise(self):
+        """未知 hit_id 容错:传入畸形 hit_id 不应抛异常;store 应保持空。"""
+        # 正常 hit_id 形如 'a1b2c3d4|paragraph_0|2|4|jieba',5 段以 | 分隔
+        # 这里只给 2 段 — 解析 HitRef 必然失败
+        corrupt_hit_id = "broken|hit_id"
+        try:
+            self.bridge.ignore_ocr_hit(
+                "paragraph_0", "jieba", "周强", corrupt_hit_id,
+            )
+        except Exception as exc:  # pragma: no cover - 失败信号
+            self.fail(f"corrupt hit_id 不应抛异常: {exc}")
+        # store 仍空,未记录 ignore
+        self.assertEqual(
+            len(list(self.mock_mw._override_store.iter_overrides())),
+            0,
+            "corrupt hit_id 不应在 store 写入任何 override",
+        )
+        # render_word_preview 不应被触发(因为解析失败早 return)
+        self.mock_mw.render_word_preview.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
