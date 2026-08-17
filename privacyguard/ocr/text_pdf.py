@@ -26,7 +26,13 @@ def iter_unique_text_matches(page_text, patterns):
 
 
 def collect_text_pdf_hit_boxes(page, patterns, page_text=None):
-    """返回文本型 PDF 的唯一命中框坐标列表。"""
+    """返回文本型 PDF 的唯一命中框坐标列表。
+
+    Wave 2.1 (Task 3): 返回值从 4-tuple `(x, y, w, h)` 升级为
+    6-tuple `(x, y, w, h, text, rule_name)`。text 是命中的原文,
+    rule_name 是触发命中的 pattern (用于上游 HitOverrideStore
+    关联 rule_name 与 source).
+    """
     if page_text is None:
         page_text = page.get_text()
 
@@ -45,6 +51,6 @@ def collect_text_pdf_hit_boxes(page, patterns, page_text=None):
             continue
 
         for hit in hits:
-            hit_boxes.append((hit.x0, hit.y0, hit.width, hit.height))
+            hit_boxes.append((hit.x0, hit.y0, hit.width, hit.height, found_str, found_str))
 
     return hit_boxes
