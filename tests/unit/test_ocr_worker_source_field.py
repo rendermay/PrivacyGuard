@@ -126,6 +126,63 @@ class OCRWorkerPayloadTest(unittest.TestCase):
         self.assertEqual(ocr_hits[0]["text"], "13812345678")
         self.assertEqual(ocr_hits[0]["rule_name"], "custom_phone")
 
+    def test_jieba_hits_marked_source_jieba(self):
+        """jieba 路径必须打 source='jieba',rule_name='姓名启发式'.
+
+        这是 Task 3 最重要的 source 标签 — Task 4 用户最常要 ignore 的就是 jieba 误判。
+        """
+        from privacyguard.workers.ocr_worker import OCRWorker
+
+        mock_ocr_engine = MagicMock()
+        mock_ocr_engine.recognize.return_value = []
+
+        fake_page = MagicMock()
+        fake_page.get_text.return_value = "周强是作者"
+
+        text_pdf_calls = []
+
+        def fake_text_pdf(page, patterns, page_text=None):
+            text_pdf_calls.append(patterns)
+            if patterns == ["周强"]:
+                return [(50, 60, 25, 15, "周强", "姓名启发式")]
+            return []
+
+        with patch("privacyguard.workers.ocr_worker.collect_text_pdf_hit_boxes",
+                   side_effect=fake_text_pdf), \
+            patch("privacyguard.workers.ocr_worker.collect_embedded_image_clip_rects",
+                  return_value=[]), \
+            patch("privacyguard.workers.ocr_worker.collect_image_block_ocr_hits",
+                  return_value=[]), \
+            patch("privacyguard.pii.name_recognizer.extract_person_names",
+                  return_value=["周强"]):
+            worker = OCRWorker(
+                pdf_path="/dev/null",
+                rules=[],
+                use_enhance=False,
+                custom_keywords="",
+                scan_scale=1.0,
+                off_x=0,
+                off_w=0,
+                enable_name_recognition=True,
+            )
+
+            captured = []
+            worker.page_result_signal.connect(
+                lambda idx, hits: captured.append((idx, hits))
+            )
+
+            worker._process_page(fake_page, 0, ocr_engine=mock_ocr_engine, scan_scale=1.0)
+
+        self.assertEqual(len(captured), 1)
+        _, hits = captured[0]
+        jieba_hits = [h for h in hits if h["source"] == "jieba"]
+        self.assertEqual(len(jieba_hits), 1, "jieba 应有 1 个 source='jieba' hit")
+        self.assertEqual(jieba_hits[0]["text"], "周强")
+        self.assertEqual(jieba_hits[0]["rule_name"], "姓名启发式")
+        # jieba 路径应触发一次 collect_text_pdf_hit_boxes(传入 ["周强"])
+        self.assertIn(["周强"], text_pdf_calls,
+                      "jieba 路径应触发一次 collect_text_pdf_hit_boxes")
+
 
 if __name__ == "__main__":
     unittest.main()
