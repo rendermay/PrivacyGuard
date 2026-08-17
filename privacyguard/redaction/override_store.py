@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Iterator, List, Optional
 
 from privacyguard.redaction.hit_ref import HitRef, Override, VALID_ACTIONS, VALID_SCOPES
@@ -14,6 +14,36 @@ logger = logging.getLogger(__name__)
 
 def _now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def clean_stale_permanent(items, *, max_age_days: int = 30, today: Optional[str] = None) -> list:
+    """清理 max_age_days 天前 promoted 的永久 override.
+
+    Args:
+        items: dump_permanent 输出格式的 list
+        max_age_days: 阈值，默认 30 天
+        today: 测试用，ISO 格式；None 则用 datetime.now()
+    """
+    if today is None:
+        today_iso = datetime.now().isoformat(timespec="seconds")
+    else:
+        today_iso = today
+    today_dt = datetime.fromisoformat(today_iso)
+    cutoff = today_dt - timedelta(days=max_age_days)
+    kept = []
+    for item in items:
+        promoted_at = item.get("promoted_at")
+        if not promoted_at:
+            kept.append(item)
+            continue
+        try:
+            promoted_dt = datetime.fromisoformat(promoted_at)
+        except ValueError:
+            kept.append(item)
+            continue
+        if promoted_dt >= cutoff:
+            kept.append(item)
+    return kept
 
 
 class HitOverrideStore:
@@ -33,6 +63,8 @@ class HitOverrideStore:
         # keyed by hit_id
         self._overrides: Dict[str, Override] = {}
         self._lock = threading.Lock()
+        # v37.8.x: 可选 SimpleConfig 引用，由调用方在 init 后注入
+        self._config = None  # type: ignore[assignment]
 
     @classmethod
     def instance(cls) -> "HitOverrideStore":
@@ -193,3 +225,27 @@ class HitOverrideStore:
             scope=raw["scope"],
             promoted_at=raw.get("promoted_at"),
         )
+
+    # ---- v37.8.x: 与 SimpleConfig 双向绑定 ----
+
+    def bind_config(self, config) -> None:
+        """由 MainWindow 在 init 时注入 SimpleConfig 引用。
+
+        之后 save_permanent() 会自动把 dump_permanent() 写回
+        ``redaction.overrides.permanent`` 并落盘。
+        """
+        self._config = config
+
+    def save_permanent(self) -> None:
+        """写回 SimpleConfig.
+
+        若未 bind_config 则静默跳过（避免污染测试态）。
+        """
+        if self._config is None:
+            return
+        items = self.dump_permanent()
+        try:
+            self._config.set("redaction.overrides.permanent", items, persist=False)
+            self._config.save()
+        except Exception as exc:
+            logger.warning("save_permanent 失败: %s", exc)

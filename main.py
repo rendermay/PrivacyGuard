@@ -76,8 +76,9 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QRadioButton, QButtonGroup, QComboBox, QSizePolicy,
                              QTextBrowser, QLineEdit, QListWidget, QListWidgetItem,
                              QAbstractItemView, QSlider, QTableWidget, QMenu,
-                             QTableWidgetItem, QHeaderView, QStyle)
-from PyQt6.QtGui import QPixmap, QImage, QPainter, QPen, QColor, QWheelEvent, QCursor, QIcon, QDesktopServices
+                             QTableWidgetItem, QHeaderView, QStyle,
+                             QDockWidget)
+from PyQt6.QtGui import QPixmap, QImage, QPainter, QPen, QColor, QWheelEvent, QCursor, QIcon, QDesktopServices, QShortcut, QKeySequence
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QRectF, QPointF, QSettings, QMutex, QMutexLocker, QObject, pyqtSlot, QSize, QTimer, QUrl
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebChannel import QWebChannel
@@ -1628,6 +1629,47 @@ class SettingsDialog(QDialog):
         v_ocr.addWidget(adjust_card)
         layout.addWidget(box_ocr)
 
+        # v37.8.x: 5. 永久 override 维护
+        box_overrides = QFrame()
+        box_overrides.setObjectName("settingsSectionCard")
+        v_overrides = QVBoxLayout(box_overrides)
+        v_overrides.setContentsMargins(16, 16, 16, 16)
+        v_overrides.setSpacing(12)
+        ov_lead = QLabel("维护永久 ignore / confirm 条目。永久 override 会跨会话生效,建议定期清理过期记录。")
+        ov_lead.setObjectName("settingsSectionLead")
+        ov_lead.setWordWrap(True)
+        self.lbl_overrides_summary = QLabel("")
+        self.lbl_overrides_summary.setObjectName("settingsSectionSummary")
+        self.lbl_overrides_summary.setWordWrap(True)
+        v_overrides.addWidget(
+            self._create_settings_section_header(
+                "5. 永久 override 名单", ov_lead, self.lbl_overrides_summary
+            )
+        )
+        ov_actions = QHBoxLayout()
+        ov_actions.setSpacing(8)
+        ov_actions.addWidget(self._create_settings_action_hint("快捷操作"))
+        clean_btn = QPushButton("清理 30 天前失效的 permanent overrides")
+        clean_btn.setObjectName("settingsInlineButton")
+        clean_btn.clicked.connect(self._on_clean_stale_overrides)
+        ov_actions.addWidget(clean_btn)
+        ov_actions.addStretch()
+        v_overrides.addLayout(ov_actions)
+        ov_card = QFrame()
+        ov_card.setObjectName("settingsFieldCard")
+        ov_card_layout = QVBoxLayout(ov_card)
+        ov_card_layout.setContentsMargins(16, 16, 16, 16)
+        ov_card_layout.setSpacing(8)
+        ov_card_title = QLabel("Permanent 列表")
+        ov_card_title.setObjectName("settingsFieldTitle")
+        ov_card_note = QLabel("永久条目存于 config.json 的 redaction.overrides.permanent,共 N 条。")
+        ov_card_note.setObjectName("settingsFieldNote")
+        ov_card_note.setWordWrap(True)
+        ov_card_layout.addWidget(ov_card_title)
+        ov_card_layout.addWidget(ov_card_note)
+        v_overrides.addWidget(ov_card)
+        layout.addWidget(box_overrides)
+
         layout.addStretch(1)
         content_scroll.setWidget(content_widget)
         body_layout.addWidget(content_scroll, stretch=1)
@@ -1664,7 +1706,7 @@ class SettingsDialog(QDialog):
         footer_actions.addWidget(btn_ok)
         footer_layout.addLayout(footer_actions)
         outer_layout.addWidget(footer)
-        self._settings_sections = [box_rules, box_custom, box_enhance, box_ocr]
+        self._settings_sections = [box_rules, box_custom, box_enhance, box_ocr, box_overrides]
         self._settings_nav_syncing = False
         self.settings_nav.currentRowChanged.connect(self._scroll_to_settings_section)
         self.content_scroll.verticalScrollBar().valueChanged.connect(self._sync_settings_nav_from_scroll)
@@ -1673,6 +1715,7 @@ class SettingsDialog(QDialog):
         self._refresh_rule_summary()
         self._refresh_precision_summary()
         self._refresh_ocr_summary()
+        self._refresh_overrides_summary()
         self._refresh_settings_layout_density()
 
     def _on_adjust_changed(self, value):
@@ -2611,6 +2654,53 @@ class SettingsDialog(QDialog):
             trend = "保持原始检测框"
         self.lbl_ocr_summary.setText(f"当前检测框调节：{adjust_value}% · {trend}")
         self._refresh_settings_overview()
+
+    def _refresh_overrides_summary(self):
+        """v37.8.x: 读取 config 中的 permanent overrides 数量,刷新概述."""
+        if not self.config:
+            self.lbl_overrides_summary.setText("当前未挂载配置管理器,无法统计。")
+            return
+        items = self.config.get("redaction.overrides.permanent", []) or []
+        total = len(items) if isinstance(items, list) else 0
+        ignore_n = sum(1 for it in items if isinstance(it, dict) and it.get("action") == "ignore")
+        confirm_n = sum(1 for it in items if isinstance(it, dict) and it.get("action") == "confirm")
+        self.lbl_overrides_summary.setText(
+            f"当前 permanent 列表: 共 {total} 条(ignore {ignore_n} / confirm {confirm_n})"
+        )
+        self._refresh_settings_overview()
+
+    def _on_clean_stale_overrides(self):
+        """v37.8.x: 清理 30 天前 promoted 的 permanent override."""
+        if not self.config:
+            QMessageBox.warning(self, "提示", "未挂载配置管理器,无法清理。")
+            return
+        from privacyguard.redaction.override_store import clean_stale_permanent
+        items = self.config.get("redaction.overrides.permanent", []) or []
+        if not isinstance(items, list):
+            QMessageBox.warning(self, "提示", "permanent 字段格式异常,无法清理。")
+            return
+        before = len(items)
+        cleaned = clean_stale_permanent(items, max_age_days=30)
+        removed = before - len(cleaned)
+        self.config.set("redaction.overrides.permanent", cleaned)
+        try:
+            self.config.save()
+        except Exception as exc:
+            QMessageBox.warning(self, "失败", f"保存配置失败: {exc}")
+            return
+        # 同步内存中的 store
+        mw = self.parent()
+        if mw is not None and hasattr(mw, "_override_store"):
+            try:
+                mw._override_store.load_permanent(cleaned)
+            except Exception:
+                pass
+        self._refresh_overrides_summary()
+        QMessageBox.information(
+            self,
+            "完成",
+            f"已清理 {removed} 条失效 permanent override(剩余 {len(cleaned)} 条)。",
+        )
 
     def _open_word_rules_editor(self):
         default_text = self.input_replacement_text.text().strip() or "[已脱敏]"
@@ -4277,6 +4367,56 @@ class SinglePageCanvas(QLabel):
             # 同时传递给父类以支持正常滚动
             super().wheelEvent(event)
 
+
+# === v37.8.x: 干预面板 dock ===
+class OverrideDock(QDockWidget):
+    """显示当前文档的会话级 + 永久级 override 列表.
+
+    - 5 列表格: 文本 / 来源 / 位置 / 操作 / 作用域
+    - 顶部摘要: 已忽略 N 条 / 已确认 N 条
+    - 通过 MainWindow._override_store 实时拉数据
+    """
+
+    def __init__(self, parent=None):
+        super().__init__("脱敏干预", parent)
+        self._main_window = None
+        self._table = QTableWidget(0, 5)
+        self._table.setHorizontalHeaderLabels(["文本", "来源", "位置", "操作", "作用域"])
+        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._summary_label = QLabel("已忽略 0 条 / 已确认 0 条")
+        layout = QVBoxLayout()
+        layout.addWidget(self._summary_label)
+        layout.addWidget(self._table)
+        container = QWidget()
+        container.setLayout(layout)
+        self.setWidget(container)
+        self.hide()
+
+    def attach(self, main_window):
+        self._main_window = main_window
+
+    def refresh(self):
+        if not self._main_window:
+            return
+        store = getattr(self._main_window, "_override_store", None)
+        if store is None:
+            return
+        items = list(store.iter_overrides())
+        self._table.setRowCount(len(items))
+        ig = cf = 0
+        for row, ov in enumerate(items):
+            self._table.setItem(row, 0, QTableWidgetItem(ov.ref.text))
+            self._table.setItem(row, 1, QTableWidgetItem(ov.ref.source))
+            self._table.setItem(row, 2, QTableWidgetItem(ov.ref.location))
+            self._table.setItem(row, 3, QTableWidgetItem(ov.action))
+            self._table.setItem(row, 4, QTableWidgetItem(ov.scope))
+            if ov.action == "ignore":
+                ig += 1
+            else:
+                cf += 1
+        self._summary_label.setText(f"已忽略 {ig} 条 / 已确认 {cf} 条")
+
+
 # === OCR 线程 ===
 # v37.7.6: 改为使用模块化 OCRWorker，自动注入 box_adjust_ratio
 class OCRWorker(_ModularOCRWorker):
@@ -4460,9 +4600,8 @@ class WebViewBridge(QObject):
         """JS 调用:把已记录的 session override 提升为 permanent."""
         store = self.main_window._override_store
         store.promote(hit_id)
-        # Task 5 note: HitOverrideStore 当前没有 save_permanent;
-        # permanent 状态通过 dump_permanent() 暴露给 config 持久化层。
-        # 这里不做自动落盘,留上层自行调度,避免污染用户配置。
+        # v37.8.x: 提升后立即落盘 + 刷新 dock
+        store.save_permanent()
         if hasattr(self.main_window, "_refresh_override_dock"):
             self.main_window._refresh_override_dock()
 
@@ -4470,6 +4609,8 @@ class WebViewBridge(QObject):
     def revert_override(self, hit_id):
         """JS 调用:撤销某条已记录的 override."""
         self.main_window._override_store.revert(hit_id)
+        # v37.8.x: 若该 hit 是 permanent, 撤销后需落盘
+        self.main_window._override_store.save_permanent()
         self.main_window.render_word_preview()
         if hasattr(self.main_window, "_refresh_override_dock"):
             self.main_window._refresh_override_dock()
@@ -5189,6 +5330,25 @@ class MainWindow(QMainWindow):
 
         self.setup_ui()
 
+        # v37.8.x: 干预面板 dock
+        self._override_store.bind_config(config)
+        # 启动时加载 config.json 中的 permanent overrides
+        perms = config.get("redaction.overrides.permanent", []) if config else []
+        if perms:
+            self._override_store.load_permanent(perms)
+        self._override_dock = OverrideDock(self)
+        self._override_dock.attach(self)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._override_dock)
+        # 启动时根据配置决定 dock 是否可见
+        if config and config.get("redaction.enable_hit_override", True):
+            self._override_dock.show()
+        # Ctrl+Shift+H 快捷键 toggle dock 显隐
+        self._override_dock_shortcut = QShortcut(
+            QKeySequence("Ctrl+Shift+H"), self
+        )
+        self._override_dock_shortcut.activated.connect(self._override_dock.toggle_view)
+        self._refresh_override_dock()
+
         # v37.6.0: 启用拖拽支持
         self.setAcceptDrops(True)
         self._drag_active = False  # 拖拽状态标记
@@ -5245,6 +5405,12 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """保存窗口状态并清理临时文件"""
+        # v37.8.x: 关闭前把 permanent overrides 落盘
+        if hasattr(self, "_override_store"):
+            try:
+                self._override_store.save_permanent()
+            except Exception as exc:
+                print(f"[关闭] 保存 permanent override 失败: {exc}")
         self._app_exit_cleanup()
         self.settings.setValue("window_geometry", self.saveGeometry())
         super().closeEvent(event)
@@ -5767,6 +5933,12 @@ class MainWindow(QMainWindow):
 
         # 清理旧版临时文件
         self._cleanup_temp_file()
+
+    def _refresh_override_dock(self):
+        """v37.8.x: 刷新干预面板数据,被桥槽调用."""
+        dock = getattr(self, "_override_dock", None)
+        if dock is not None:
+            dock.refresh()
 
     # v22.4: 移除 eventFilter，直接在 SinglePageCanvas.mousePressEvent 中处理
 
