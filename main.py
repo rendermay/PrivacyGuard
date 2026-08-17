@@ -11412,6 +11412,8 @@ sudo dnf install antiword
     def _render_single_page(self, canvas, page_idx):
         """v7.0 风格渲染 - 直接传递列表引用
         v37.0.9: 添加异常处理防止 canvas 被删除后崩溃
+        v37.8.x: 同步 canvas.page_index — 保证 PDFCanvas.mousePressEvent 中
+        _locate_hit 用 f"page_{page_index}" 与 _rects_for_page 命中同一 hit_id
         """
         # 检查 canvas 有效性
         if not self._is_canvas_valid(canvas):
@@ -11428,6 +11430,10 @@ sudo dnf install antiword
             self._safe_canvas_update(canvas, QPixmap.fromImage(qimg), self.zoom_level,
                                      ocr_rects, data['manual'])
             self._safe_canvas_set_mask_color(canvas, self.current_color)
+            # v37.8.x: 关键修复 — canvas.page_index 必须随渲染同步,否则
+            # PDFCanvas.mousePressEvent 中 _locate_hit 构造 HitRef 用错 location,
+            # 与 _rects_for_page 过滤时的 hit_id 不匹配 → 黑块无法消失
+            canvas.page_index = page_idx
         except RuntimeError as e:
             print(f"[错误] 渲染页面 {page_idx} 时出错: {e}")
         except Exception as e:
