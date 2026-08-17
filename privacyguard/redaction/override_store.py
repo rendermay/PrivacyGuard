@@ -209,6 +209,33 @@ class HitOverrideStore:
                     continue
                 self._overrides[ov.ref.hit_id] = ov
 
+    def replace_permanent(self, items: List[dict]) -> None:
+        """全量替换永久 overrides。
+
+        与 ``load_permanent`` (仅新增/覆盖) 不同,本方法会先移除所有现有的
+        permanent 条目,再按 ``items`` 重建。用于"清理失效"等需要保持内存与
+        config.json 一致的场景。
+        """
+        if not isinstance(items, list):
+            logger.warning("replace_permanent: 期望 list,得到 %s", type(items).__name__)
+            return
+        with self._lock:
+            # 移除现有 permanent 条目
+            stale_hits = [
+                hit_id for hit_id, ov in self._overrides.items()
+                if ov.scope == "permanent"
+            ]
+            for hit_id in stale_hits:
+                del self._overrides[hit_id]
+            # 装载新 items
+            for raw in items:
+                try:
+                    ov = self._restore_one(raw)
+                except Exception as exc:
+                    logger.warning("replace_permanent: 跳过损坏条目: %s; data=%s", exc, raw)
+                    continue
+                self._overrides[ov.ref.hit_id] = ov
+
     @staticmethod
     def _restore_one(raw: dict) -> Override:
         ref = HitRef(

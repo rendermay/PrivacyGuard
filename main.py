@@ -2692,7 +2692,7 @@ class SettingsDialog(QDialog):
         mw = self.parent()
         if mw is not None and hasattr(mw, "_override_store"):
             try:
-                mw._override_store.load_permanent(cleaned)
+                mw._override_store.replace_permanent(cleaned)
             except Exception:
                 pass
         self._refresh_overrides_summary()
@@ -5346,7 +5346,9 @@ class MainWindow(QMainWindow):
         self._override_dock_shortcut = QShortcut(
             QKeySequence("Ctrl+Shift+H"), self
         )
-        self._override_dock_shortcut.activated.connect(self._override_dock.toggle_view)
+        self._override_dock_shortcut.activated.connect(
+            lambda: self._override_dock.setVisible(not self._override_dock.isVisible())
+        )
         self._refresh_override_dock()
 
         # v37.6.0: 启用拖拽支持

@@ -52,6 +52,22 @@ class OverridesPersistenceTest(unittest.TestCase):
         self.assertEqual(len(cleaned), 1)
         self.assertEqual(cleaned[0]["hit_id"], "b|p|0|2|jieba")
 
+    def test_replace_permanent_removes_stale(self):
+        """replace_permanent 应移除所有不存在的 permanent 条目."""
+        s = HitOverrideStore.instance()
+        # 加两个 permanent override
+        ref_old = HitRef("a", "p", 0, 2, "old", "jieba")
+        ref_new = HitRef("b", "p", 0, 2, "new", "ocr")
+        s.ignore(ref_old, scope="permanent")
+        s.ignore(ref_new, scope="permanent")
+        # replace 只传 new
+        new_items = s.dump_permanent()
+        new_items = [it for it in new_items if it["doc_hash"] == "b"]
+        s.replace_permanent(new_items)
+        # ref_old 应不再被 ignored,ref_new 应仍被 ignored
+        self.assertFalse(s.is_ignored(ref_old))
+        self.assertTrue(s.is_ignored(ref_new))
+
 
 if __name__ == "__main__":
     unittest.main()
