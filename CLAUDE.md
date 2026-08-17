@@ -7,9 +7,9 @@ This file is the primary development guide for Claude Code and other coding agen
 ## Project Overview
 
 **Project**: PrivacyGuard 脱敏卫士  
-**Current Version**: v37.7.6 (`37.7.6 - Full Convergence Remediation`)  
-**Last Updated**: 2026-05-16  
-**Status**: v37.7.6 全面重复实现收敛完成；P1-P4 修复全部完成；基线测试 79/79 通过
+**Current Version**: v37.8.0 (`37.8.0 - Manual Redaction Intervention`)  
+**Last Updated**: 2026-08-17  
+**Status**: v37.8.0 自动脱敏人工干预机制完成；Wave 1-5 全部完成；全量回归 162 项 / 160 通过（2 项为 v37.7.6 起既有失败）
 
 PrivacyGuard is a Python + PyQt6 desktop application for intelligent redaction of PDF and Word documents.
 
@@ -29,6 +29,11 @@ PrivacyGuard is a Python + PyQt6 desktop application for intelligent redaction o
   - left: original preview with OCR/manual highlights
   - right: merged replaced preview (`rule > manual > ocr`)
 - Drag & drop open
+- 人工干预 (Manual Redaction Intervention):
+  - 自动命中支持右键「忽略 / 确认 / 撤销 / 提升为永久」
+  - 会话级 + 永久级双层 override，由 `HitOverrideStore` 单例统一管理
+  - 专用干预 dock 面板（按 scope / action 筛选）
+  - 设置中心「清理失效 overrides」
 - Windows and macOS packaging scripts
 
 ---
@@ -39,12 +44,13 @@ When resuming work, read these files in order:
 
 1. `docs/current/STATUS.md`
 2. `docs/current/DEV_LOG.md`
-3. `docs/current/V38_UI_REFACTOR_PLAN.md`
-4. `CHANGELOG.md`
-5. `rollback_journal.md`
-6. `docs/current/PRIORITY_REMEDIATION_PLAN.md`
-7. `docs/diary/20260309_2338_release_sync_diary.md`
-8. `docs/diary/20260311_pyinstaller_packaging_fix_diary.md`
+3. `docs/current/PHASE_HIT_OVERRIDE.md`
+4. `docs/current/V38_UI_REFACTOR_PLAN.md`
+5. `CHANGELOG.md`
+6. `rollback_journal.md`
+7. `docs/current/PRIORITY_REMEDIATION_PLAN.md`
+8. `docs/diary/20260309_2338_release_sync_diary.md`
+9. `docs/diary/20260311_pyinstaller_packaging_fix_diary.md`
 
 ---
 
@@ -68,6 +74,20 @@ When resuming work, read these files in order:
 - Shared config utilities also exist in `privacyguard/utils/config.py`
 - Do not assume `ConfigManager` is the active runtime path unless you have explicitly switched the app over
 - **v37.7.x 中文姓名启发式识别 (jieba X3)**：新增 `redaction.enable_name_recognition` 键，默认 False；详见 `docs/current/PHASE_NAME_RECOGNITION.md`
+- **v37.8.0 人工干预 (Hit Override)**：新增 `redaction.enable_hit_override`（默认 True）与 `redaction.overrides.permanent`；详见 `docs/current/PHASE_HIT_OVERRIDE.md`
+
+### Hit override store (人工干预)
+
+- 核心包：`privacyguard/redaction/`
+  - `hit_ref.py` — `HitRef`(frozen) + `Override`；`hit_id = f"{doc_hash}|{location}|{start}|{end}|{source}"`
+  - `doc_hash.py` — `compute_doc_hash(file_path)`，基于 路径 + size + mtime 的 8 位标识
+  - `override_store.py` — `HitOverrideStore` 单例，session / permanent 双层作用域
+- **唯一消费入口**：`HitOverrideStore.instance().filtered_hits(hits, location=..., doc_hash=...)`
+  - 任何新的命中消费端都必须经此入口，禁止自行判定 override
+- `manual` 来源命中永不被过滤（人工框选是显式意图）
+- `OCRWorker.page_result_signal` payload 是 `list[dict]`（含 `rect` / `source` / `text` / `start` / `end`），**不再是** `list[QRectF]`
+- 永久 override 存于 `config.json` 的 `redaction.overrides.permanent`，写入走 tmp + rename 原子替换
+- 默认空 override 时行为与 v37.7.6 完全一致
 
 ### OCR dependency behavior
 
@@ -134,6 +154,9 @@ Important:
 - `privacyguard/utils/exceptions.py` - shared exception classes
 - `privacyguard/utils/temp_manager.py` - shared temp file manager
 - `privacyguard/utils/security.py` - shared path validation & resource_path
+- `privacyguard/redaction/hit_ref.py` - `HitRef` / `Override` 数据模型
+- `privacyguard/redaction/doc_hash.py` - 文档 8 位标识
+- `privacyguard/redaction/override_store.py` - `HitOverrideStore` 单例 + `filtered_hits`
 
 ---
 
@@ -170,7 +193,64 @@ python3 -m unittest \
   -v
 ```
 
-Current verified baseline: `114/114` (含步骤 1 + 步骤 4 jieba X3 集成)。
+Current verified baseline: `162` 项 / `160` 通过（见下方 full regression）。
+
+### Extended regression (hit override / 人工干预)
+
+```bash
+python3 -m unittest \
+  tests.unit.test_hit_ref \
+  tests.unit.test_doc_hash \
+  tests.unit.test_override_store \
+  tests.unit.test_override_config_defaults \
+  tests.unit.test_ocr_worker_source_field \
+  tests.unit.test_pdf_source_field \
+  tests.unit.test_word_source_field \
+  tests.unit.test_bridge_override_slots \
+  tests.unit.test_overrides_persistence \
+  -v
+```
+
+共 38 例，全部 PASS。
+
+### Full regression (v37.8.0 基线)
+
+```bash
+python3 -m compileall -q main.py privacyguard tests
+python3 -m unittest \
+  tests.unit.test_hit_ref \
+  tests.unit.test_doc_hash \
+  tests.unit.test_override_store \
+  tests.unit.test_override_config_defaults \
+  tests.unit.test_ocr_worker_source_field \
+  tests.unit.test_pdf_source_field \
+  tests.unit.test_word_source_field \
+  tests.unit.test_bridge_override_slots \
+  tests.unit.test_overrides_persistence \
+  tests.unit.test_mixed_pdf_ocr \
+  tests.test_path_validation \
+  tests.unit.test_ocr_api \
+  tests.unit.test_package_imports \
+  tests.unit.test_pdf_text_hit_dedup \
+  tests.unit.test_app_config \
+  tests.unit.test_word_replace_rules \
+  tests.unit.test_batch_word_replace \
+  tests.unit.test_config_alignment \
+  tests.unit.test_fstring_safety \
+  tests.unit.test_convergence \
+  tests.unit.test_redaction_rule_patterns \
+  tests.unit.test_name_recognizer \
+  tests.unit.test_worker_name_recognition \
+  tests.unit.test_enable_name_recognition_persistence \
+  -v
+```
+
+结果：`Ran 162 tests` / `FAILED (failures=2)`。
+
+**已知既有失败（非回归，自 v37.7.6 起存在）**：
+`tests.unit.test_config_alignment.test_scan_default_level_matches` 与
+`test_simple_config_reads_config_json_values` —— `config.json` 中
+`redaction.scan.default_level` 为 `2.0`，测试期望 `1.5`。修复前请勿把它当成新引入的回归。
 
 ### Extended regression (Chinese name recognition)
 
@@ -222,6 +302,8 @@ packaging/windows/scripts/build_complete.bat
 - `20260310_release_sync_cp29_verified`
 - `20260311_pyinstaller_packaging_fix_cp30_verified`
 - `v38_ui_refactor_cp31_20260313_140645`
+- `v37.7.x_name_recognition_x3_cp32_20260816`
+- `v37_8_manual_intervention_cp33_20260817_121549`
 
 Rollback references:
 

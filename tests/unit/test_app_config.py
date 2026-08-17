@@ -17,7 +17,7 @@ class TestAppConfig(unittest.TestCase):
 
     def test_read_app_version_falls_back_to_current_release(self):
         with patch("main.Path.read_text", side_effect=OSError):
-            self.assertEqual(read_app_version(), "37.7.6")
+            self.assertEqual(read_app_version(), "37.8.0")
 
     def test_simple_config_save_persists_multiple_values(self):
         fd, temp_path = tempfile.mkstemp(suffix=".json")

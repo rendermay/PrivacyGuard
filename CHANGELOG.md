@@ -10,8 +10,41 @@
 
 - 真机截图驱动的最后一轮观感抛光
 - 正式发布前的 Windows / macOS 产物验收
+- 干预 dock 的真机交互调试
+
+---
+
+## v37.8.0 - 2026-08-17 — 人工干预机制 (Manual Redaction Intervention)
+
+### 新增
+
+- 自动脱敏命中的人工干预通道：右键忽略/确认 + 专用 dock 面板
+- `HitOverrideStore` 单例（`privacyguard/redaction/override_store.py`），会话级 + 永久级双层 override
+- `HitRef` 不可变标识（`privacyguard/redaction/hit_ref.py`）与 `compute_doc_hash` 8 位文档标识（`privacyguard/redaction/doc_hash.py`）
+- `config.json` 新增 `redaction.enable_hit_override`（默认 `true`）与 `redaction.overrides.permanent`
+- 设置中心「清理失效 overrides」按钮（`clean_stale_permanent`，默认 30 天过期）
+- PDF 画布右键菜单：忽略 / 确认 / 撤销 / 提升为永久
+- Word 预览 WebViewBridge 新增 4 个干预槽函数 + 前端 JS 右键菜单
+- 38 条新单元测试
+
+### 修复
+
+- 无功能修复；仅扩展
+- 附带清理：删除 `SimpleConfig.DEFAULT_CONFIG` dead code
+
+### 兼容
+
+- 默认空 override 下，所有行为与 v37.7.6 完全一致
+- 旧 `config.json` 自动补齐新键
+- 旧 `OCRWorker` payload（`QRectF` 列表）不再支持，`page_result_signal` 改为 `list[dict]`，call site 已全部迁移
+
+### 测试基线
+
+- 全量回归 `162` 项：`160 PASS`，`2` 项为 v37.7.6 起既有失败（`test_config_alignment` 的 `scan.default_level` 2.0 vs 1.5），与本阶段无关
 
 ### 🆕 中文姓名启发式识别 (jieba X3 方案)
+
+> 本节原属 `[Unreleased]`，随 v37.8.0 一并发布。
 
 针对法律文书等含姓名角色的场景，新增**可选的中文人名启发式识别**能力。
 

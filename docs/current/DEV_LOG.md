@@ -2,9 +2,74 @@
 
 ## 项目信息
 - **项目名称**: PrivacyGuard 脱敏卫士
-- **当前版本**: v37.7.6 (Full Convergence Remediation) + 中文姓名识别 (jieba X3, 默认 OFF)
-- **开发日期**: 2026-08-16
-- **状态**: ✅ 中文姓名启发式识别 (jieba X3) 集成完成，默认 OFF，全量回归 114/114 PASS
+- **当前版本**: v37.8.0 (Manual Redaction Intervention)
+- **开发日期**: 2026-08-17
+- **状态**: ✅ 自动脱敏人工干预机制完成，全量回归 162 项 / 160 PASS（2 项既有失败）
+
+---
+
+## 2026-08-17 - 自动脱敏人工干预机制 (Manual Redaction Intervention)
+
+### Phase 文档
+- `docs/current/PHASE_HIT_OVERRIDE.md` 已落盘
+
+### Wave 1 — 核心层：HitRef + doc_hash + HitOverrideStore ✅
+- 新增 `privacyguard/redaction/hit_ref.py`
+  - `HitRef` frozen dataclass：`doc_hash` / `location` / `start` / `end` / `source` / `text`
+  - `hit_id` 属性 = `f"{doc_hash}|{location}|{start}|{end}|{source}"`
+  - `Override` dataclass：`hit_id` / `action`(`ignore`/`confirm`) / `scope`(`session`/`permanent`) / `created_at` / `ref`
+- 新增 `privacyguard/redaction/doc_hash.py`
+  - `compute_doc_hash(file_path)`：路径 + size + mtime → 8 位十六进制
+- 新增 `privacyguard/redaction/override_store.py`
+  - `HitOverrideStore.instance()` 单例 + `reset_singleton()`（测试用）
+  - `ignore` / `confirm` / `revert` / `promote` / `is_ignored` / `is_confirmed` / `iter_overrides`
+  - `filtered_hits(hits, *, location, doc_hash)`：唯一消费入口，保留 `manual` 来源命中不被过滤
+  - `dump_permanent` / `load_permanent` / `replace_permanent` / `bind_config` / `save_permanent`（tmp + rename 原子写）
+  - `clean_stale_permanent(items, max_age_days=30)`
+- 新增测试：`test_hit_ref`(5) + `test_doc_hash`(4) + `test_override_store`(11) = **20/20**
+
+### Wave 2 — 配置默认键 ✅
+- `config.json`：`redaction.enable_hit_override = true`、`redaction.overrides.permanent = []`
+- `SimpleConfig`：旧配置缺键自动补齐；顺带删除已死的 `SimpleConfig.DEFAULT_CONFIG`
+- 新增测试：`test_override_config_defaults`(2) — **2/2**
+
+### Wave 3 — PDF 通道 ✅
+- `privacyguard/workers/ocr_worker.py`
+  - `page_result_signal` payload 由 `list[QRectF]` 改为 `list[dict]`，携带 `rect` / `source` / `text` / `start` / `end`
+  - source 标签覆盖 `regex` / `jieba` / `keyword` / `image_ocr`
+- `main.py:MainWindow`
+  - PDF 页面命中消费端统一走 `HitOverrideStore.filtered_hits()`
+  - 画布右键菜单：忽略 / 确认 / 撤销 / 提升为永久
+- 新增测试：`test_ocr_worker_source_field`(3) + `test_pdf_source_field`(3) — **6/6**
+
+### Wave 4 — Word 通道 ✅
+- `privacyguard/workers/word_worker.py`：命中 dict 补 `source` / `start` / `end`
+- `main.py:WebViewBridge` 新增 4 个槽：`ignore_ocr_hit` / `confirm_ocr_hit` / `revert_ocr_hit` / `promote_ocr_hit`，签名统一 `(key, source, text, hit_id)`
+- 预览 JS：右键菜单 + `confirmed` / `ignored` 视觉样式；replaced panel 接 `filtered_hits()`
+- 新增测试：`test_word_source_field`(1) + `test_bridge_override_slots`(6) — **7/7**
+
+### Wave 5 — dock + 持久化 + 文档 ✅
+- 新增干预 dock 面板：按 `scope` / `action` 筛选、快捷键、双击定位
+- 启动加载 / 退出保存 `redaction.overrides.permanent`
+- SettingsDialog 新增「清理失效 overrides」按钮
+- 新增测试：`test_overrides_persistence`(3) — **3/3**
+- 文档同步：`version.txt` 37.7.6 → 37.8.0、`CHANGELOG.md`、`STATUS.md`、`DEV_LOG.md`、`PHASE_HIT_OVERRIDE.md`、`CLAUDE.md`
+
+### 最终回归
+- `python3 -m compileall -q main.py privacyguard tests` ✅
+- 全量回归 `162` 项：`160 PASS`
+- 既有失败 2 项：`test_config_alignment.test_scan_default_level_matches` / `test_simple_config_reads_config_json_values`（`config.json` 为 2.0，测试期望 1.5），自 v37.7.6 起存在，与本阶段无关
+
+### 关键设计取舍
+- **单一过滤入口**：所有消费端只经 `filtered_hits()`，避免多点 override 判定漂移
+- **manual 命中永不被过滤**：人工框选是显式意图，不参与 override 判定
+- **doc_hash 含 mtime**：文档改动后旧 override 自然失效，避免错位命中
+- **permanent 原子写**：tmp + rename，避免半写坏文件
+- **默认空 override 等价现状**：向后兼容 v37.7.6
+
+### 已知边界
+- `test_convergence` 强制要求 `main.py` 与 `privacyguard/__init__.py` 的 `read_app_version()` OSError 回退值与 `version.txt` 一致，故两处回退值同步升为 `"37.8.0"`（`tests/unit/test_app_config.py` 的对应断言同步更新）
+- `packaging/**` 的版本资源待真机 smoke 后再同步
 
 ---
 

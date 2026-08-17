@@ -97,7 +97,7 @@ def read_app_version():
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except OSError:
-        return "37.7.6"
+        return "37.8.0"
 
 class SimpleConfig:
     """简化配置管理器 - 直接从 config.json 读取"""
