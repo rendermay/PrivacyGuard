@@ -4419,6 +4419,82 @@ class WebViewBridge(QObject):
             print(f"[撤销] 删除了 {count} 个全局脱敏: {text}")
             self.main_window.render_word_preview()
 
+    # === v37.8.x: HitOverrideStore 4 槽 + contextmenu 入口 ===
+    @pyqtSlot(str, str, str, str)
+    def ignore_ocr_hit(self, key, source, text, hit_id):
+        """JS 调用:忽略某条 OCR / jieba hit (session 级别)."""
+        from privacyguard.redaction.hit_ref import HitRef
+        try:
+            doc_hash, location, start_s, end_s, src = hit_id.split("|", 4)
+            ref = HitRef(
+                doc_hash=doc_hash, location=location,
+                start=int(start_s), end=int(end_s),
+                text=text, source=src,
+            )
+        except Exception as exc:
+            print(f"[Bridge] ignore_ocr_hit 解析 hit_id 失败: {exc}")
+            return
+        self.main_window._override_store.ignore(ref, scope="session")
+        self.main_window.render_word_preview()
+        if hasattr(self.main_window, "_refresh_override_dock"):
+            self.main_window._refresh_override_dock()
+
+    @pyqtSlot(str, str, str, str)
+    def confirm_ocr_hit(self, key, source, text, hit_id):
+        """JS 调用:确认某条 OCR / jieba hit 为敏感信息 (session 级别)."""
+        from privacyguard.redaction.hit_ref import HitRef
+        try:
+            doc_hash, location, start_s, end_s, src = hit_id.split("|", 4)
+            ref = HitRef(doc_hash, location,
+                         int(start_s), int(end_s), text, src)
+        except Exception as exc:
+            print(f"[Bridge] confirm_ocr_hit 解析 hit_id 失败: {exc}")
+            return
+        self.main_window._override_store.confirm(ref, scope="session")
+        self.main_window.render_word_preview()
+        if hasattr(self.main_window, "_refresh_override_dock"):
+            self.main_window._refresh_override_dock()
+
+    @pyqtSlot(str)
+    def promote_override(self, hit_id):
+        """JS 调用:把已记录的 session override 提升为 permanent."""
+        store = self.main_window._override_store
+        store.promote(hit_id)
+        # Task 5 note: HitOverrideStore 当前没有 save_permanent;
+        # permanent 状态通过 dump_permanent() 暴露给 config 持久化层。
+        # 这里不做自动落盘,留上层自行调度,避免污染用户配置。
+        if hasattr(self.main_window, "_refresh_override_dock"):
+            self.main_window._refresh_override_dock()
+
+    @pyqtSlot(str)
+    def revert_override(self, hit_id):
+        """JS 调用:撤销某条已记录的 override."""
+        self.main_window._override_store.revert(hit_id)
+        self.main_window.render_word_preview()
+        if hasattr(self.main_window, "_refresh_override_dock"):
+            self.main_window._refresh_override_dock()
+
+    @pyqtSlot(str, str, str, str, int, int)
+    def handle_ocr_hit_contextmenu(self, key, source, text, hit_id, x, y):
+        """JS 触发右键:弹 QMenu 把用户选择转给 ignore/confirm/promote/revert."""
+        from PyQt6.QtCore import QPoint
+        menu = QMenu(self.main_window)
+        act_ig = menu.addAction("忽略此条 (本次)")
+        act_cf = menu.addAction("确认是敏感信息 (本次)")
+        menu.addSeparator()
+        act_pm = menu.addAction("提升到永久名单")
+        act_rv = menu.addAction("撤销")
+        act_cancel = menu.addAction("取消")
+        chosen = menu.exec(QPoint(int(x), int(y)))
+        if chosen == act_ig:
+            self.ignore_ocr_hit(key, source, text, hit_id)
+        elif chosen == act_cf:
+            self.confirm_ocr_hit(key, source, text, hit_id)
+        elif chosen == act_pm:
+            self.promote_override(hit_id)
+        elif chosen == act_rv:
+            self.revert_override(hit_id)
+
     def get_scroll_position(self):
         """获取当前保存的滚动位置"""
         return self._scroll_position
@@ -4519,6 +4595,28 @@ _INTERACTIVE_JS_CODE = r"""
         const target = e.target;
         let selection = window.getSelection();
         let selectedText = selection.toString().trim();
+
+        // v37.8.x: OCR / jieba hit 命中 — 弹出 HitOverrideStore 操作菜单
+        // 仅当 mark 上有 data-hit-id 时触发;manual-highlight 仍走旧路径。
+        let ocrHitElement = target.closest('mark[data-hit-id]');
+        if (ocrHitElement) {
+            const key = ocrHitElement.getAttribute('data-key') || '';
+            const source = ocrHitElement.getAttribute('data-source') || '';
+            const text = ocrHitElement.textContent || '';
+            const hitId = ocrHitElement.getAttribute('data-hit-id') || '';
+            if (pyBridge && webChannelReady &&
+                typeof pyBridge.handle_ocr_hit_contextmenu === 'function') {
+                try {
+                    pyBridge.handle_ocr_hit_contextmenu(
+                        key, source, text, hitId,
+                        parseInt(e.clientX), parseInt(e.clientY)
+                    );
+                } catch (err) {
+                    console.error('[ContextMenu] handle_ocr_hit_contextmenu failed:', err);
+                }
+            }
+            return;
+        }
 
         // 查找点击的目标是否是手动脱敏标记或其内部元素
         let highlightElement = target.closest('.manual-highlight');
@@ -11865,6 +11963,10 @@ sudo dnf install antiword
         from html import escape as html_escape
 
         segments = build_highlight_preview_segments(source_text, merged_matches)
+        # v37.8.x: HitOverrideStore 过滤 — ignored 命中整段不渲染为 <mark>;
+        # confirmed 命中打 ocr-hit--confirmed 类以便 CSS 加深背景。
+        store = getattr(self, "_override_store", None)
+        doc_hash = getattr(self, "_current_doc_hash", "") or ""
         parts = []
         for segment in segments:
             value = segment.get("value", "")
@@ -11879,13 +11981,49 @@ sudo dnf install antiword
                 continue
 
             source = str(segment.get("source", "manual"))
+            seg_start = int(segment.get("start", 0))
+            seg_end = int(segment.get("end", 0))
+            seg_text = str(segment.get("value", ""))
+
+            # v37.8.x: 构造 HitRef 走 store 过滤;manual 永远保留。
+            if source != "manual" and store is not None and doc_hash:
+                ref = HitRef(
+                    doc_hash=doc_hash,
+                    location=str(key),
+                    start=seg_start,
+                    end=seg_end,
+                    text=seg_text,
+                    source=source,
+                )
+                if store.is_ignored(ref):
+                    # 忽略命中:不渲染 <mark>,保留原文
+                    parts.append(escaped_value)
+                    continue
+                hit_id_str = ref.hit_id
+            else:
+                hit_id_str = ""
+
             css_class = "manual-highlight" if source == "manual" else "ocr-highlight"
+            if source != "manual" and store is not None and doc_hash:
+                ref = HitRef(
+                    doc_hash=doc_hash,
+                    location=str(key),
+                    start=seg_start,
+                    end=seg_end,
+                    text=seg_text,
+                    source=source,
+                )
+                if store.is_confirmed(ref):
+                    css_class += " ocr-hit--confirmed"
             attrs = [
                 f'class="{css_class}"',
                 f'data-key="{html_escape(str(key))}"',
-                f'data-start="{int(segment.get("start", 0))}"',
-                f'data-end="{int(segment.get("end", 0))}"',
+                f'data-start="{seg_start}"',
+                f'data-end="{seg_end}"',
+                f'data-source="{html_escape(source)}"',
             ]
+            if hit_id_str:
+                attrs.append(f'data-hit-id="{html_escape(hit_id_str)}"')
             title = "手动脱敏" if source == "manual" else str(segment.get("rule_name", "")).strip() or "智能脱敏"
             if title:
                 attrs.append(f'title="{html_escape(title)}"')
@@ -12580,7 +12718,11 @@ sudo dnf install antiword
                 self._save_word(fname)
 
     def _save_word(self, fname):
-        """保存 Word 文档 - v24 改进版：详细错误处理 + 使用 TempFileManager + 合并 OCR 和 Manual 脱敏"""
+        """保存 Word 文档 - v24 改进版：详细错误处理 + 使用 TempFileManager + 合并 OCR 和 Manual 脱敏
+
+        v37.8.x: 导出前先走 HitOverrideStore.filtered_hits 把 ignored OCR hit
+        从 ocr_matches 中剔除(manual 永远保留;confirm 保留)。
+        """
         try:
             import shutil
             from docx import Document
@@ -12594,18 +12736,27 @@ sudo dnf install antiword
             # 打开副本进行修改
             new_doc = Document(temp_file)
 
+            store = self._override_store
+            doc_hash = self._current_doc_hash
+
             # 遍历段落进行 run 级别的文本替换
             for para_idx, para in enumerate(new_doc.paragraphs):
                 key = f'paragraph_{para_idx}'
                 if key in self.word_data:
                     data = self.word_data[key]
                     source_text = data.get("text", "")
+                    # v37.8.x: 导出前 store 过滤 (manual 永远保留)
+                    filtered_ocr = store.filtered_hits(
+                        list(data.get("ocr", [])),
+                        location=key,
+                        doc_hash=doc_hash,
+                    )
                     merged_matches = merge_word_matches_with_priority(
                         source_text,
                         self.word_replace_rules,
                         self.replacement_text,
                         manual_matches=data.get("manual", []),
-                        ocr_matches=data.get("ocr", [])
+                        ocr_matches=filtered_ocr
                     )
                     if merged_matches:
                         replace_matches_in_paragraph(
@@ -12623,12 +12774,18 @@ sudo dnf install antiword
                         if key in self.word_data:
                             data = self.word_data[key]
                             source_text = data.get("text", "")
+                            # v37.8.x: 导出前 store 过滤 (manual 永远保留)
+                            filtered_ocr = store.filtered_hits(
+                                list(data.get("ocr", [])),
+                                location=key,
+                                doc_hash=doc_hash,
+                            )
                             merged_matches = merge_word_matches_with_priority(
                                 source_text,
                                 self.word_replace_rules,
                                 self.replacement_text,
                                 manual_matches=data.get("manual", []),
-                                ocr_matches=data.get("ocr", [])
+                                ocr_matches=filtered_ocr
                             )
 
                             if merged_matches:

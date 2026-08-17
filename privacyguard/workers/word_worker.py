@@ -141,13 +141,27 @@ class WordWorker(QThread):
                         'start': match.start(),
                         'end': match.end(),
                         'text': match.group(),
-                        'replacement': self.replacement_text
+                        'replacement': self.replacement_text,
+                        'source': self._source_for_pattern(pattern),
                     })
             except re.error:
                 # 忽略无效的正则表达式
                 pass
 
         return matches
+
+    def _source_for_pattern(self, pattern: str) -> str:
+        """识别 pattern 属于哪个来源.
+
+        jieba 来源的 pattern 是 ``re.escape(姓名)`` 形式,且**不在**
+        self.rules / self.custom_keywords 内。
+
+        rule 路径与 custom_keywords 都视为规则类 — Word 端不细分
+        ocr(单独走 PDFChannel),所以二者统一打 ``source='rule'``。
+        """
+        if pattern in self.rules or pattern in self.custom_keywords:
+            return "rule"
+        return "jieba"
 
     def _get_rule_name(self, pattern):
         """根据模式获取规则名称"""
