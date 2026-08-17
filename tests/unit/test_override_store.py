@@ -69,9 +69,10 @@ class HitOverrideStoreTest(unittest.TestCase):
         r1 = _ref(text="周强", start=10, end=12)
         r2 = _ref(text="李四", start=20, end=22)
         s.ignore(r1, scope="session")
+        # hit dict 必须带 start/end 才能命中 ignored ref
         hits = [
-            {"rect": None, "source": "jieba", "text": "周强", "rule_name": "姓名"},
-            {"rect": None, "source": "jieba", "text": "李四", "rule_name": "姓名"},
+            {"rect": None, "source": "jieba", "text": "周强", "rule_name": "姓名", "start": 10, "end": 12},
+            {"rect": None, "source": "jieba", "text": "李四", "rule_name": "姓名", "start": 20, "end": 22},
         ]
         kept = s.filtered_hits(hits, location="p_3", doc_hash="a1b2c3d4")
         self.assertEqual(len(kept), 1)

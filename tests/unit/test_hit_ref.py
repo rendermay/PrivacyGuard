@@ -21,10 +21,14 @@ class HitRefTest(unittest.TestCase):
         # 第二次调用仍稳定
         self.assertEqual(ref.hit_id, "a1b2c3d4|paragraph_3|10|12|jieba")
 
-    def test_hit_id_differs_on_text_change(self):
+    def test_hitref_differs_on_text_change(self):
+        # text 字段不参与 hit_id 计算(用于人眼核对),但参与 dataclass 整体相等性
         a = HitRef("a1b2c3d4", "p_3", 10, 12, "周强", "jieba")
         b = HitRef("a1b2c3d4", "p_3", 10, 12, "周强2", "jieba")
-        self.assertNotEqual(a.hit_id, b.hit_id)
+        # hit_id 必须相同(text 不计入)
+        self.assertEqual(a.hit_id, b.hit_id)
+        # 但 dataclass 整体不相等(text 字段不同)
+        self.assertNotEqual(a, b)
 
     def test_hit_id_differs_on_source_change(self):
         a = HitRef("a1b2c3d4", "p_3", 10, 12, "周强", "jieba")
