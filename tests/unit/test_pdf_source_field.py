@@ -31,7 +31,7 @@ class PDFSourceFieldTest(unittest.TestCase):
 
     def test_page_data_stores_dict_list(self):
         """_receive_page_hits 应把 raw dict 列表存进 page_data[idx]['ocr']."""
-        from main import _filter_hits_to_rects
+        from main import MainWindow
 
         store = HitOverrideStore.instance()
         rect = QRectF(10, 20, 30, 5)
@@ -44,7 +44,7 @@ class PDFSourceFieldTest(unittest.TestCase):
         page_data = {0: {"ocr": list(raw_hits), "manual": []}}
 
         # _filter_hits_to_rects 应无 ignore 时返回所有 rect
-        kept_rects = _filter_hits_to_rects(
+        kept_rects = MainWindow._filter_hits_to_rects(
             page_data[0]["ocr"],
             store=store,
             location="page_0",
@@ -56,7 +56,7 @@ class PDFSourceFieldTest(unittest.TestCase):
 
     def test_filtered_hits_drops_ignored(self):
         """当 store 中已 ignore(周强) 时,_filter_hits_to_rects 应剔除。"""
-        from main import _filter_hits_to_rects
+        from main import MainWindow
 
         store = HitOverrideStore.instance()
         ref = HitRef("a1b2c3d4", "page_0", 10, 12, "周强", "jieba")
@@ -72,7 +72,7 @@ class PDFSourceFieldTest(unittest.TestCase):
         # page_data 应保留 raw 全部(便于撤销后再次出现)
         self.assertEqual(len(page_data[0]["ocr"]), 2)
 
-        kept_rects = _filter_hits_to_rects(
+        kept_rects = MainWindow._filter_hits_to_rects(
             page_data[0]["ocr"],
             store=store,
             location="page_0",
@@ -83,7 +83,7 @@ class PDFSourceFieldTest(unittest.TestCase):
 
     def test_filtered_hits_keeps_manual(self):
         """manual rect 应永远保留,即使 start/end 与被 ignore 重叠。"""
-        from main import _filter_hits_to_rects
+        from main import MainWindow
 
         store = HitOverrideStore.instance()
         # ignore 一个 jieba hit
@@ -95,7 +95,7 @@ class PDFSourceFieldTest(unittest.TestCase):
             {"rect": QRectF(10, 20, 30, 5), "source": "manual", "text": "周强",
              "rule_name": "manual", "start": 10, "end": 12},
         ]
-        kept_rects = _filter_hits_to_rects(
+        kept_rects = MainWindow._filter_hits_to_rects(
             raw_hits,
             store=store,
             location="page_0",

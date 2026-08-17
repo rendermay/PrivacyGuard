@@ -4125,16 +4125,29 @@ class SinglePageCanvas(QLabel):
             if self.main_window is None:
                 return
 
-            # 优先找手动框
-            hit_info = self._locate_hit(click_pos, prefer_manual=True)
-            if hit_info is None:
-                hit_info = self._locate_hit(click_pos, prefer_manual=False)
+            # v37.8.x: 优先找手动框 — 命中则 v7.0 行为:直接删除
+            manual_hit_index = None
+            for i, r in enumerate(self.rects_manual):
+                if self.pdf_to_screen(r).contains(click_pos):
+                    manual_hit_index = i
+                    break
+
+            if manual_hit_index is not None:
+                # v7.0 行为:右键手动框直接删除,不做 store 操作
+                del self.rects_manual[manual_hit_index]
+                self.update()
+                if hasattr(self.main_window, "render_view"):
+                    self.main_window.render_view()
+                return
+
+            # 非手动框命中,再查 OCR 框
+            hit_info = self._locate_hit(click_pos, prefer_manual=False)
             if hit_info is None:
                 if DEBUG_MODE:
                     print(f"[DEBUG] ✗ 未点击到任何矩形框")
                 return
 
-            ref, scope = hit_info  # ref 是 HitRef, scope 是 'manual' 或 'ocr'
+            ref, scope = hit_info  # ref 是 HitRef, scope 是 'ocr'
             store = self.main_window._override_store
 
             menu = QMenu(self)
@@ -11364,27 +11377,6 @@ sudo dnf install antiword
         # 避免在模态对话框阻塞主线程时形成死锁
         self._pending_error_msg = error_msg
 
-    # v36.4: 线程安全的 OCR 结果处理方法
-    # v37.8.x: 旧签名 _on_ocr_page_result(page_num, list[QRectF]) 已废弃。
-    # 新签名 _receive_page_hits(page_num, list[dict]) 由 Task 4 引入,
-    # 通过 store 过滤后渲染/导出。旧方法保留以防遗留 connect,但不再被使用。
-    def _on_ocr_page_result(self, page_num: int, rects: list):
-        """v37.8.x: 已废弃 - 委托给 _receive_page_hits(自动包装 dict).
-
-        旧签名接收 list[QRectF],新签名接收 list[dict{rect,source,text,rule_name}]。
-        此兼容方法在 QRectF 路径上模拟成 dict 后转交,确保任何遗留 connect 不爆。
-        """
-        wrapped = []
-        for r in rects:
-            if isinstance(r, dict):
-                wrapped.append(r)
-            else:
-                # 旧 QRectF 路径 — 包装成 source='ocr' 的 dict
-                wrapped.append({
-                    "rect": r, "source": "ocr", "text": "", "rule_name": "legacy"
-                })
-        self._receive_page_hits(page_num, wrapped)
-
     def _receive_page_hits(self, page_idx: int, hits: list) -> None:
         """v37.8.x: 接收 OCRWorker 逐页 hit dict 列表,过滤后存 page_data + 渲染。
 
@@ -11421,22 +11413,22 @@ sudo dnf install antiword
 
         返回 list[QRectF],不可用于写回 — 仅供渲染与导出。
         """
-        return _filter_hits_to_rects(
+        return self._filter_hits_to_rects(
             self.page_data.get(page_idx, {}).get("ocr", []),
             store=self._override_store,
             location=f"page_{page_idx}",
             doc_hash=self._current_doc_hash,
         )
 
+    @staticmethod
+    def _filter_hits_to_rects(hits: list, *, store, location: str, doc_hash: str) -> list:
+        """v37.8.x: 模块级纯函数 — store 过滤 + 抽 QRectF.
 
-def _filter_hits_to_rects(hits: list, *, store, location: str, doc_hash: str) -> list:
-    """v37.8.x: 模块级纯函数 — store 过滤 + 抽 QRectF.
-
-    抽到这里便于直接单测,无需启动 QMainWindow 实例。
-    语义: manual 永远保留;ignore 命中剔除;confirm / 未操作保留。
-    """
-    kept = store.filtered_hits(hits, location=location, doc_hash=doc_hash)
-    return [h["rect"] for h in kept]
+        抽到这里便于直接单测,无需启动 QMainWindow 实例。
+        语义: manual 永远保留;ignore 命中剔除;confirm / 未操作保留。
+        """
+        kept = store.filtered_hits(hits, location=location, doc_hash=doc_hash)
+        return [h["rect"] for h in kept]
 
     def _on_ocr_finished_safe(self, _):
         """v36.4: 线程安全 - OCR 完成处理（在主线程执行）
