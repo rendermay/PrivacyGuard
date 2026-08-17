@@ -152,7 +152,10 @@ class HitOverrideStore:
 
 ### 4.4 不画框删除的兼容
 
-- 现有右键删除手动框 / OCR 框逻辑保留 — 但语义变成「本次忽略」,不再直接从 `rects_ocr` `del`,而是 `store.ignore()` 然后 `filtered_hits` 自然就不画了
+- 现有右键删除手动框 / OCR 框逻辑保留 — 但语义变成「本次忽略」:
+  - **手动框**(`rects_manual`):保留 `del` 行为(手动画的本就是用户表达,不进 override store)
+  - **OCR 框**(`rects_ocr` 中 item):改为 `store.ignore()` + 不再直接 `del`,由下次 `_safe_canvas_update` 走 `filtered_hits` 自然不画
+- 该差异保证「手动画框永远生效」+ 「OCR 框可恢复」两个语义并存
 
 ### 4.5 双入口之专用面板 dock
 
@@ -341,8 +344,8 @@ def revert_override(self, hit_id): ...
 | Wave | 范围 | 估行 |
 |------|------|------|
 | **W1** | `HitRef` + `HitOverrideStore` + 单元测试 | ~250 |
-| **W2** | PDF 数据结构调整 + canvas 右键菜单 + filtered_hits 接入 | ~300 |
-| **W3** | Word 数据结构调整 + WebViewBridge 4 槽 + HTML 渲染层 | ~280 |
+| **W2** | PDF 数据结构调整 + canvas 右键菜单 + filtered_hits 接入 + **PDF 导出路径同步 store** | ~350 |
+| **W3** | Word 数据结构调整 + WebViewBridge 4 槽 + HTML 渲染层 + **Word 导出路径同步 store** | ~320 |
 | **W4** | 专用面板 dock + 持久化 + 设置中心清理按钮 | ~250 |
 | **W5** | 全量回归 + 文档同步 + 性能验证 | ~100 |
 
@@ -369,4 +372,4 @@ def revert_override(self, hit_id): ...
 | R3 | WebView 销毁导致右键菜单闪退 | 应用关闭途中点击 | `try/except RuntimeError` + 槽函数检查 `_webview` 有效性 |
 | R4 | doc_hash 命中率低,用户反馈"为什么我的忽略不生效" | mtime 被压缩软件改写 | 文档头部信息(标题)进 doc_hash 二次校验 |
 | R5 | permanent 累积过千条,UI 卡顿 | 长期使用 | dock 顶部"按 source 筛选" + 默认按 `text` 排序 |
-| R6 | ignore 后导出仍残留 | filtered_hits 仅影响预览,导出路径未同步 | Wave 2/3 导出逻辑同步过 store(覆盖范围 PDF 与 Word) |
+| R6 | ignore 后导出仍残留 | filtered_hits 仅影响预览,导出路径未同步 | **Wave 2 在 `_export_pdf_with_hits` 等导出函数处对 hit 列表过一次 `filtered_hits`;Wave 3 在 `_export_word_with_replacements` 同理**,覆盖 PDF 与 Word 两端导出路径 |
