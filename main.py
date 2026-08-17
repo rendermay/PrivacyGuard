@@ -98,21 +98,41 @@ def read_app_version():
 class SimpleConfig:
     """简化配置管理器 - 直接从 config.json 读取"""
 
+    # v37.8.x: 缺省键补齐（仅含新增 override 相关键，其他键由 config.json 提供）
+    DEFAULT_CONFIG = {
+        "redaction": {
+            "enable_hit_override": True,
+            "overrides": {
+                "permanent": [],
+            },
+        },
+    }
+
     def __init__(self, config_path=None):
         self._config = {}
         if config_path is None:
             config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
         self._config_path = config_path
-        self._load_config()
+        self.load()
 
-    def _load_config(self):
-        """加载配置文件"""
+    def load(self):
+        """加载配置文件并补齐默认键。"""
         try:
             if os.path.exists(self._config_path):
                 with open(self._config_path, 'r', encoding='utf-8') as f:
                     self._config = json.load(f)
         except (OSError, IOError, json.JSONDecodeError) as e:
             print(f"[配置系统] 加载配置失败: {e}")
+
+        # v37.8.x: 补齐 override 相关默认键
+        red = self._config.setdefault("redaction", {})
+        red.setdefault("enable_hit_override", True)
+        overrides = red.setdefault("overrides", {})
+        overrides.setdefault("permanent", [])
+
+    def _load_config(self):
+        """[兼容保留] 旧版加载入口,委托给 load()."""
+        self.load()
 
     def save(self):
         """将当前配置写回磁盘。"""

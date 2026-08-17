@@ -94,7 +94,11 @@
     "precise_locator": {
       "enabled": true
     },
-    "enable_name_recognition": true
+    "enable_name_recognition": true,
+    "enable_hit_override": true,
+    "overrides": {
+      "permanent": []
+    }
   },
   "ocr": {
     "min_rect_width": 5,
