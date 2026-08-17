@@ -21,7 +21,8 @@ class WordWorker(QThread):
     finished_signal = pyqtSignal(dict)
     progress_signal = pyqtSignal(int)
 
-    def __init__(self, word_doc, word_data, rules, custom_keywords, replacement_text, default_rules=None):
+    def __init__(self, word_doc, word_data, rules, custom_keywords, replacement_text, default_rules=None,
+                 enable_name_recognition: bool = False):
         super().__init__()
         self.word_doc = word_doc
         self.word_data = word_data
@@ -30,6 +31,9 @@ class WordWorker(QThread):
         self.custom_keywords = [re.escape(k.strip()) for k in raw_keywords if k.strip()]
         self.replacement_text = replacement_text
         self.default_rules = default_rules or {}
+
+        # v37.7.x: 中文姓名启发式识别开关 (默认 False,向后兼容)
+        self.enable_name_recognition = enable_name_recognition
 
     def run(self):
         """主处理流程 - 支持取消并保存进度（v36.3）"""
@@ -110,6 +114,24 @@ class WordWorker(QThread):
         matches = []
         all_patterns = self.rules + self.custom_keywords
 
+        # v37.7.x: 中文姓名启发式识别 (默认 OFF)
+        if self.enable_name_recognition and text:
+            try:
+                from privacyguard.pii.name_recognizer import (
+                    extract_person_names,
+                )
+                _names = extract_person_names(text)
+                if _names:
+                    _existing = set(self.rules) | set(self.custom_keywords)
+                    _extra = [
+                        re.escape(n) for n in _names
+                        if n not in _existing
+                    ]
+                    if _extra:
+                        all_patterns = all_patterns + _extra
+            except Exception as _exc:
+                print(f"[WordWorker] 姓名识别失败: {_exc}")
+
         for pattern in all_patterns:
             try:
                 for match in re.finditer(pattern, text, re.IGNORECASE):
@@ -119,13 +141,27 @@ class WordWorker(QThread):
                         'start': match.start(),
                         'end': match.end(),
                         'text': match.group(),
-                        'replacement': self.replacement_text
+                        'replacement': self.replacement_text,
+                        'source': self._source_for_pattern(pattern),
                     })
             except re.error:
                 # 忽略无效的正则表达式
                 pass
 
         return matches
+
+    def _source_for_pattern(self, pattern: str) -> str:
+        """识别 pattern 属于哪个来源.
+
+        jieba 来源的 pattern 是 ``re.escape(姓名)`` 形式,且**不在**
+        self.rules / self.custom_keywords 内。
+
+        rule 路径与 custom_keywords 都视为规则类 — Word 端不细分
+        ocr(单独走 PDFChannel),所以二者统一打 ``source='rule'``。
+        """
+        if pattern in self.rules or pattern in self.custom_keywords:
+            return "rule"
+        return "jieba"
 
     def _get_rule_name(self, pattern):
         """根据模式获取规则名称"""

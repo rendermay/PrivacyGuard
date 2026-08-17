@@ -188,3 +188,23 @@
     - 启动 Windows-first UI 全面改造前保留主运行链与文档基线
     - 避免在 dirty worktree 中依赖 `git revert` 回退
     - 后续 UI 迭代统一基于 `cp31` 分阶段推进
+- [x] cp33 v37.8.0 人工干预机制 (Manual Redaction Intervention) 完成（已验证）
+  - checkpoint: `v37_8_manual_intervention_cp33_20260817_121549`
+  - snapshot dir: `backups/v37_8_manual_intervention_cp33_20260817_121549/`
+  - backup files:
+    - `main.py`
+    - `version.txt`（37.8.0）
+    - `config.json`（含 `redaction.enable_hit_override` / `redaction.overrides.permanent`）
+    - `CLAUDE.md`
+    - `rollback_journal.md`
+    - `docs/current/STATUS.md`
+    - `docs/current/DEV_LOG.md`
+    - `docs/current/PHASE_HIT_OVERRIDE.md`
+    - `snapshot_redaction.tar.gz`（`privacyguard/redaction/` 全量）
+  - verification:
+    - `python3 -m compileall -q main.py privacyguard tests`
+    - 全量回归 `Ran 162 tests` / `160 PASS`
+    - 既有失败 2 项：`tests.unit.test_config_alignment` 的 `scan.default_level`（2.0 vs 1.5），自 v37.7.6 起存在
+  - purpose:
+    - 保留人工干预机制（HitRef / HitOverrideStore / 干预 dock）落地后的完整基线
+    - 功能级回退：`config.json` 设 `redaction.enable_hit_override=false` 并清空 `redaction.overrides.permanent` 即可恢复 v37.7.6 行为

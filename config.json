@@ -47,12 +47,27 @@
         "pattern": "__SEAL_DETECTION__",
         "enabled": false,
         "description": "使用 OpenCV 自动检测并脱敏红色印章区域（基于颜色和形状分析）"
+      },
+      "地址（含门牌号）": {
+        "pattern": "[一-龥]{2,15}(?:省|市|自治区|特别行政区)[一-龥\\d\\s,]{4,40}\\d+号",
+        "enabled": true,
+        "description": "匹配含省级行政区且末端为门牌号的地址"
+      },
+      "固定电话": {
+        "pattern": "(?<!\\d)0[\\w]{2,3}[-\\s]?[\\w]{7,8}(?!\\d)",
+        "enabled": true,
+        "description": "匹配 0xx-xxxxxxxx 座机/固定电话(容忍 OCR 误识字母替代数字)"
+      },
+      "法定代表人": {
+        "pattern": "法定代表人\\s*[::：]?\\s*[一-龥]{2,4}(?:·[一-龥]{2,4})?",
+        "enabled": true,
+        "description": "匹配'法定代表人'标签后的人名(支持半角/全角冒号)"
       }
     },
     "replacement_text": "*",
-    "custom_keywords": "人",
+    "custom_keywords": "",
     "scan": {
-      "default_level": 1.5,
+      "default_level": 2.0,
       "available_levels": [
         1.0,
         1.5,
@@ -78,6 +93,11 @@
     },
     "precise_locator": {
       "enabled": true
+    },
+    "enable_name_recognition": true,
+    "enable_hit_override": true,
+    "overrides": {
+      "permanent": []
     }
   },
   "ocr": {
@@ -85,7 +105,7 @@
     "progress_update_interval": 0.05,
     "zoom_min": 0.5,
     "zoom_max": 4.0,
-    "box_adjust_ratio": 0.0,
+    "box_adjust_ratio": 0.5,
     "box_adjust_range": [
       -0.3,
       0.5

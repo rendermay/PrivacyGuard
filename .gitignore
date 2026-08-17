@@ -57,6 +57,10 @@ claude-*-cwd
 # Project management temp
 .project/
 
+# Runtime test artifacts (jieba cache + PDF samples from manual testing)
+jieba.cache
+pdf/
+
 # Release binaries (keep source, not built artifacts)
 releases/**/*.dmg
 releases/**/*.zip

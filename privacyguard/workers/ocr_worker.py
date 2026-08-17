@@ -42,11 +42,13 @@ class OCRWorker(QThread):
     finished_signal = pyqtSignal(dict)
     progress_signal = pyqtSignal(int)
     page_result_signal = pyqtSignal(int, list)  # v36.4: 逐页发送结果 (页码, 矩形列表)
+    # Wave 2.1 (Task 3): 矩形列表元素升级为 dict {rect: QRectF, source: str, text: str, rule_name: str}
+    # Task 4 (MainWindow) 消费者依赖 source 字段区分 manual/ocr/jieba/seal.
     error_signal = pyqtSignal(str)  # v37.0.5: 错误信号
 
     def __init__(self, pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
                  use_char_level_ocr: bool = False, seal_detection_enabled: bool = False,
-                 box_adjust_ratio: float = 0.0):
+                 box_adjust_ratio: float = 0.0, enable_name_recognition: bool = False):
         super().__init__()
         self.pdf_path = pdf_path
         self.rules = rules
@@ -56,6 +58,10 @@ class OCRWorker(QThread):
         self.scan_scale = scan_scale
         self.off_x = off_x
         self.off_w = off_w
+
+        # v37.7.x: 中文姓名启发式识别开关 (默认 False,向后兼容)
+        # 启用后从整页文本提取候选姓名,经 re.escape 后追加到 custom_keywords 列表
+        self.enable_name_recognition = enable_name_recognition
 
         # v37.4.0: 只使用 RapidOCR，不再使用字符级 OCR
         self.use_char_level_ocr = False
@@ -79,6 +85,18 @@ class OCRWorker(QThread):
         except cv2.error as e:
             print(f"图像处理错误: {e}")
             return img_np
+
+    def _render_full_page_bgr(self, page, scan_scale):
+        """v37.7.x: 把整页 PDF 渲染为 BGR 图像 (供全页 OCR 用).
+
+        与 render_pdf_clip_to_bgr 的区别: 不带 clip, 整页 0..width 0..height.
+        """
+        pix = page.get_pixmap(
+            matrix=fitz.Matrix(scan_scale, scan_scale),
+            alpha=False,
+        )
+        img_data = np.frombuffer(pix.tobytes("png"), dtype=np.uint8)
+        return cv2.imdecode(img_data, cv2.IMREAD_COLOR)
 
     def _get_seal_detector(self):
         """v37.5.0: 印章检测器（使用 OpenCV，无需额外依赖）"""
@@ -344,12 +362,175 @@ class OCRWorker(QThread):
             print(f"[WARN] _calculate_from_line 错误: {e}")
             return None
 
+    def _process_page(self, page, page_idx, *, ocr_engine, scan_scale):
+        """Wave 2.1 (Task 3): 处理单页 OCR,返回 list[dict] hits.
+
+        每项含:
+          - rect: QRectF (PDF 坐标)
+          - source: str ∈ {"rule", "ocr", "jieba", "seal"}
+          - text: str (命中原文,OCR 通道与 seal 通道为空)
+          - rule_name: str (触发命中的 pattern 描述)
+
+        同时通过 page_result_signal.emit(page_idx, rects) 通知消费者.
+        """
+        rects = []
+        page_text = page.get_text()
+        page_dict = page.get_text("dict")
+        image_clip_rects = collect_embedded_image_clip_rects(page_dict)
+
+        # v37.7.x 修订: 中文姓名启发式识别同时覆盖 文本通道 和 图片通道.
+        # 原实现 (page_text 非空才注入) 在扫描型 PDF (page_text="") 上完全失效.
+        # 修复: 即使 page_text 为空, 也先用 RapidOCR 全页扫一次,把行级文本拼起来
+        # 喂给 jieba 抽取人名,然后 re.escape 追加到 all_patterns (image 通道后续会用到).
+        all_patterns = self.rules + self.custom_keywords
+        jieba_extra = []
+        if self.enable_name_recognition:
+            jieba_source_text = page_text or ""
+            if not jieba_source_text and image_clip_rects:
+                try:
+                    _ocr_for_names = ocr_engine.recognize(
+                        self._render_full_page_bgr(page, scan_scale)
+                    )
+                    _line_texts = [
+                        getattr(r, "text", "")
+                        for r in (_ocr_for_names or [])
+                    ]
+                    jieba_source_text = "\n".join(
+                        t for t in _line_texts if t
+                    )
+                except Exception as _exc:
+                    # 永不向调用方抛异常; 静默回退到空字符串即可
+                    print(f"[OCRWorker] 全页 OCR (姓名抽取用) 失败: {_exc}")
+                    jieba_source_text = ""
+
+            if jieba_source_text:
+                try:
+                    from privacyguard.pii.name_recognizer import (
+                        extract_person_names,
+                    )
+                    _names = extract_person_names(jieba_source_text)
+                    if _names:
+                        _existing = set(self.rules) | set(self.custom_keywords)
+                        jieba_extra = [
+                            re.escape(n) for n in _names
+                            if n not in _existing
+                        ]
+                        if jieba_extra:
+                            all_patterns = all_patterns + jieba_extra
+                except Exception as _exc:
+                    print(f"[OCRWorker] 姓名识别失败: {_exc}")
+
+        # 文本通道: 分三路,各自打 source 标签
+        if page_text.strip():
+            # self.rules -> source='rule'
+            if self.rules:
+                rule_hits = collect_text_pdf_hit_boxes(
+                    page, self.rules, page_text=page_text
+                )
+                rects.extend({
+                    "rect": QRectF(x, y, w, h),
+                    "source": "rule",
+                    "text": text,
+                    "rule_name": rule_name,
+                } for x, y, w, h, text, rule_name in rule_hits)
+
+            # self.custom_keywords -> source='ocr'
+            if self.custom_keywords:
+                custom_hits = collect_text_pdf_hit_boxes(
+                    page, self.custom_keywords, page_text=page_text
+                )
+                rects.extend({
+                    "rect": QRectF(x, y, w, h),
+                    "source": "ocr",
+                    "text": text,
+                    "rule_name": rule_name,
+                } for x, y, w, h, text, rule_name in custom_hits)
+
+            # jieba 注入 -> source='jieba'
+            if jieba_extra:
+                jieba_hits = collect_text_pdf_hit_boxes(
+                    page, jieba_extra, page_text=page_text
+                )
+                rects.extend({
+                    "rect": QRectF(x, y, w, h),
+                    "source": "jieba",
+                    "text": text,
+                    "rule_name": "姓名启发式",
+                } for x, y, w, h, text, _rule_name in jieba_hits)
+
+        if not image_clip_rects and not page_text.strip():
+            image_clip_rects = [(page.rect.x0, page.rect.y0, page.rect.x1, page.rect.y1)]
+
+        image_hit_count = 0
+        if image_clip_rects:
+            # image 通道: collect_image_block_ocr_hits 仍返回 QRectF 列表,
+            # 在调用点 wrap 为 dict (与 brief 一致, 不动 mixed_pdf.py 契约)
+            image_hit_rects = collect_image_block_ocr_hits(
+                page,
+                all_patterns,
+                scan_scale,
+                recognize_fn=lambda scan_img: ocr_engine.recognize(scan_img),
+                calculate_rect_fn=lambda box, text, span, scan_img: self.calculate_sub_rect(
+                    box,
+                    text,
+                    span,
+                    img_region=scan_img,
+                ),
+                clip_to_page_rect_fn=lambda local_rect, clip_rect: QRectF(
+                    local_rect.x() + clip_rect[0],
+                    local_rect.y() + clip_rect[1],
+                    local_rect.width(),
+                    local_rect.height(),
+                ),
+                preprocess_fn=self.preprocess_image if self.use_enhance else None,
+                page_dict=page_dict,
+                image_clip_rects=image_clip_rects,
+            )
+            rects.extend({
+                "rect": qr,
+                "source": "ocr",
+                "text": "",
+                "rule_name": "OCR图像通道",
+            } for qr in image_hit_rects)
+            image_hit_count = len(image_hit_rects)
+
+        if image_clip_rects or (page_text.strip() and rects):
+            text_count = len(rects) - image_hit_count
+            print(
+                f"[OCR] 页面 {page_idx}: 文本命中 {text_count}, "
+                f"图片块 {len(image_clip_rects)}, 图片OCR命中 {image_hit_count}"
+            )
+
+        # v37.5.0: 印章检测 -> source='seal'
+        if self.seal_detection_enabled and "__SEAL_DETECTION__" in self.rules:
+            try:
+                pix = page.get_pixmap(matrix=fitz.Matrix(scan_scale, scan_scale))
+                img_data = np.frombuffer(pix.tobytes("png"), dtype=np.uint8)
+                img_np = cv2.imdecode(img_data, cv2.IMREAD_COLOR)
+                scan_img = self.preprocess_image(img_np) if self.use_enhance else img_np
+                seal_rects = self._detect_seals(scan_img, scan_scale)
+                rects.extend({
+                    "rect": sr,
+                    "source": "seal",
+                    "text": "",
+                    "rule_name": "印章检测",
+                } for sr in seal_rects)
+                if seal_rects:
+                    print(f"[Seal Detection] 页面 {page_idx} 检测到 {len(seal_rects)} 个印章")
+            except Exception as e:
+                print(f"[Seal Detection] 页面 {page_idx} 检测失败: {type(e).__name__}: {e}")
+
+        # 逐页发送结果 (Wave 2.1: payload 改为 list[dict])
+        self.page_result_signal.emit(page_idx, rects)
+        return rects
+
     def run(self):
         """执行 OCR 扫描
 
         v37.0.6: 重构信号发送顺序，确保资源清理后再发送信号
         v37.0.5: 增强异常处理
         v36.4: 使用信号槽机制替代共享字典
+        Wave 2.1 (Task 3): 单页处理提取到 _process_page, payload 升级 list[dict]
         """
         error_msg = None
         doc = None
@@ -383,68 +564,7 @@ class OCRWorker(QThread):
                         break
 
                     page = doc[i]
-                    rects = []
-                    all_patterns = self.rules + self.custom_keywords
-
-                    page_text = page.get_text()
-                    page_dict = page.get_text("dict")
-                    image_clip_rects = collect_embedded_image_clip_rects(page_dict)
-
-                    if page_text.strip():
-                        hit_boxes = collect_text_pdf_hit_boxes(page, all_patterns, page_text=page_text)
-                        rects.extend(QRectF(x, y, w, h) for x, y, w, h in hit_boxes)
-
-                    if not image_clip_rects and not page_text.strip():
-                        image_clip_rects = [(page.rect.x0, page.rect.y0, page.rect.x1, page.rect.y1)]
-
-                    image_hit_count = 0
-                    if image_clip_rects:
-                        image_hit_rects = collect_image_block_ocr_hits(
-                            page,
-                            all_patterns,
-                            SCAN_SCALE,
-                            recognize_fn=lambda scan_img: ocr_engine.recognize(scan_img),
-                            calculate_rect_fn=lambda box, text, span, scan_img: self.calculate_sub_rect(
-                                box,
-                                text,
-                                span,
-                                img_region=scan_img,
-                            ),
-                            clip_to_page_rect_fn=lambda local_rect, clip_rect: QRectF(
-                                local_rect.x() + clip_rect[0],
-                                local_rect.y() + clip_rect[1],
-                                local_rect.width(),
-                                local_rect.height(),
-                            ),
-                            preprocess_fn=self.preprocess_image if self.use_enhance else None,
-                            page_dict=page_dict,
-                            image_clip_rects=image_clip_rects,
-                        )
-                        rects.extend(image_hit_rects)
-                        image_hit_count = len(image_hit_rects)
-
-                    if image_clip_rects or (page_text.strip() and rects):
-                        print(
-                            f"[OCR] 页面 {i}: 文本命中 {len(rects) - image_hit_count}, "
-                            f"图片块 {len(image_clip_rects)}, 图片OCR命中 {image_hit_count}"
-                        )
-
-                    # v37.5.0: 印章检测
-                    if self.seal_detection_enabled and "__SEAL_DETECTION__" in self.rules:
-                        try:
-                            pix = page.get_pixmap(matrix=fitz.Matrix(SCAN_SCALE, SCAN_SCALE))
-                            img_data = np.frombuffer(pix.tobytes("png"), dtype=np.uint8)
-                            img_np = cv2.imdecode(img_data, cv2.IMREAD_COLOR)
-                            scan_img = self.preprocess_image(img_np) if self.use_enhance else img_np
-                            seal_rects = self._detect_seals(scan_img, SCAN_SCALE)
-                            rects.extend(seal_rects)
-                            if seal_rects:
-                                print(f"[Seal Detection] 页面 {i} 检测到 {len(seal_rects)} 个印章")
-                        except Exception as e:
-                            print(f"[Seal Detection] 页面 {i} 检测失败: {type(e).__name__}: {e}")
-
-                    # 逐页发送结果
-                    self.page_result_signal.emit(i, rects)
+                    self._process_page(page, i, ocr_engine=ocr_engine, scan_scale=SCAN_SCALE)
 
                     # 背压控制
                     current_progress = int((i+1)/total * 100)

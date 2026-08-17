@@ -1,11 +1,42 @@
 # PrivacyGuard 当前状态（Single Source）
 
-- **日期**: 2026-05-16
-- **当前版本基线**: v37.7.6
-- **版本标识**: `37.7.6 - Full Convergence Remediation`
-- **当前状态**: ✅ 全面重复实现收敛完成
-- **最后更新**: 2026-05-16
-- **当前工作轨道**: 正式发布前的真机截图驱动抛光
+- **日期**: 2026-08-17
+- **当前版本基线**: v37.8.0
+- **版本标识**: `37.8.0 - Manual Redaction Intervention`
+- **当前状态**: ✅ 自动脱敏人工干预机制完成
+- **最后更新**: 2026-08-17
+- **当前工作轨道**: 真机截图驱动抛光 + 干预 dock 调试
+
+---
+
+## 2026-08-17 自动脱敏人工干预机制 (v37.8.0)
+
+### 已完成
+
+- **核心层**：新增 `privacyguard/redaction/` 包
+  - `hit_ref.py`：`HitRef`（不可变命中标识，`hit_id = f"{doc_hash}|{location}|{start}|{end}|{source}"`）+ `Override`
+  - `doc_hash.py`：`compute_doc_hash(file_path)`，基于路径 + size + mtime 的 8 位标识
+  - `override_store.py`：`HitOverrideStore` 单例，session / permanent 双层作用域，`filtered_hits()` 为唯一消费入口
+- **配置层**：`config.json` 新增 `redaction.enable_hit_override`（默认 `true`）与 `redaction.overrides.permanent`；`SimpleConfig` 兼容旧配置自动补齐
+- **PDF 端**：`OCRWorker.page_result_signal` payload 改为 `list[dict]`（携带 `source` / `text` / `start` / `end`）；MainWindow 消费端接入 `filtered_hits()`；画布右键菜单支持 忽略 / 确认 / 撤销 / 提升为永久
+- **Word 端**：`WordWorker` 命中携带 source 字段；`WebViewBridge` 新增 4 个干预槽函数；预览 JS 右键菜单联动；replaced panel 走 `filtered_hits()`
+- **UI 层**：新增干预 dock 面板（按 scope / action 筛选 + 快捷键），设置中心新增「清理失效 overrides」按钮
+- 新增 38 条单元测试（9 个测试模块）
+
+### 当前验证
+
+- `python3 -m compileall -q main.py privacyguard tests` ✅
+- 全量回归：`162` 项，`160 PASS`
+- 已知既有失败 2 项：`test_config_alignment` 的 `scan.default_level`（config.json 为 2.0，测试期望 1.5），自 v37.7.6 起存在，与本阶段无关
+
+### 兼容性
+
+- 无 override 时行为与 v37.7.6 完全一致
+- 旧 `OCRWorker` payload（`QRectF` 列表）已废弃，所有 call site 已迁移
+
+### 关联文档
+
+- `docs/current/PHASE_HIT_OVERRIDE.md`
 
 ---
 

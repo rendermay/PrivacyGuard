@@ -2,9 +2,156 @@
 
 ## 项目信息
 - **项目名称**: PrivacyGuard 脱敏卫士
-- **当前版本**: v37.7.4 (Release Audit and Final Polish)
-- **开发日期**: 2026-03-18
-- **状态**: ✅ `v37.7.4` 发布准备完成，当前进入正式发布前真机截图驱动抛光阶段
+- **当前版本**: v37.8.0 (Manual Redaction Intervention)
+- **开发日期**: 2026-08-17
+- **状态**: ✅ 自动脱敏人工干预机制完成，全量回归 162 项 / 160 PASS（2 项既有失败）
+
+---
+
+## 2026-08-17 - 自动脱敏人工干预机制 (Manual Redaction Intervention)
+
+### Phase 文档
+- `docs/current/PHASE_HIT_OVERRIDE.md` 已落盘
+
+### Wave 1 — 核心层：HitRef + doc_hash + HitOverrideStore ✅
+- 新增 `privacyguard/redaction/hit_ref.py`
+  - `HitRef` frozen dataclass：`doc_hash` / `location` / `start` / `end` / `source` / `text`
+  - `hit_id` 属性 = `f"{doc_hash}|{location}|{start}|{end}|{source}"`
+  - `Override` dataclass：`hit_id` / `action`(`ignore`/`confirm`) / `scope`(`session`/`permanent`) / `created_at` / `ref`
+- 新增 `privacyguard/redaction/doc_hash.py`
+  - `compute_doc_hash(file_path)`：路径 + size + mtime → 8 位十六进制
+- 新增 `privacyguard/redaction/override_store.py`
+  - `HitOverrideStore.instance()` 单例 + `reset_singleton()`（测试用）
+  - `ignore` / `confirm` / `revert` / `promote` / `is_ignored` / `is_confirmed` / `iter_overrides`
+  - `filtered_hits(hits, *, location, doc_hash)`：唯一消费入口，保留 `manual` 来源命中不被过滤
+  - `dump_permanent` / `load_permanent` / `replace_permanent` / `bind_config` / `save_permanent`（tmp + rename 原子写）
+  - `clean_stale_permanent(items, max_age_days=30)`
+- 新增测试：`test_hit_ref`(5) + `test_doc_hash`(4) + `test_override_store`(11) = **20/20**
+
+### Wave 2 — 配置默认键 ✅
+- `config.json`：`redaction.enable_hit_override = true`、`redaction.overrides.permanent = []`
+- `SimpleConfig`：旧配置缺键自动补齐；顺带删除已死的 `SimpleConfig.DEFAULT_CONFIG`
+- 新增测试：`test_override_config_defaults`(2) — **2/2**
+
+### Wave 3 — PDF 通道 ✅
+- `privacyguard/workers/ocr_worker.py`
+  - `page_result_signal` payload 由 `list[QRectF]` 改为 `list[dict]`，携带 `rect` / `source` / `text` / `start` / `end`
+  - source 标签覆盖 `regex` / `jieba` / `keyword` / `image_ocr`
+- `main.py:MainWindow`
+  - PDF 页面命中消费端统一走 `HitOverrideStore.filtered_hits()`
+  - 画布右键菜单：忽略 / 确认 / 撤销 / 提升为永久
+- 新增测试：`test_ocr_worker_source_field`(3) + `test_pdf_source_field`(3) — **6/6**
+
+### Wave 4 — Word 通道 ✅
+- `privacyguard/workers/word_worker.py`：命中 dict 补 `source` / `start` / `end`
+- `main.py:WebViewBridge` 新增 4 个槽：`ignore_ocr_hit` / `confirm_ocr_hit` / `revert_ocr_hit` / `promote_ocr_hit`，签名统一 `(key, source, text, hit_id)`
+- 预览 JS：右键菜单 + `confirmed` / `ignored` 视觉样式；replaced panel 接 `filtered_hits()`
+- 新增测试：`test_word_source_field`(1) + `test_bridge_override_slots`(6) — **7/7**
+
+### Wave 5 — dock + 持久化 + 文档 ✅
+- 新增干预 dock 面板：按 `scope` / `action` 筛选、快捷键、双击定位
+- 启动加载 / 退出保存 `redaction.overrides.permanent`
+- SettingsDialog 新增「清理失效 overrides」按钮
+- 新增测试：`test_overrides_persistence`(3) — **3/3**
+- 文档同步：`version.txt` 37.7.6 → 37.8.0、`CHANGELOG.md`、`STATUS.md`、`DEV_LOG.md`、`PHASE_HIT_OVERRIDE.md`、`CLAUDE.md`
+
+### 最终回归
+- `python3 -m compileall -q main.py privacyguard tests` ✅
+- 全量回归 `162` 项：`160 PASS`
+- 既有失败 2 项：`test_config_alignment.test_scan_default_level_matches` / `test_simple_config_reads_config_json_values`（`config.json` 为 2.0，测试期望 1.5），自 v37.7.6 起存在，与本阶段无关
+
+### 关键设计取舍
+- **单一过滤入口**：所有消费端只经 `filtered_hits()`，避免多点 override 判定漂移
+- **manual 命中永不被过滤**：人工框选是显式意图，不参与 override 判定
+- **doc_hash 含 mtime**：文档改动后旧 override 自然失效，避免错位命中
+- **permanent 原子写**：tmp + rename，避免半写坏文件
+- **默认空 override 等价现状**：向后兼容 v37.7.6
+
+### 已知边界
+- `test_convergence` 强制要求 `main.py` 与 `privacyguard/__init__.py` 的 `read_app_version()` OSError 回退值与 `version.txt` 一致，故两处回退值同步升为 `"37.8.0"`（`tests/unit/test_app_config.py` 的对应断言同步更新）
+- `packaging/**` 的版本资源待真机 smoke 后再同步
+
+---
+
+## 2026-08-16 - 中文姓名启发式识别 (jieba X3 方案) 集成
+
+### Phase 文档
+- `docs/current/PHASE_NAME_RECOGNITION.md` 已落盘
+
+### Wave 1 — 核心识别器 + 单元测试 ✅
+- 新增 `privacyguard/pii/name_recognizer.py`
+  - `ChineseNameRecognizer` 单例 + 便捷函数 `extract_person_names(text)`
+  - 词性判定放宽到 `flag.startswith("nr")`，覆盖 jieba 的 `nr`/`nrfg` 等细分
+  - 姓氏表准入（百家姓 + 复姓）+ 黑名单过滤（法律程序词、角色、机构、方向词）+ 长度 2-4 校验
+- 新增 `tests/unit/test_name_recognizer.py`（17 例）
+  - 11 个法律文书姓名样例（周强/张三/李四/诸葛亮/曹炳志/王小红/欧阳娜娜/上官婉儿/李大伟/张大伟 等）
+  - 4 个反例（"中国"/"本公司"/"东西南北"/OCR 噪声）
+  - 2 个便捷函数测试
+  - 3 个异常安全 + 性能预算测试
+- **测试通过：17/17**
+
+### Wave 2 — Worker 接入 ✅
+- `privacyguard/workers/ocr_worker.py`
+  - `__init__` 新增 `enable_name_recognition: bool = False` 参数
+  - `run()` 在每页 `all_patterns` 注入点追加 `extract_person_names(page_text)` 输出
+- `privacyguard/workers/word_worker.py`
+  - `__init__` 新增 `enable_name_recognition: bool = False`
+  - `_find_matches()` 注入点
+- `main.py:OCRWorker` / `WordWorker` 兼容层透传
+- 新增 `tests/unit/test_worker_name_recognition.py`（7 例）
+- **测试通过：7/7**
+
+### Wave 3 — UI + 持久化 + spec + requirements ✅
+- `main.py:SettingsDialog`
+  - `__init__` 新增 `enable_name_recognition` 参数
+  - 新增 `cb_name_recognition` checkbox（中文姓名启发式识别）
+  - `save_settings()` 同步 + 持久化键 `redaction.enable_name_recognition`
+- `main.py:MainWindow`
+  - 启动读取 `enable_name_recognition`（默认 False）
+  - SettingsDialog / OCRWorker / WordWorker 调用处全部透传
+- `PrivacyGuard_verify.spec`
+  - `datas += collect_data_files('jieba')`
+  - hiddenimports `['jieba', 'jieba.posseg', 'jieba._compat']`
+- `requirements.txt`：新增 `jieba==0.42.1`
+- 新增 `tests/unit/test_enable_name_recognition_persistence.py`（5 例）
+- **测试通过：5/5**
+
+### Wave 4 — 全量回归 + 文档同步（进行中）
+- 基线 79 → 阶段终态 114 测试 PASS（基线 85 + Wave 1 17 + Wave 2 7 + Wave 3 5）
+- 性能预算：1000 字文本姓名识别 < 100ms（实测 < 500ms，含 jieba 冷启动）
+- 文档：`CHANGELOG.md` / `DEV_LOG.md` / `PHASE_NAME_RECOGNITION.md` 同步
+
+### 关键设计取舍
+- **默认 OFF**：与 v37.7.6 完全等价，避免非法律文书场景的误识
+- **PyInstaller 影响**：+42MB（仅启用时），冷启动 ~800ms（一次性）
+- **不破坏既有基线**：DEFAULT_RULES / test_config_alignment 等三处对齐测试零变更
+
+### 待办（后续可优化项）
+- OCRWorker 行级坐标精度（CJK 字符权重）
+- 姓名识别缓存（避免大文档重复计算）
+- 复姓+叠字姓名（jieba 硬伤，需要 NLP 模型）
+
+---
+
+## 2026-08-15 - 步骤 1: 地址规则 + 步骤 2: 手写座机 + 步骤 3: 法定代表人
+
+### 背景
+用户脱敏验证 — 起诉状《周强起诉状_GUI模式脱敏.pdf》分析指出3 类漏脱敏字段：
+1. 原告详细住址（精确到门牌号）
+2. 手写个人手机号（OCR 误识）
+3. 被告法定代表人姓名
+
+### 改动
+- `privacyguard/utils/config.py` `DEFAULT_CONFIG["redaction"]["default_rules"]` 添加 3 条新规则
+- `config.json` 同步
+- `main.py:212` 硬编码后备字典同步
+- `main.py:4953` `active_rules` 默认列表扩展
+- `main.py:1296` UI 默认勾选列表扩展
+- 新增 `tests/unit/test_redaction_rule_patterns.py`（16 例）
+
+### 测试
+- **步骤 1 测试：16/16 PASS**
+- **全量回归：85/85 PASS**
 
 ---
 

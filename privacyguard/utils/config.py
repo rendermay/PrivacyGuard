@@ -76,10 +76,25 @@ DEFAULT_CONFIG = {
                 "pattern": "__SEAL_DETECTION__",
                 "enabled": False,
                 "description": "使用 OpenCV 自动检测并脱敏红色印章区域"
+            },
+            "地址（含门牌号）": {
+                "pattern": r"[一-龥]{2,15}(?:省|市|自治区|特别行政区)[一-龥\d\s,]{4,40}\d+号",
+                "enabled": True,
+                "description": "匹配含省级行政区且末端为门牌号的地址"
+            },
+            "固定电话": {
+                "pattern": r"(?<!\d)0\d{2,3}[-\s]?[\d\w]{7,8}(?!\d)",
+                "enabled": True,
+                "description": "匹配 0xx-xxxxxxxx 座机/固定电话(容忍 OCR 误识)"
+            },
+            "法定代表人": {
+                "pattern": r"法定代表人\s*[::：]?\s*[一-龥]{2,4}(?:·[一-龥]{2,4})?",
+                "enabled": True,
+                "description": "匹配'法定代表人'标签后的人名(支持半角/全角冒号)"
             }
         },
         "replacement_text": "*",
-        "custom_keywords": "人",
+        "custom_keywords": "",
         "scan": {
             "default_level": 1.5,
             "available_levels": [1.0, 1.5, 2.0],

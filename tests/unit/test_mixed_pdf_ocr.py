@@ -78,7 +78,14 @@ class TestMixedPdfOcr(unittest.TestCase):
         )
 
         self.assertEqual(rendered, image_clip_rects)
-        self.assertEqual(hit_rects, [(112.0, 208.0, 40.0, 14.0)])
+        # v37.7.x 方案 X: 输出 duck-typing QRectF, 兼容 tuple 比较
+        self.assertEqual(len(hit_rects), 1)
+        hit = hit_rects[0]
+        # 输出可能是 QRectF 或 _TupleRect (fallback), 都满足 .x() / .y() / .width() / .height()
+        self.assertAlmostEqual(hit.x(), 112.0)
+        self.assertAlmostEqual(hit.y(), 208.0)
+        self.assertAlmostEqual(hit.width(), 40.0)
+        self.assertAlmostEqual(hit.height(), 14.0)
 
 
 if __name__ == "__main__":

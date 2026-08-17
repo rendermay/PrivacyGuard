@@ -33,6 +33,9 @@ from privacyguard.workers.image_merge import ImageMergeWorker
 from privacyguard.workers.word_worker import WordWorker as _ModularWordWorker
 from privacyguard.workers.ocr_worker import OCRWorker as _ModularOCRWorker
 from privacyguard.utils.doc_converter import convert_doc_to_docx as _shared_convert_doc_to_docx
+from privacyguard.redaction.hit_ref import HitRef  # v37.8.x: 人工干预
+from privacyguard.redaction.override_store import HitOverrideStore  # v37.8.x: override store 单例
+from privacyguard.redaction.doc_hash import compute_doc_hash  # v37.8.x: 文档 hash
 
 # v37.0.5: 延迟导入 OCR 模块，便于错误处理
 RapidOCR = None
@@ -73,8 +76,9 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QRadioButton, QButtonGroup, QComboBox, QSizePolicy,
                              QTextBrowser, QLineEdit, QListWidget, QListWidgetItem,
                              QAbstractItemView, QSlider, QTableWidget, QMenu,
-                             QTableWidgetItem, QHeaderView, QStyle)
-from PyQt6.QtGui import QPixmap, QImage, QPainter, QPen, QColor, QWheelEvent, QCursor, QIcon, QDesktopServices
+                             QTableWidgetItem, QHeaderView, QStyle,
+                             QDockWidget)
+from PyQt6.QtGui import QPixmap, QImage, QPainter, QPen, QColor, QWheelEvent, QCursor, QIcon, QDesktopServices, QShortcut, QKeySequence
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QRectF, QPointF, QSettings, QMutex, QMutexLocker, QObject, pyqtSlot, QSize, QTimer, QUrl
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebChannel import QWebChannel
@@ -93,7 +97,7 @@ def read_app_version():
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except OSError:
-        return "37.7.6"
+        return "37.8.0"
 
 class SimpleConfig:
     """简化配置管理器 - 直接从 config.json 读取"""
@@ -103,10 +107,10 @@ class SimpleConfig:
         if config_path is None:
             config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
         self._config_path = config_path
-        self._load_config()
+        self.load()
 
-    def _load_config(self):
-        """加载配置文件"""
+    def load(self):
+        """加载配置文件并补齐默认键。"""
         try:
             if os.path.exists(self._config_path):
                 with open(self._config_path, 'r', encoding='utf-8') as f:
@@ -114,14 +118,32 @@ class SimpleConfig:
         except (OSError, IOError, json.JSONDecodeError) as e:
             print(f"[配置系统] 加载配置失败: {e}")
 
+        # v37.8.x: 补齐 override 相关默认键
+        red = self._config.setdefault("redaction", {})
+        red.setdefault("enable_hit_override", True)
+        overrides = red.setdefault("overrides", {})
+        overrides.setdefault("permanent", [])
+
+    def _load_config(self):
+        """[兼容保留] 旧版加载入口,委托给 load()."""
+        self.load()
+
     def save(self):
-        """将当前配置写回磁盘。"""
+        """原子写回磁盘 — 先写 .tmp,再 os.replace 原子替换."""
+        tmp_path = self._config_path + ".tmp"
         try:
-            with open(self._config_path, 'w', encoding='utf-8') as f:
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(self._config, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, self._config_path)
             return True
         except (OSError, IOError, TypeError) as e:
             print(f"[配置系统] 保存配置失败: {e}")
+            # 清理可能残留的 .tmp
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
             return False
 
     def get(self, key, default=None):
@@ -215,7 +237,11 @@ else:
         "日期时间": r"\d{4}[年\-\.]\d{1,2}[月\-\.]\d{1,2}[日]?",
         "电子邮箱": r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
         "银行卡号": r"(?<!\d)([1-9]\d{12,18})(?!\d)",
-        "印章": "__SEAL_DETECTION__"  # v37.5.0: 印章检测特殊标记
+        "印章": "__SEAL_DETECTION__",  # v37.5.0: 印章检测特殊标记
+        # v37.7.x: 扩展规则 — 起诉讼书场景下常见漏脱敏字段
+        "地址（含门牌号）": r"[一-龥]{2,15}(?:省|市|自治区|特别行政区)[一-龥\d\s,]{4,40}\d+号",
+        "固定电话": r"(?<!\d)0[\w]{2,3}[-\s]?[\w]{7,8}(?!\d)",
+        "法定代表人": r"法定代表人\s*[::：]?\s*[一-龥]{2,4}(?:·[一-龥]{2,4})?",
     }
 
 WORD_RULE_SCHEMA_VERSION = 1
@@ -1011,7 +1037,9 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None, current_rules=None, use_enhance=False, custom_keywords="",
                  scan_level=2.0, offset_x=0, offset_w=0, replacement_text="[已脱敏]",
                  word_replace_rules=None,
-                 config_manager=None):
+                 config_manager=None,
+                 enable_name_recognition=False,
+                 enable_hit_override=True):
         super().__init__(parent)
         self.config = config_manager
 
@@ -1065,6 +1093,10 @@ class SettingsDialog(QDialog):
         self.word_replace_rules = normalize_word_replace_rules(word_replace_rules or [], self.replacement_text)
         self.default_replacement_text = "[已脱敏]"
         self.recommended_rule_names = ["身份证号", "手机号码"]
+        # v37.7.x: 中文姓名启发式识别开关(默认 False,向后兼容)
+        self.enable_name_recognition = bool(enable_name_recognition)
+        # v37.8.x: 人工干预主开关(默认 True,与 config 默认一致)
+        self.enable_hit_override = bool(enable_hit_override)
 
         # v37.0: 从配置读取范围和标签
         if self.config:
@@ -1289,7 +1321,7 @@ class SettingsDialog(QDialog):
         for index, (name, pattern) in enumerate(rule_items):
             cb = QCheckBox(name)
             if current_rules and pattern in current_rules: cb.setChecked(True)
-            elif not current_rules and name in ["身份证号", "手机号码"]: cb.setChecked(True)
+            elif not current_rules and name in ["身份证号", "手机号码", "地址（含门牌号）", "固定电话", "法定代表人"]: cb.setChecked(True)
             self.checks[name] = cb
             cb.toggled.connect(self._refresh_rule_summary)
             if index < split_index:
@@ -1345,6 +1377,26 @@ class SettingsDialog(QDialog):
         custom_actions.addWidget(btn_clear_keywords)
         custom_actions.addStretch()
         left_panel.addLayout(custom_actions)
+        # v37.7.x: 中文姓名启发式识别开关
+        self.cb_name_recognition = QCheckBox("启用中文姓名启发式识别 (jieba)")
+        self.cb_name_recognition.setObjectName("settingsInlineCheckbox")
+        self.cb_name_recognition.setChecked(self.enable_name_recognition)
+        self.cb_name_recognition.setToolTip(
+            "开启后,工具会调用 jieba 词性标注提取文本中的中文姓名,"
+            "追加到 OCR/Word 命中规则。\n"
+            "适用于法律文书等含姓名角色的场景;非中文或纯文本场景建议关闭。"
+        )
+        left_panel.addWidget(self.cb_name_recognition)
+        # v37.8.x: 人工干预主开关(显式持久化,避免仅依赖 config 默认值)
+        self.cb_hit_override = QCheckBox("启用人工干预面板 (Override Dock)")
+        self.cb_hit_override.setObjectName("settingsInlineCheckbox")
+        self.cb_hit_override.setChecked(self.enable_hit_override)
+        self.cb_hit_override.setToolTip(
+            "开启后,主窗口底部会显示人工干预 Dock,支持对 OCR/Word 命中进行"
+            "ignore / confirm / promote 等手动操作。\n"
+            "关闭后 Dock 会隐藏,所有 override 操作也会随之失效。"
+        )
+        left_panel.addWidget(self.cb_hit_override)
         self.txt_custom = QTextEdit()
         self.txt_custom.setPlaceholderText("例如：法院 张三 (支持多行)")
         self.txt_custom.setPlainText(custom_keywords)
@@ -1598,6 +1650,47 @@ class SettingsDialog(QDialog):
         v_ocr.addWidget(adjust_card)
         layout.addWidget(box_ocr)
 
+        # v37.8.x: 5. 永久 override 维护
+        box_overrides = QFrame()
+        box_overrides.setObjectName("settingsSectionCard")
+        v_overrides = QVBoxLayout(box_overrides)
+        v_overrides.setContentsMargins(16, 16, 16, 16)
+        v_overrides.setSpacing(12)
+        ov_lead = QLabel("维护永久 ignore / confirm 条目。永久 override 会跨会话生效,建议定期清理过期记录。")
+        ov_lead.setObjectName("settingsSectionLead")
+        ov_lead.setWordWrap(True)
+        self.lbl_overrides_summary = QLabel("")
+        self.lbl_overrides_summary.setObjectName("settingsSectionSummary")
+        self.lbl_overrides_summary.setWordWrap(True)
+        v_overrides.addWidget(
+            self._create_settings_section_header(
+                "5. 永久 override 名单", ov_lead, self.lbl_overrides_summary
+            )
+        )
+        ov_actions = QHBoxLayout()
+        ov_actions.setSpacing(8)
+        ov_actions.addWidget(self._create_settings_action_hint("快捷操作"))
+        clean_btn = QPushButton("清理 30 天前失效的 permanent overrides")
+        clean_btn.setObjectName("settingsInlineButton")
+        clean_btn.clicked.connect(self._on_clean_stale_overrides)
+        ov_actions.addWidget(clean_btn)
+        ov_actions.addStretch()
+        v_overrides.addLayout(ov_actions)
+        ov_card = QFrame()
+        ov_card.setObjectName("settingsFieldCard")
+        ov_card_layout = QVBoxLayout(ov_card)
+        ov_card_layout.setContentsMargins(16, 16, 16, 16)
+        ov_card_layout.setSpacing(8)
+        ov_card_title = QLabel("Permanent 列表")
+        ov_card_title.setObjectName("settingsFieldTitle")
+        ov_card_note = QLabel("永久条目存于 config.json 的 redaction.overrides.permanent,共 N 条。")
+        ov_card_note.setObjectName("settingsFieldNote")
+        ov_card_note.setWordWrap(True)
+        ov_card_layout.addWidget(ov_card_title)
+        ov_card_layout.addWidget(ov_card_note)
+        v_overrides.addWidget(ov_card)
+        layout.addWidget(box_overrides)
+
         layout.addStretch(1)
         content_scroll.setWidget(content_widget)
         body_layout.addWidget(content_scroll, stretch=1)
@@ -1634,7 +1727,7 @@ class SettingsDialog(QDialog):
         footer_actions.addWidget(btn_ok)
         footer_layout.addLayout(footer_actions)
         outer_layout.addWidget(footer)
-        self._settings_sections = [box_rules, box_custom, box_enhance, box_ocr]
+        self._settings_sections = [box_rules, box_custom, box_enhance, box_ocr, box_overrides]
         self._settings_nav_syncing = False
         self.settings_nav.currentRowChanged.connect(self._scroll_to_settings_section)
         self.content_scroll.verticalScrollBar().valueChanged.connect(self._sync_settings_nav_from_scroll)
@@ -1643,6 +1736,7 @@ class SettingsDialog(QDialog):
         self._refresh_rule_summary()
         self._refresh_precision_summary()
         self._refresh_ocr_summary()
+        self._refresh_overrides_summary()
         self._refresh_settings_layout_density()
 
     def _on_adjust_changed(self, value):
@@ -2582,6 +2676,53 @@ class SettingsDialog(QDialog):
         self.lbl_ocr_summary.setText(f"当前检测框调节：{adjust_value}% · {trend}")
         self._refresh_settings_overview()
 
+    def _refresh_overrides_summary(self):
+        """v37.8.x: 读取 config 中的 permanent overrides 数量,刷新概述."""
+        if not self.config:
+            self.lbl_overrides_summary.setText("当前未挂载配置管理器,无法统计。")
+            return
+        items = self.config.get("redaction.overrides.permanent", []) or []
+        total = len(items) if isinstance(items, list) else 0
+        ignore_n = sum(1 for it in items if isinstance(it, dict) and it.get("action") == "ignore")
+        confirm_n = sum(1 for it in items if isinstance(it, dict) and it.get("action") == "confirm")
+        self.lbl_overrides_summary.setText(
+            f"当前 permanent 列表: 共 {total} 条(ignore {ignore_n} / confirm {confirm_n})"
+        )
+        self._refresh_settings_overview()
+
+    def _on_clean_stale_overrides(self):
+        """v37.8.x: 清理 30 天前 promoted 的 permanent override."""
+        if not self.config:
+            QMessageBox.warning(self, "提示", "未挂载配置管理器,无法清理。")
+            return
+        from privacyguard.redaction.override_store import clean_stale_permanent
+        items = self.config.get("redaction.overrides.permanent", []) or []
+        if not isinstance(items, list):
+            QMessageBox.warning(self, "提示", "permanent 字段格式异常,无法清理。")
+            return
+        before = len(items)
+        cleaned = clean_stale_permanent(items, max_age_days=30)
+        removed = before - len(cleaned)
+        self.config.set("redaction.overrides.permanent", cleaned)
+        try:
+            self.config.save()
+        except Exception as exc:
+            QMessageBox.warning(self, "失败", f"保存配置失败: {exc}")
+            return
+        # 同步内存中的 store
+        mw = self.parent()
+        if mw is not None and hasattr(mw, "_override_store"):
+            try:
+                mw._override_store.replace_permanent(cleaned)
+            except Exception:
+                pass
+        self._refresh_overrides_summary()
+        QMessageBox.information(
+            self,
+            "完成",
+            f"已清理 {removed} 条失效 permanent override(剩余 {len(cleaned)} 条)。",
+        )
+
     def _open_word_rules_editor(self):
         default_text = self.input_replacement_text.text().strip() or "[已脱敏]"
         dlg = WordReplaceRulesDialog(
@@ -2614,6 +2755,11 @@ class SettingsDialog(QDialog):
         # v37.4.0: 保存检测框调节比例
         self.box_adjust_ratio = self.slider_adjust.value() / 100.0
 
+        # v37.7.x: 中文姓名启发式识别开关
+        self.enable_name_recognition = self.cb_name_recognition.isChecked()
+        # v37.8.x: 人工干预主开关
+        self.enable_hit_override = self.cb_hit_override.isChecked()
+
         # v37.0: 保存到配置文件
         if self.config:
             try:
@@ -2625,6 +2771,12 @@ class SettingsDialog(QDialog):
                 self.config.set("redaction.custom_keywords", self.custom_keywords, persist=False)
                 self.config.set("redaction.replacement_text", self.replacement_text, persist=False)
                 self.config.set("ocr.box_adjust_ratio", self.box_adjust_ratio, persist=False)
+                # v37.7.x: 姓名识别开关持久化
+                self.config.set("redaction.enable_name_recognition",
+                                self.enable_name_recognition, persist=False)
+                # v37.8.x: 人工干预主开关持久化(允许用户在 UI 显式切换)
+                self.config.set("redaction.enable_hit_override",
+                                self.enable_hit_override, persist=False)
                 self.config.save()
             except Exception as e:
                 print(f"[设置] 保存配置失败: {e}")
@@ -4022,11 +4174,41 @@ class SinglePageCanvas(QLabel):
         self.drawing = False
         self.start_point = QPointF()
         self.current_rect = QRectF()
+        # v37.8.x: 注入 main_window 引用,供右键菜单读写 HitOverrideStore。
+        # 由 MainWindow.setup_ui 在创建后调用 set_main_window 注入,避免循环依赖。
+        self.main_window = None
 
     def set_mask_color(self, color):
         """v7.0 方法"""
         self.mask_color = color
         self.update()
+
+    def set_main_window(self, main_window):
+        """v37.8.x: 注入 MainWindow 引用,供右键菜单读写 override store."""
+        self.main_window = main_window
+
+    def _locate_hit(self, click_pos, *, prefer_manual: bool):
+        """v37.8.x: 定位点击位置对应的 HitRef。
+
+        返回 (HitRef, scope_marker) 或 None。
+        scope_marker: 'manual' 或 'ocr' — 用于区分 hit 来自手动框还是 OCR 框。
+        手动框无 text(画框时不带 OCR 文本),HitRef.text 留空。
+        """
+        if self.main_window is None:
+            return None
+        rects = self.rects_manual if prefer_manual else self.rects_ocr
+        for r in rects:
+            if self.pdf_to_screen(r).contains(click_pos):
+                ref = HitRef(
+                    doc_hash=self.main_window._current_doc_hash,
+                    location=f"page_{self.page_index}",
+                    start=int(r.x()),
+                    end=int(r.x() + r.width()),
+                    text="",
+                    source="manual" if prefer_manual else "ocr",
+                )
+                return (ref, "manual" if prefer_manual else "ocr")
+        return None
 
     def update_content(self, pixmap, scale, ocr_rects, manual_rects):
         """v7.0 方法 - 直接引用列表，不复制！"""
@@ -4049,46 +4231,71 @@ class SinglePageCanvas(QLabel):
             self.current_rect = QRectF(self.start_point, self.start_point)
             self.update()
 
-        # 右键删除 (v7.0 风格)
+        # 右键弹 QMenu (v37.8.x)
         elif event.button() == Qt.MouseButton.RightButton:
             click_pos = event.position()
             if DEBUG_MODE:
                 print(f"\n[DEBUG] === 右键点击 === 页面{self.page_index}, 位置({click_pos.x():.2f}, {click_pos.y():.2f})")
                 print(f"[DEBUG] 手动框数量: {len(self.rects_manual)}, OCR框数量: {len(self.rects_ocr)}")
 
-            deleted = False
+            if self.main_window is None:
+                return
 
-            # 先删手动框（从后往前，优先删除上层）
-            for i in range(len(self.rects_manual) - 1, -1, -1):
-                screen_rect = self.pdf_to_screen(self.rects_manual[i])
-                if DEBUG_MODE:
-                    print(f"[DEBUG] 检查手动框[{i}]: {screen_rect}, contains={screen_rect.contains(click_pos)}")
-                if screen_rect.contains(click_pos):
-                    del self.rects_manual[i]
-                    deleted = True
-                    if DEBUG_MODE:
-                        print(f"[DEBUG] ✓ 删除手动框[{i}]")
+            # v37.8.x: 优先找手动框 — 命中则 v7.0 行为:直接删除
+            manual_hit_index = None
+            for i, r in enumerate(self.rects_manual):
+                if self.pdf_to_screen(r).contains(click_pos):
+                    manual_hit_index = i
                     break
 
-            # 再删 OCR 框
-            if not deleted:
-                for i in range(len(self.rects_ocr) - 1, -1, -1):
-                    screen_rect = self.pdf_to_screen(self.rects_ocr[i])
-                    if DEBUG_MODE:
-                        print(f"[DEBUG] 检查OCR框[{i}]: {screen_rect}, contains={screen_rect.contains(click_pos)}")
-                    if screen_rect.contains(click_pos):
-                        del self.rects_ocr[i]
-                        deleted = True
-                        if DEBUG_MODE:
-                            print(f"[DEBUG] ✓ 删除OCR框[{i}]")
-                        break
-
-            if deleted:
+            if manual_hit_index is not None:
+                # v7.0 行为:右键手动框直接删除,不做 store 操作
+                del self.rects_manual[manual_hit_index]
                 self.update()
-            else:
+                if hasattr(self.main_window, "render_view"):
+                    self.main_window.render_view()
+                return
+
+            # 非手动框命中,再查 OCR 框
+            hit_info = self._locate_hit(click_pos, prefer_manual=False)
+            if hit_info is None:
                 if DEBUG_MODE:
                     print(f"[DEBUG] ✗ 未点击到任何矩形框")
-            # 不需要 emit 信号！列表是共享引用，删除已经同步到主窗口
+                return
+
+            ref, scope = hit_info  # ref 是 HitRef, scope 是 'ocr'
+            store = self.main_window._override_store
+
+            menu = QMenu(self)
+            act_ignore = menu.addAction("忽略此条 (本次)")
+            act_confirm = menu.addAction("确认是敏感信息 (本次)")
+            menu.addSeparator()
+            act_promote = menu.addAction("提升到永久名单")
+            act_revert = menu.addAction("撤销已记录的覆盖")
+            menu.addSeparator()
+            act_cancel = menu.addAction("取消")
+
+            chosen = menu.exec(event.globalPosition().toPoint())
+            if chosen == act_ignore:
+                store.ignore(ref, scope="session")
+            elif chosen == act_confirm:
+                store.confirm(ref, scope="session")
+            elif chosen == act_promote:
+                # 必须先 ignore/confirm 后才能 promote
+                if ref.hit_id not in [o.ref.hit_id for o in store.iter_overrides()]:
+                    QMessageBox.information(self.main_window, "提示", "请先 ignore 或 confirm 后再提升")
+                    return
+                store.promote(ref.hit_id)
+            elif chosen == act_revert:
+                store.revert(ref.hit_id)
+            else:
+                return  # 用户选取消
+
+            # 重画 canvas
+            self.update()
+            # 触发过滤重渲染 — main_window 暴露 _refresh_override_dock 是可选的,这里用 render_view 兜底
+            if hasattr(self.main_window, "render_view"):
+                self.main_window.render_view()
 
     def pdf_to_screen(self, rect):
         """v7.0 实现 - 带小的容错范围"""
@@ -4186,18 +4393,70 @@ class SinglePageCanvas(QLabel):
             # 同时传递给父类以支持正常滚动
             super().wheelEvent(event)
 
+
+# === v37.8.x: 干预面板 dock ===
+class OverrideDock(QDockWidget):
+    """显示当前文档的会话级 + 永久级 override 列表.
+
+    - 5 列表格: 文本 / 来源 / 位置 / 操作 / 作用域
+    - 顶部摘要: 已忽略 N 条 / 已确认 N 条
+    - 通过 MainWindow._override_store 实时拉数据
+    """
+
+    def __init__(self, parent=None):
+        super().__init__("脱敏干预", parent)
+        self._main_window = None
+        self._table = QTableWidget(0, 5)
+        self._table.setHorizontalHeaderLabels(["文本", "来源", "位置", "操作", "作用域"])
+        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._summary_label = QLabel("已忽略 0 条 / 已确认 0 条")
+        layout = QVBoxLayout()
+        layout.addWidget(self._summary_label)
+        layout.addWidget(self._table)
+        container = QWidget()
+        container.setLayout(layout)
+        self.setWidget(container)
+        self.hide()
+
+    def attach(self, main_window):
+        self._main_window = main_window
+
+    def refresh(self):
+        if not self._main_window:
+            return
+        store = getattr(self._main_window, "_override_store", None)
+        if store is None:
+            return
+        items = list(store.iter_overrides())
+        self._table.setRowCount(len(items))
+        ig = cf = 0
+        for row, ov in enumerate(items):
+            self._table.setItem(row, 0, QTableWidgetItem(ov.ref.text))
+            self._table.setItem(row, 1, QTableWidgetItem(ov.ref.source))
+            self._table.setItem(row, 2, QTableWidgetItem(ov.ref.location))
+            self._table.setItem(row, 3, QTableWidgetItem(ov.action))
+            self._table.setItem(row, 4, QTableWidgetItem(ov.scope))
+            if ov.action == "ignore":
+                ig += 1
+            else:
+                cf += 1
+        self._summary_label.setText(f"已忽略 {ig} 条 / 已确认 {cf} 条")
+
+
 # === OCR 线程 ===
 # v37.7.6: 改为使用模块化 OCRWorker，自动注入 box_adjust_ratio
 class OCRWorker(_ModularOCRWorker):
-    """OCR 处理线程（兼容层：自动注入 config 中的 box_adjust_ratio）"""
+    """OCR 处理线程（兼容层：自动注入 config 中的 box_adjust_ratio + enable_name_recognition）"""
 
     def __init__(self, pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
-                 use_char_level_ocr: bool = False, seal_detection_enabled: bool = False):
+                 use_char_level_ocr: bool = False, seal_detection_enabled: bool = False,
+                 enable_name_recognition: bool = False):
         box_adjust_ratio = config.get("ocr.box_adjust_ratio", 0.0) if config else 0.0
         super().__init__(pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
                          use_char_level_ocr=use_char_level_ocr,
                          seal_detection_enabled=seal_detection_enabled,
-                         box_adjust_ratio=box_adjust_ratio)
+                         box_adjust_ratio=box_adjust_ratio,
+                         enable_name_recognition=enable_name_recognition)
 
 # === WebView Bridge：Python 与 JavaScript 通信 ===
 class WebViewBridge(QObject):
@@ -4326,6 +4585,83 @@ class WebViewBridge(QObject):
             print(f"[撤销] 删除了 {count} 个全局脱敏: {text}")
             self.main_window.render_word_preview()
 
+    # === v37.8.x: HitOverrideStore 4 槽 + contextmenu 入口 ===
+    @pyqtSlot(str, str, str, str)
+    def ignore_ocr_hit(self, key, source, text, hit_id):
+        """JS 调用:忽略某条 OCR / jieba hit (session 级别)."""
+        from privacyguard.redaction.hit_ref import HitRef
+        try:
+            doc_hash, location, start_s, end_s, src = hit_id.split("|", 4)
+            ref = HitRef(
+                doc_hash=doc_hash, location=location,
+                start=int(start_s), end=int(end_s),
+                text=text, source=src,
+            )
+        except Exception as exc:
+            print(f"[Bridge] ignore_ocr_hit 解析 hit_id 失败: {exc}")
+            return
+        self.main_window._override_store.ignore(ref, scope="session")
+        self.main_window.render_word_preview()
+        if hasattr(self.main_window, "_refresh_override_dock"):
+            self.main_window._refresh_override_dock()
+
+    @pyqtSlot(str, str, str, str)
+    def confirm_ocr_hit(self, key, source, text, hit_id):
+        """JS 调用:确认某条 OCR / jieba hit 为敏感信息 (session 级别)."""
+        from privacyguard.redaction.hit_ref import HitRef
+        try:
+            doc_hash, location, start_s, end_s, src = hit_id.split("|", 4)
+            ref = HitRef(doc_hash, location,
+                         int(start_s), int(end_s), text, src)
+        except Exception as exc:
+            print(f"[Bridge] confirm_ocr_hit 解析 hit_id 失败: {exc}")
+            return
+        self.main_window._override_store.confirm(ref, scope="session")
+        self.main_window.render_word_preview()
+        if hasattr(self.main_window, "_refresh_override_dock"):
+            self.main_window._refresh_override_dock()
+
+    @pyqtSlot(str)
+    def promote_override(self, hit_id):
+        """JS 调用:把已记录的 session override 提升为 permanent."""
+        store = self.main_window._override_store
+        store.promote(hit_id)
+        # v37.8.x: 提升后立即落盘 + 刷新 dock
+        store.save_permanent()
+        if hasattr(self.main_window, "_refresh_override_dock"):
+            self.main_window._refresh_override_dock()
+
+    @pyqtSlot(str)
+    def revert_override(self, hit_id):
+        """JS 调用:撤销某条已记录的 override."""
+        self.main_window._override_store.revert(hit_id)
+        # v37.8.x: 若该 hit 是 permanent, 撤销后需落盘
+        self.main_window._override_store.save_permanent()
+        self.main_window.render_word_preview()
+        if hasattr(self.main_window, "_refresh_override_dock"):
+            self.main_window._refresh_override_dock()
+
+    @pyqtSlot(str, str, str, str, int, int)
+    def handle_ocr_hit_contextmenu(self, key, source, text, hit_id, x, y):
+        """JS 触发右键:弹 QMenu 把用户选择转给 ignore/confirm/promote/revert."""
+        from PyQt6.QtCore import QPoint
+        menu = QMenu(self.main_window)
+        act_ig = menu.addAction("忽略此条 (本次)")
+        act_cf = menu.addAction("确认是敏感信息 (本次)")
+        menu.addSeparator()
+        act_pm = menu.addAction("提升到永久名单")
+        act_rv = menu.addAction("撤销")
+        act_cancel = menu.addAction("取消")
+        chosen = menu.exec(QPoint(int(x), int(y)))
+        if chosen == act_ig:
+            self.ignore_ocr_hit(key, source, text, hit_id)
+        elif chosen == act_cf:
+            self.confirm_ocr_hit(key, source, text, hit_id)
+        elif chosen == act_pm:
+            self.promote_override(hit_id)
+        elif chosen == act_rv:
+            self.revert_override(hit_id)
+
     def get_scroll_position(self):
         """获取当前保存的滚动位置"""
         return self._scroll_position
@@ -4356,11 +4692,13 @@ class WebViewBridge(QObject):
 # === Word 文档处理线程 ===
 # v37.7.6: 改为使用模块化 WordWorker，补充 default_rules 参数
 class WordWorker(_ModularWordWorker):
-    """Word 文档智能脱敏线程（兼容层：自动注入 DEFAULT_RULES）"""
+    """Word 文档智能脱敏线程（兼容层：自动注入 DEFAULT_RULES + enable_name_recognition）"""
 
-    def __init__(self, word_doc, word_data, rules, custom_keywords, replacement_text):
+    def __init__(self, word_doc, word_data, rules, custom_keywords, replacement_text,
+                 enable_name_recognition: bool = False):
         super().__init__(word_doc, word_data, rules, custom_keywords,
-                         replacement_text, default_rules=DEFAULT_RULES)
+                         replacement_text, default_rules=DEFAULT_RULES,
+                         enable_name_recognition=enable_name_recognition)
 
 # === Word 预览交互式 JavaScript 代码常量 ===
 # v36.4: 提取为常量，避免 _inject_interactive_html 函数过长
@@ -4424,6 +4762,28 @@ _INTERACTIVE_JS_CODE = r"""
         const target = e.target;
         let selection = window.getSelection();
         let selectedText = selection.toString().trim();
+
+        // v37.8.x: OCR / jieba hit 命中 — 弹出 HitOverrideStore 操作菜单
+        // 仅当 mark 上有 data-hit-id 时触发;manual-highlight 仍走旧路径。
+        let ocrHitElement = target.closest('mark[data-hit-id]');
+        if (ocrHitElement) {
+            const key = ocrHitElement.getAttribute('data-key') || '';
+            const source = ocrHitElement.getAttribute('data-source') || '';
+            const text = ocrHitElement.textContent || '';
+            const hitId = ocrHitElement.getAttribute('data-hit-id') || '';
+            if (pyBridge && webChannelReady &&
+                typeof pyBridge.handle_ocr_hit_contextmenu === 'function') {
+                try {
+                    pyBridge.handle_ocr_hit_contextmenu(
+                        key, source, text, hitId,
+                        parseInt(e.clientX), parseInt(e.clientY)
+                    );
+                } catch (err) {
+                    console.error('[ContextMenu] handle_ocr_hit_contextmenu failed:', err);
+                }
+            }
+            return;
+        }
 
         // 查找点击的目标是否是手动脱敏标记或其内部元素
         let highlightElement = target.closest('.manual-highlight');
@@ -4899,6 +5259,12 @@ class MainWindow(QMainWindow):
             self.offset_x = config.get("redaction.offset.default_x", 0)
             self.offset_w = config.get("redaction.offset.default_w", 0)
             self.custom_keywords = config.get("redaction.custom_keywords", "")
+            # v37.7.x: 中文姓名启发式识别开关(默认 False,向后兼容)
+            self.enable_name_recognition = config.get(
+                "redaction.enable_name_recognition", False)
+            # v37.8.x: 人工干预主开关(默认 True,与 SimpleConfig 一致)
+            self.enable_hit_override = bool(config.get(
+                "redaction.enable_hit_override", True))
             # v37.4.0: 移除 OCR 引擎配置，只使用 RapidOCR
         else:
             min_width, min_height = 900, 600
@@ -4908,6 +5274,9 @@ class MainWindow(QMainWindow):
             self.offset_x = 0
             self.offset_w = 0
             self.custom_keywords = ""
+            # v37.7.x: 姓名识别开关(无 config 时默认 False)
+            self.enable_hit_override = True
+            self.enable_name_recognition = False
 
         # 窗口尺寸设置：最小尺寸 + 默认尺寸
         self.setMinimumSize(min_width, min_height)
@@ -4924,6 +5293,9 @@ class MainWindow(QMainWindow):
         self.zoom_level = 1.0
         self.page_data = {}
         self._ocr_processed_pages = set()  # OCR 实际处理过的页（用于准确完成状态提示）
+        # v37.8.x: 人工干预 override store + 当前文档 hash
+        self._override_store = HitOverrideStore.instance()
+        self._current_doc_hash = ""
         self.word_data = {}  # Word 文档数据结构
         self.word_replace_rules = []  # 会话级多字段替换规则
         self.word_compare_mode = False  # Word 预览是否开启原文/替换后对比
@@ -4946,7 +5318,14 @@ class MainWindow(QMainWindow):
         self.toolbar_density_mode = "wide"
         self._bound_window_handle = None
         self._button_density_metrics = {}
-        self.active_rules = [DEFAULT_RULES.get("身份证号", ""), DEFAULT_RULES.get("手机号码", "")]
+        self.active_rules = [
+            DEFAULT_RULES.get("身份证号", ""),
+            DEFAULT_RULES.get("手机号码", ""),
+            # v37.7.x: 起诉讼书场景常用字段
+            DEFAULT_RULES.get("地址（含门牌号）", ""),
+            DEFAULT_RULES.get("固定电话", ""),
+            DEFAULT_RULES.get("法定代表人", ""),
+        ]
         self.use_enhance = False
         self.current_color = QColor(0, 0, 0)
         self.dual_view = False
@@ -4980,6 +5359,27 @@ class MainWindow(QMainWindow):
         atexit.register(self._app_exit_cleanup)
 
         self.setup_ui()
+
+        # v37.8.x: 干预面板 dock
+        self._override_store.bind_config(config)
+        # 启动时加载 config.json 中的 permanent overrides
+        perms = config.get("redaction.overrides.permanent", []) if config else []
+        if perms:
+            self._override_store.load_permanent(perms)
+        self._override_dock = OverrideDock(self)
+        self._override_dock.attach(self)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._override_dock)
+        # 启动时根据配置决定 dock 是否可见
+        if config and config.get("redaction.enable_hit_override", True):
+            self._override_dock.show()
+        # Ctrl+Shift+H 快捷键 toggle dock 显隐
+        self._override_dock_shortcut = QShortcut(
+            QKeySequence("Ctrl+Shift+H"), self
+        )
+        self._override_dock_shortcut.activated.connect(
+            lambda: self._override_dock.setVisible(not self._override_dock.isVisible())
+        )
+        self._refresh_override_dock()
 
         # v37.6.0: 启用拖拽支持
         self.setAcceptDrops(True)
@@ -5037,6 +5437,12 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """保存窗口状态并清理临时文件"""
+        # v37.8.x: 关闭前把 permanent overrides 落盘
+        if hasattr(self, "_override_store"):
+            try:
+                self._override_store.save_permanent()
+            except Exception as exc:
+                print(f"[关闭] 保存 permanent override 失败: {exc}")
         self._app_exit_cleanup()
         self.settings.setValue("window_geometry", self.saveGeometry())
         super().closeEvent(event)
@@ -5560,6 +5966,12 @@ class MainWindow(QMainWindow):
         # 清理旧版临时文件
         self._cleanup_temp_file()
 
+    def _refresh_override_dock(self):
+        """v37.8.x: 刷新干预面板数据,被桥槽调用."""
+        dock = getattr(self, "_override_dock", None)
+        if dock is not None:
+            dock.refresh()
+
     # v22.4: 移除 eventFilter，直接在 SinglePageCanvas.mousePressEvent 中处理
 
     def setup_ui(self):
@@ -5741,6 +6153,9 @@ class MainWindow(QMainWindow):
         # v22.9: 使用固定的 canvas_container，通过隐藏/显示实现单/双页切换
         self.canvas_left = SinglePageCanvas(0)
         self.canvas_right = SinglePageCanvas(1)
+        # v37.8.x: 注入 main_window 引用,供 canvas 右键菜单访问 override store
+        self.canvas_left.set_main_window(self)
+        self.canvas_right.set_main_window(self)
 
         # 容器始终作为 scroll 的 widget
         self.canvas_container = QWidget()
@@ -6562,6 +6977,34 @@ class MainWindow(QMainWindow):
             QLabel {{
                 background-color: transparent;
                 color: {theme["text"]};
+            }}
+            /* v37.8.x: 强制 QMenu 浅色 — 避免深色系统主题下 popup 菜单白底白字 */
+            QMenu {{
+                background-color: {theme["surface"]};
+                color: {theme["text"]};
+                border: 1px solid {theme["border"]};
+                padding: 6px 0px;
+                font-family: {Theme.FONT_FAMILY};
+                font-size: {Theme.FONT_SIZE_NORMAL}px;
+            }}
+            QMenu::item {{
+                background-color: transparent;
+                color: {theme["text"]};
+                padding: 6px 24px 6px 24px;
+                margin: 2px 4px;
+                border-radius: 4px;
+            }}
+            QMenu::item:selected {{
+                background-color: {theme["hover"]};
+                color: {theme["text"]};
+            }}
+            QMenu::item:disabled {{
+                color: {theme["text_secondary"]};
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background: {theme["border"]};
+                margin: 4px 8px;
             }}
         """)
 
@@ -9916,7 +10359,9 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self, self.active_rules, self.use_enhance, self.custom_keywords,
                             self.scan_level, self.offset_x, self.offset_w, self.replacement_text,
                             self.word_replace_rules,
-                            config_manager=config)
+                            config_manager=config,
+                            enable_name_recognition=self.enable_name_recognition,
+                            enable_hit_override=self.enable_hit_override)
         if dlg.exec():
             self.active_rules = dlg.selected_rules
             self.use_enhance = dlg.use_enhance
@@ -9926,6 +10371,16 @@ class MainWindow(QMainWindow):
             self.offset_w = dlg.offset_w
             self.replacement_text = dlg.replacement_text
             self.word_replace_rules = dlg.word_replace_rules
+            # v37.7.x: 同步姓名识别开关
+            self.enable_name_recognition = dlg.enable_name_recognition
+            # v37.8.x: 同步人工干预主开关,并刷新 Dock 显隐
+            self.enable_hit_override = dlg.enable_hit_override
+            if self.enable_hit_override:
+                if self._override_dock and not self._override_dock.isVisible():
+                    self._override_dock.show()
+            else:
+                if self._override_dock and self._override_dock.isVisible():
+                    self._override_dock.hide()
             if self.word_doc:
                 if not self._has_word_replacement_candidates():
                     self.word_compare_user_hidden = False
@@ -10519,6 +10974,11 @@ class MainWindow(QMainWindow):
         self.doc_type = 'pdf'
         total = len(self.doc)
         self.page_data = {i: {'ocr': [], 'manual': []} for i in range(total)}
+        # v37.8.x: 计算当前文档 hash,用于 HitOverrideStore 关联 override
+        try:
+            self._current_doc_hash = compute_doc_hash(fname)
+        except OSError:
+            self._current_doc_hash = ""
         self.current_page = 0
         self.word_doc = None
         self.word_data = {}
@@ -10952,6 +11412,8 @@ sudo dnf install antiword
     def _render_single_page(self, canvas, page_idx):
         """v7.0 风格渲染 - 直接传递列表引用
         v37.0.9: 添加异常处理防止 canvas 被删除后崩溃
+        v37.8.x: 同步 canvas.page_index — 保证 PDFCanvas.mousePressEvent 中
+        _locate_hit 用 f"page_{page_index}" 与 _rects_for_page 命中同一 hit_id
         """
         # 检查 canvas 有效性
         if not self._is_canvas_valid(canvas):
@@ -10963,9 +11425,15 @@ sudo dnf install antiword
             img_fmt = QImage.Format.Format_RGB888
             qimg = QImage(pix.samples, pix.width, pix.height, pix.stride, img_fmt).copy()
             data = self.page_data[page_idx]
-            # 使用安全的更新方法
-            self._safe_canvas_update(canvas, QPixmap.fromImage(qimg), self.zoom_level, data['ocr'], data['manual'])
+            # v37.8.x: 用 _rects_for_page 走 store 过滤后再喂 canvas
+            ocr_rects = self._rects_for_page(page_idx)
+            self._safe_canvas_update(canvas, QPixmap.fromImage(qimg), self.zoom_level,
+                                     ocr_rects, data['manual'])
             self._safe_canvas_set_mask_color(canvas, self.current_color)
+            # v37.8.x: 关键修复 — canvas.page_index 必须随渲染同步,否则
+            # PDFCanvas.mousePressEvent 中 _locate_hit 构造 HitRef 用错 location,
+            # 与 _rects_for_page 过滤时的 hit_id 不匹配 → 黑块无法消失
+            canvas.page_index = page_idx
         except RuntimeError as e:
             print(f"[错误] 渲染页面 {page_idx} 时出错: {e}")
         except Exception as e:
@@ -11129,11 +11597,13 @@ sudo dnf install antiword
             # v37.4.0: 只使用 RapidOCR，移除 use_char_level_ocr 参数
             self.worker = OCRWorker(self.file_path, self.active_rules, self.use_enhance, self.custom_keywords,
                                     self.scan_level, self.offset_x, self.offset_w,
-                                    seal_detection_enabled=seal_detection_enabled)
+                                    seal_detection_enabled=seal_detection_enabled,
+                                    enable_name_recognition=self.enable_name_recognition)
             self.active_worker = self.worker  # 追踪线程
             self.worker.progress_signal.connect(self.progress.setValue)
-            # v36.4: 使用线程安全的逐页结果信号
-            self.worker.page_result_signal.connect(self._on_ocr_page_result)
+            # v37.8.x: connect 到 _receive_page_hits(新签名,接 list[dict])
+            # 旧 _on_ocr_page_result 仍存在但已废弃,仅作 QRectF 路径的 fallback
+            self.worker.page_result_signal.connect(self._receive_page_hits)
             # v37.0.5: 连接错误信号
             self.worker.error_signal.connect(self._on_ocr_error)
             # 先连接原有的完成处理，再连接清理
@@ -11143,7 +11613,8 @@ sudo dnf install antiword
         # Word 处理
         elif self.word_doc:
             self.worker = WordWorker(self.word_doc, self.word_data, self.active_rules,
-                                     self.custom_keywords, self.replacement_text)
+                                     self.custom_keywords, self.replacement_text,
+                                     enable_name_recognition=self.enable_name_recognition)
             self.active_worker = self.worker  # 追踪线程
             self.worker.progress_signal.connect(self.progress.setValue)
             # 先连接原有的完成处理，再连接清理
@@ -11251,16 +11722,58 @@ sudo dnf install antiword
         # 避免在模态对话框阻塞主线程时形成死锁
         self._pending_error_msg = error_msg
 
-    # v36.4: 线程安全的 OCR 结果处理方法
-    def _on_ocr_page_result(self, page_num: int, rects: list):
-        """v36.4: 线程安全 - 接收单页 OCR 结果（在主线程执行）"""
-        self._ocr_processed_pages.add(page_num)
-        if page_num in self.page_data:
-            # 去重：移除重复或高度重叠的矩形
-            deduped = self._deduplicate_rects(rects)
-            self.page_data[page_num]['ocr'] = deduped
-            if DEBUG_MODE and len(rects) != len(deduped):
-                print(f"[DEBUG] 页面{page_num}: 去重前{len(rects)}个矩形, 去重后{len(deduped)}个")
+    def _receive_page_hits(self, page_idx: int, hits: list) -> None:
+        """v37.8.x: 接收 OCRWorker 逐页 hit dict 列表,过滤后存 page_data + 渲染。
+
+        参数:
+            page_idx: 页码(0-based)
+            hits: list[dict],每个 dict 含 rect(QRectF)/source(str)/text(str)/rule_name(str)
+
+        行为:
+            1. raw 全量写入 page_data[idx]['ocr'](便于 revert 后再次出现)
+            2. store.filtered_hits 过滤(manual 永远保留,ignore 命中剔除)
+            3. 若本页当前正在显示(canvas_left = current_page 或 dual 时 right=current_page+1),
+               调用 render_view() 走 _rects_for_page 自动喂过滤后的 QRectF
+        """
+        self._ocr_processed_pages.add(page_idx)
+        self.page_data.setdefault(page_idx, {"ocr": [], "manual": []})
+        self.page_data[page_idx]["ocr"] = list(hits)
+
+        # 触发 canvas 刷新(只在当前显示页时)
+        if self.doc is None:
+            return
+        displayed_pages = {self.current_page}
+        if self.dual_view and self.current_page + 1 < len(self.doc):
+            displayed_pages.add(self.current_page + 1)
+        if page_idx in displayed_pages:
+            self.render_view()
+
+    def _rects_for_page(self, page_idx: int) -> list:
+        """v37.8.x: 返回过滤后的 QRectF 列表,供 canvas 渲染与 PDF 导出共用。
+
+        filtered_hits:
+          - manual 永远保留
+          - ignore 命中剔除
+          - confirm / 未操作 保留
+
+        返回 list[QRectF],不可用于写回 — 仅供渲染与导出。
+        """
+        return self._filter_hits_to_rects(
+            self.page_data.get(page_idx, {}).get("ocr", []),
+            store=self._override_store,
+            location=f"page_{page_idx}",
+            doc_hash=self._current_doc_hash,
+        )
+
+    @staticmethod
+    def _filter_hits_to_rects(hits: list, *, store, location: str, doc_hash: str) -> list:
+        """v37.8.x: 模块级纯函数 — store 过滤 + 抽 QRectF.
+
+        抽到这里便于直接单测,无需启动 QMainWindow 实例。
+        语义: manual 永远保留;ignore 命中剔除;confirm / 未操作保留。
+        """
+        kept = store.filtered_hits(hits, location=location, doc_hash=doc_hash)
+        return [h["rect"] for h in kept]
 
     def _on_ocr_finished_safe(self, _):
         """v36.4: 线程安全 - OCR 完成处理（在主线程执行）
@@ -11470,6 +11983,7 @@ sudo dnf install antiword
             table {{ border-collapse: collapse; width: 100%; margin: 10px 0; }}
             td, th {{ border: 1px solid #ddd; padding: 8px; vertical-align: top; }}
             mark.ocr-highlight {{ background-color: #ffeb3b; color: #000; display: inline; box-decoration-break: clone; -webkit-box-decoration-break: clone; }}
+            mark.ocr-hit--confirmed {{ background-color: #ff9800; color: #000; display: inline; box-decoration-break: clone; -webkit-box-decoration-break: clone; }}
             mark.manual-highlight {{ background-color: #ff6b6b; color: #fff; display: inline; cursor: pointer; box-shadow: 0 0 0 1px #e03131; box-decoration-break: clone; -webkit-box-decoration-break: clone; }}
             mark.manual-highlight:hover {{ box-shadow: 0 0 0 1px #e03131, 0 0 4px rgba(225, 49, 49, 0.5); }}
             mark.replace-preview-highlight {{
@@ -11697,6 +12211,10 @@ sudo dnf install antiword
         from html import escape as html_escape
 
         segments = build_highlight_preview_segments(source_text, merged_matches)
+        # v37.8.x: HitOverrideStore 过滤 — ignored 命中整段不渲染为 <mark>;
+        # confirmed 命中打 ocr-hit--confirmed 类以便 CSS 加深背景。
+        store = getattr(self, "_override_store", None)
+        doc_hash = getattr(self, "_current_doc_hash", "") or ""
         parts = []
         for segment in segments:
             value = segment.get("value", "")
@@ -11711,13 +12229,49 @@ sudo dnf install antiword
                 continue
 
             source = str(segment.get("source", "manual"))
+            seg_start = int(segment.get("start", 0))
+            seg_end = int(segment.get("end", 0))
+            seg_text = str(segment.get("value", ""))
+
+            # v37.8.x: 构造 HitRef 走 store 过滤;manual 永远保留。
+            if source != "manual" and store is not None and doc_hash:
+                ref = HitRef(
+                    doc_hash=doc_hash,
+                    location=str(key),
+                    start=seg_start,
+                    end=seg_end,
+                    text=seg_text,
+                    source=source,
+                )
+                if store.is_ignored(ref):
+                    # 忽略命中:不渲染 <mark>,保留原文
+                    parts.append(escaped_value)
+                    continue
+                hit_id_str = ref.hit_id
+            else:
+                hit_id_str = ""
+
             css_class = "manual-highlight" if source == "manual" else "ocr-highlight"
+            if source != "manual" and store is not None and doc_hash:
+                ref = HitRef(
+                    doc_hash=doc_hash,
+                    location=str(key),
+                    start=seg_start,
+                    end=seg_end,
+                    text=seg_text,
+                    source=source,
+                )
+                if store.is_confirmed(ref):
+                    css_class += " ocr-hit--confirmed"
             attrs = [
                 f'class="{css_class}"',
                 f'data-key="{html_escape(str(key))}"',
-                f'data-start="{int(segment.get("start", 0))}"',
-                f'data-end="{int(segment.get("end", 0))}"',
+                f'data-start="{seg_start}"',
+                f'data-end="{seg_end}"',
+                f'data-source="{html_escape(source)}"',
             ]
+            if hit_id_str:
+                attrs.append(f'data-hit-id="{html_escape(hit_id_str)}"')
             title = "手动脱敏" if source == "manual" else str(segment.get("rule_name", "")).strip() or "智能脱敏"
             if title:
                 attrs.append(f'title="{html_escape(title)}"')
@@ -11727,14 +12281,27 @@ sudo dnf install antiword
 
     def _build_word_replaced_panel_updates(self):
         updates = {}
+        # v37.8.x: HitOverrideStore 过滤 — ignored OCR hit 不进入 merge
+        # (manual 永远保留;confirm 保留)。与 _save_word / _rects_for_page 保持一致。
+        store = getattr(self, "_override_store", None)
+        doc_hash = getattr(self, "_current_doc_hash", "") or ""
         for key, data in self.word_data.items():
             source_text = data.get("text", "")
+            raw_ocr = data.get("ocr", [])
+            if store is not None and doc_hash:
+                filtered_ocr = store.filtered_hits(
+                    list(raw_ocr),
+                    location=key,
+                    doc_hash=doc_hash,
+                )
+            else:
+                filtered_ocr = list(raw_ocr)
             merged_matches = merge_word_matches_with_priority(
                 source_text,
                 self.word_replace_rules,
                 self.replacement_text,
                 manual_matches=data.get("manual", []),
-                ocr_matches=data.get("ocr", [])
+                ocr_matches=filtered_ocr
             )
             updates[key] = self._build_replaced_preview_fragment(source_text, merged_matches)
         return updates
@@ -12356,7 +12923,8 @@ sudo dnf install antiword
 
                         # v37.3.1: 修复内部编辑功能 - 使用副本避免修改原始数据
                         # 从 page_data 中获取脱敏区域列表
-                        ocr_list = self.page_data[i].get('ocr', [])
+                        # v37.8.x: 走 _rects_for_page 应用 store 过滤(已 ignore 剔除)
+                        ocr_list = self._rects_for_page(i)
                         manual_list = self.page_data[i].get('manual', [])
 
                         # 1. 添加脱敏注释
@@ -12389,6 +12957,13 @@ sudo dnf install antiword
                 except (IOError, OSError, ValueError, RuntimeError) as e:
                     QApplication.restoreOverrideCursor()
                     QMessageBox.critical(self, "失败", str(e))
+                except Exception as e:
+                    # v37.7.x: 兜底捕获所有异常 (含 pymupdf.mupdf.FzErrorSystem 等非标准异常)
+                    QApplication.restoreOverrideCursor()
+                    err_msg = str(e)
+                    if "Permission denied" in err_msg or "cannot remove" in err_msg:
+                        err_msg += "\n\n可能原因: 目标 PDF 正在被其他程序 (PDF 阅读器/浏览器) 占用.\n请关闭后再试, 或另存为新文件名."
+                    QMessageBox.critical(self, "失败", err_msg)
                 finally:
                     if doc_save:
                         doc_save.close()
@@ -12404,7 +12979,11 @@ sudo dnf install antiword
                 self._save_word(fname)
 
     def _save_word(self, fname):
-        """保存 Word 文档 - v24 改进版：详细错误处理 + 使用 TempFileManager + 合并 OCR 和 Manual 脱敏"""
+        """保存 Word 文档 - v24 改进版：详细错误处理 + 使用 TempFileManager + 合并 OCR 和 Manual 脱敏
+
+        v37.8.x: 导出前先走 HitOverrideStore.filtered_hits 把 ignored OCR hit
+        从 ocr_matches 中剔除(manual 永远保留;confirm 保留)。
+        """
         try:
             import shutil
             from docx import Document
@@ -12418,18 +12997,27 @@ sudo dnf install antiword
             # 打开副本进行修改
             new_doc = Document(temp_file)
 
+            store = self._override_store
+            doc_hash = self._current_doc_hash
+
             # 遍历段落进行 run 级别的文本替换
             for para_idx, para in enumerate(new_doc.paragraphs):
                 key = f'paragraph_{para_idx}'
                 if key in self.word_data:
                     data = self.word_data[key]
                     source_text = data.get("text", "")
+                    # v37.8.x: 导出前 store 过滤 (manual 永远保留)
+                    filtered_ocr = store.filtered_hits(
+                        list(data.get("ocr", [])),
+                        location=key,
+                        doc_hash=doc_hash,
+                    )
                     merged_matches = merge_word_matches_with_priority(
                         source_text,
                         self.word_replace_rules,
                         self.replacement_text,
                         manual_matches=data.get("manual", []),
-                        ocr_matches=data.get("ocr", [])
+                        ocr_matches=filtered_ocr
                     )
                     if merged_matches:
                         replace_matches_in_paragraph(
@@ -12447,12 +13035,18 @@ sudo dnf install antiword
                         if key in self.word_data:
                             data = self.word_data[key]
                             source_text = data.get("text", "")
+                            # v37.8.x: 导出前 store 过滤 (manual 永远保留)
+                            filtered_ocr = store.filtered_hits(
+                                list(data.get("ocr", [])),
+                                location=key,
+                                doc_hash=doc_hash,
+                            )
                             merged_matches = merge_word_matches_with_priority(
                                 source_text,
                                 self.word_replace_rules,
                                 self.replacement_text,
                                 manual_matches=data.get("manual", []),
-                                ocr_matches=data.get("ocr", [])
+                                ocr_matches=filtered_ocr
                             )
 
                             if merged_matches:
