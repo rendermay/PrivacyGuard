@@ -55,21 +55,28 @@ class PDFSourceFieldTest(unittest.TestCase):
         self.assertEqual(kept_rects[1], QRectF(50, 60, 25, 5))
 
     def test_filtered_hits_drops_ignored(self):
-        """当 store 中已 ignore(周强) 时,_filter_hits_to_rects 应剔除。"""
+        """当 store 中已 ignore(周强) 时,_filter_hits_to_rects 应剔除。
+
+        HitRef 的 start/end 必须与 _hit_to_ref 从 QRectF 提取的坐标系一致:
+          - start = int(rect.x())
+          - end   = int(rect.x() + rect.width())
+        这是与 PDFCanvas._locate_hit 同一坐标来源,保证 ignore 的 hit_id
+        能在 _rects_for_page 过滤时命中同一 hit。
+        """
         from main import MainWindow
 
         store = HitOverrideStore.instance()
-        ref = HitRef("a1b2c3d4", "page_0", 10, 12, "周强", "jieba")
+        # 与 QRectF(10, 20, 30, 5) 同一坐标系:int(10)=10, int(10+30)=40
+        ref = HitRef("a1b2c3d4", "page_0", 10, 40, "周强", "jieba")
         store.ignore(ref, scope="session")
 
         raw_hits = [
             {"rect": QRectF(10, 20, 30, 5), "source": "jieba", "text": "周强",
-             "rule_name": "姓名", "start": 10, "end": 12},
+             "rule_name": "姓名"},
             {"rect": QRectF(50, 60, 25, 5), "source": "ocr", "text": "李四",
-             "rule_name": "姓名", "start": 20, "end": 22},
+             "rule_name": "姓名"},
         ]
         page_data = {0: {"ocr": list(raw_hits), "manual": []}}
-        # page_data 应保留 raw 全部(便于撤销后再次出现)
         self.assertEqual(len(page_data[0]["ocr"]), 2)
 
         kept_rects = MainWindow._filter_hits_to_rects(
@@ -82,18 +89,18 @@ class PDFSourceFieldTest(unittest.TestCase):
         self.assertEqual(kept_rects[0], QRectF(50, 60, 25, 5))
 
     def test_filtered_hits_keeps_manual(self):
-        """manual rect 应永远保留,即使 start/end 与被 ignore 重叠。"""
+        """manual rect 应永远保留,即使与被 ignore 的坐标重叠。"""
         from main import MainWindow
 
         store = HitOverrideStore.instance()
-        # ignore 一个 jieba hit
-        ref = HitRef("a1b2c3d4", "page_0", 10, 12, "周强", "jieba")
+        # ignore 一个 jieba hit (QRectF 坐标系)
+        ref = HitRef("a1b2c3d4", "page_0", 10, 40, "周强", "jieba")
         store.ignore(ref, scope="session")
 
-        # manual 同样 start/end,应被保留
+        # manual 同样坐标,应被保留(manual 永远优先)
         raw_hits = [
             {"rect": QRectF(10, 20, 30, 5), "source": "manual", "text": "周强",
-             "rule_name": "manual", "start": 10, "end": 12},
+             "rule_name": "manual"},
         ]
         kept_rects = MainWindow._filter_hits_to_rects(
             raw_hits,

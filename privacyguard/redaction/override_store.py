@@ -157,9 +157,22 @@ class HitOverrideStore:
 
     @staticmethod
     def _hit_to_ref(hit: dict, *, location: str, doc_hash: str) -> Optional[HitRef]:
+        """从 hit dict 构造 HitRef。
+
+        start/end 来源优先级:
+          1. hit["rect"] QRectF 字段(若存在) — 与 _locate_hit 同一坐标来源,保证
+             ignore 的 hit_id 能在 filtered_hits 命中同一 hit
+          2. hit["start"] / hit["end"](显式 int 字段,Word 端用)
+          3. fallback 0 / 0
+        """
         try:
-            start = int(hit.get("start", 0))
-            end = int(hit.get("end", start))
+            rect = hit.get("rect")
+            if rect is not None and hasattr(rect, "x") and hasattr(rect, "width"):
+                start = int(rect.x())
+                end = int(rect.x() + rect.width())
+            else:
+                start = int(hit.get("start", 0))
+                end = int(hit.get("end", start))
             return HitRef(
                 doc_hash=doc_hash,
                 location=location,
