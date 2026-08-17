@@ -6978,6 +6978,34 @@ class MainWindow(QMainWindow):
                 background-color: transparent;
                 color: {theme["text"]};
             }}
+            /* v37.8.x: 强制 QMenu 浅色 — 避免深色系统主题下 popup 菜单白底白字 */
+            QMenu {{
+                background-color: {theme["surface"]};
+                color: {theme["text"]};
+                border: 1px solid {theme["border"]};
+                padding: 6px 0px;
+                font-family: {Theme.FONT_FAMILY};
+                font-size: {Theme.FONT_SIZE_NORMAL}px;
+            }}
+            QMenu::item {{
+                background-color: transparent;
+                color: {theme["text"]};
+                padding: 6px 24px 6px 24px;
+                margin: 2px 4px;
+                border-radius: 4px;
+            }}
+            QMenu::item:selected {{
+                background-color: {theme["hover"]};
+                color: {theme["text"]};
+            }}
+            QMenu::item:disabled {{
+                color: {theme["text_secondary"]};
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background: {theme["border"]};
+                margin: 4px 8px;
+            }}
         """)
 
         # 统一上下文条
