@@ -129,13 +129,21 @@ class SimpleConfig:
         self.load()
 
     def save(self):
-        """将当前配置写回磁盘。"""
+        """原子写回磁盘 — 先写 .tmp,再 os.replace 原子替换."""
+        tmp_path = self._config_path + ".tmp"
         try:
-            with open(self._config_path, 'w', encoding='utf-8') as f:
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(self._config, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, self._config_path)
             return True
         except (OSError, IOError, TypeError) as e:
             print(f"[配置系统] 保存配置失败: {e}")
+            # 清理可能残留的 .tmp
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
             return False
 
     def get(self, key, default=None):
@@ -1030,7 +1038,8 @@ class SettingsDialog(QDialog):
                  scan_level=2.0, offset_x=0, offset_w=0, replacement_text="[已脱敏]",
                  word_replace_rules=None,
                  config_manager=None,
-                 enable_name_recognition=False):
+                 enable_name_recognition=False,
+                 enable_hit_override=True):
         super().__init__(parent)
         self.config = config_manager
 
@@ -1086,6 +1095,8 @@ class SettingsDialog(QDialog):
         self.recommended_rule_names = ["身份证号", "手机号码"]
         # v37.7.x: 中文姓名启发式识别开关(默认 False,向后兼容)
         self.enable_name_recognition = bool(enable_name_recognition)
+        # v37.8.x: 人工干预主开关(默认 True,与 config 默认一致)
+        self.enable_hit_override = bool(enable_hit_override)
 
         # v37.0: 从配置读取范围和标签
         if self.config:
@@ -1376,6 +1387,16 @@ class SettingsDialog(QDialog):
             "适用于法律文书等含姓名角色的场景;非中文或纯文本场景建议关闭。"
         )
         left_panel.addWidget(self.cb_name_recognition)
+        # v37.8.x: 人工干预主开关(显式持久化,避免仅依赖 config 默认值)
+        self.cb_hit_override = QCheckBox("启用人工干预面板 (Override Dock)")
+        self.cb_hit_override.setObjectName("settingsInlineCheckbox")
+        self.cb_hit_override.setChecked(self.enable_hit_override)
+        self.cb_hit_override.setToolTip(
+            "开启后,主窗口底部会显示人工干预 Dock,支持对 OCR/Word 命中进行"
+            "ignore / confirm / promote 等手动操作。\n"
+            "关闭后 Dock 会隐藏,所有 override 操作也会随之失效。"
+        )
+        left_panel.addWidget(self.cb_hit_override)
         self.txt_custom = QTextEdit()
         self.txt_custom.setPlaceholderText("例如：法院 张三 (支持多行)")
         self.txt_custom.setPlainText(custom_keywords)
@@ -2736,6 +2757,8 @@ class SettingsDialog(QDialog):
 
         # v37.7.x: 中文姓名启发式识别开关
         self.enable_name_recognition = self.cb_name_recognition.isChecked()
+        # v37.8.x: 人工干预主开关
+        self.enable_hit_override = self.cb_hit_override.isChecked()
 
         # v37.0: 保存到配置文件
         if self.config:
@@ -2751,6 +2774,9 @@ class SettingsDialog(QDialog):
                 # v37.7.x: 姓名识别开关持久化
                 self.config.set("redaction.enable_name_recognition",
                                 self.enable_name_recognition, persist=False)
+                # v37.8.x: 人工干预主开关持久化(允许用户在 UI 显式切换)
+                self.config.set("redaction.enable_hit_override",
+                                self.enable_hit_override, persist=False)
                 self.config.save()
             except Exception as e:
                 print(f"[设置] 保存配置失败: {e}")
@@ -5236,6 +5262,9 @@ class MainWindow(QMainWindow):
             # v37.7.x: 中文姓名启发式识别开关(默认 False,向后兼容)
             self.enable_name_recognition = config.get(
                 "redaction.enable_name_recognition", False)
+            # v37.8.x: 人工干预主开关(默认 True,与 SimpleConfig 一致)
+            self.enable_hit_override = bool(config.get(
+                "redaction.enable_hit_override", True))
             # v37.4.0: 移除 OCR 引擎配置，只使用 RapidOCR
         else:
             min_width, min_height = 900, 600
@@ -5246,6 +5275,7 @@ class MainWindow(QMainWindow):
             self.offset_w = 0
             self.custom_keywords = ""
             # v37.7.x: 姓名识别开关(无 config 时默认 False)
+            self.enable_hit_override = True
             self.enable_name_recognition = False
 
         # 窗口尺寸设置：最小尺寸 + 默认尺寸
@@ -10302,7 +10332,8 @@ class MainWindow(QMainWindow):
                             self.scan_level, self.offset_x, self.offset_w, self.replacement_text,
                             self.word_replace_rules,
                             config_manager=config,
-                            enable_name_recognition=self.enable_name_recognition)
+                            enable_name_recognition=self.enable_name_recognition,
+                            enable_hit_override=self.enable_hit_override)
         if dlg.exec():
             self.active_rules = dlg.selected_rules
             self.use_enhance = dlg.use_enhance
@@ -10314,6 +10345,14 @@ class MainWindow(QMainWindow):
             self.word_replace_rules = dlg.word_replace_rules
             # v37.7.x: 同步姓名识别开关
             self.enable_name_recognition = dlg.enable_name_recognition
+            # v37.8.x: 同步人工干预主开关,并刷新 Dock 显隐
+            self.enable_hit_override = dlg.enable_hit_override
+            if self.enable_hit_override:
+                if self._override_dock and not self._override_dock.isVisible():
+                    self._override_dock.show()
+            else:
+                if self._override_dock and self._override_dock.isVisible():
+                    self._override_dock.hide()
             if self.word_doc:
                 if not self._has_word_replacement_candidates():
                     self.word_compare_user_hidden = False
