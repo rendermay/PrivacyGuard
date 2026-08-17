@@ -33,6 +33,9 @@ from privacyguard.workers.image_merge import ImageMergeWorker
 from privacyguard.workers.word_worker import WordWorker as _ModularWordWorker
 from privacyguard.workers.ocr_worker import OCRWorker as _ModularOCRWorker
 from privacyguard.utils.doc_converter import convert_doc_to_docx as _shared_convert_doc_to_docx
+from privacyguard.redaction.hit_ref import HitRef  # v37.8.x: 人工干预
+from privacyguard.redaction.override_store import HitOverrideStore  # v37.8.x: override store 单例
+from privacyguard.redaction.doc_hash import compute_doc_hash  # v37.8.x: 文档 hash
 
 # v37.0.5: 延迟导入 OCR 模块，便于错误处理
 RapidOCR = None
@@ -4055,11 +4058,41 @@ class SinglePageCanvas(QLabel):
         self.drawing = False
         self.start_point = QPointF()
         self.current_rect = QRectF()
+        # v37.8.x: 注入 main_window 引用,供右键菜单读写 HitOverrideStore。
+        # 由 MainWindow.setup_ui 在创建后调用 set_main_window 注入,避免循环依赖。
+        self.main_window = None
 
     def set_mask_color(self, color):
         """v7.0 方法"""
         self.mask_color = color
         self.update()
+
+    def set_main_window(self, main_window):
+        """v37.8.x: 注入 MainWindow 引用,供右键菜单读写 override store."""
+        self.main_window = main_window
+
+    def _locate_hit(self, click_pos, *, prefer_manual: bool):
+        """v37.8.x: 定位点击位置对应的 HitRef。
+
+        返回 (HitRef, scope_marker) 或 None。
+        scope_marker: 'manual' 或 'ocr' — 用于区分 hit 来自手动框还是 OCR 框。
+        手动框无 text(画框时不带 OCR 文本),HitRef.text 留空。
+        """
+        if self.main_window is None:
+            return None
+        rects = self.rects_manual if prefer_manual else self.rects_ocr
+        for r in rects:
+            if self.pdf_to_screen(r).contains(click_pos):
+                ref = HitRef(
+                    doc_hash=self.main_window._current_doc_hash,
+                    location=f"page_{self.page_index}",
+                    start=int(r.x()),
+                    end=int(r.x() + r.width()),
+                    text="",
+                    source="manual" if prefer_manual else "ocr",
+                )
+                return (ref, "manual" if prefer_manual else "ocr")
+        return None
 
     def update_content(self, pixmap, scale, ocr_rects, manual_rects):
         """v7.0 方法 - 直接引用列表，不复制！"""
@@ -4082,46 +4115,58 @@ class SinglePageCanvas(QLabel):
             self.current_rect = QRectF(self.start_point, self.start_point)
             self.update()
 
-        # 右键删除 (v7.0 风格)
+        # 右键弹 QMenu (v37.8.x)
         elif event.button() == Qt.MouseButton.RightButton:
             click_pos = event.position()
             if DEBUG_MODE:
                 print(f"\n[DEBUG] === 右键点击 === 页面{self.page_index}, 位置({click_pos.x():.2f}, {click_pos.y():.2f})")
                 print(f"[DEBUG] 手动框数量: {len(self.rects_manual)}, OCR框数量: {len(self.rects_ocr)}")
 
-            deleted = False
+            if self.main_window is None:
+                return
 
-            # 先删手动框（从后往前，优先删除上层）
-            for i in range(len(self.rects_manual) - 1, -1, -1):
-                screen_rect = self.pdf_to_screen(self.rects_manual[i])
-                if DEBUG_MODE:
-                    print(f"[DEBUG] 检查手动框[{i}]: {screen_rect}, contains={screen_rect.contains(click_pos)}")
-                if screen_rect.contains(click_pos):
-                    del self.rects_manual[i]
-                    deleted = True
-                    if DEBUG_MODE:
-                        print(f"[DEBUG] ✓ 删除手动框[{i}]")
-                    break
-
-            # 再删 OCR 框
-            if not deleted:
-                for i in range(len(self.rects_ocr) - 1, -1, -1):
-                    screen_rect = self.pdf_to_screen(self.rects_ocr[i])
-                    if DEBUG_MODE:
-                        print(f"[DEBUG] 检查OCR框[{i}]: {screen_rect}, contains={screen_rect.contains(click_pos)}")
-                    if screen_rect.contains(click_pos):
-                        del self.rects_ocr[i]
-                        deleted = True
-                        if DEBUG_MODE:
-                            print(f"[DEBUG] ✓ 删除OCR框[{i}]")
-                        break
-
-            if deleted:
-                self.update()
-            else:
+            # 优先找手动框
+            hit_info = self._locate_hit(click_pos, prefer_manual=True)
+            if hit_info is None:
+                hit_info = self._locate_hit(click_pos, prefer_manual=False)
+            if hit_info is None:
                 if DEBUG_MODE:
                     print(f"[DEBUG] ✗ 未点击到任何矩形框")
-            # 不需要 emit 信号！列表是共享引用，删除已经同步到主窗口
+                return
+
+            ref, scope = hit_info  # ref 是 HitRef, scope 是 'manual' 或 'ocr'
+            store = self.main_window._override_store
+
+            menu = QMenu(self)
+            act_ignore = menu.addAction("忽略此条 (本次)")
+            act_confirm = menu.addAction("确认是敏感信息 (本次)")
+            menu.addSeparator()
+            act_promote = menu.addAction("提升到永久名单")
+            act_revert = menu.addAction("撤销已记录的覆盖")
+            menu.addSeparator()
+            act_cancel = menu.addAction("取消")
+
+            chosen = menu.exec(event.globalPosition().toPoint())
+            if chosen == act_ignore:
+                store.ignore(ref, scope="session")
+            elif chosen == act_confirm:
+                store.confirm(ref, scope="session")
+            elif chosen == act_promote:
+                # 必须先 ignore/confirm 后才能 promote
+                if ref.hit_id not in [o.ref.hit_id for o in store.iter_overrides()]:
+                    QMessageBox.information(self.main_window, "提示", "请先 ignore 或 confirm 后再提升")
+                    return
+                store.promote(ref.hit_id)
+            elif chosen == act_revert:
+                store.revert(ref.hit_id)
+            else:
+                return  # 用户选取消
+
+            # 重画 canvas
+            self.update()
+            # 触发过滤重渲染 — main_window 暴露 _refresh_override_dock 是可选的,这里用 render_view 兜底
+            if hasattr(self.main_window, "render_view"):
+                self.main_window.render_view()
 
     def pdf_to_screen(self, rect):
         """v7.0 实现 - 带小的容错范围"""
@@ -4966,6 +5011,9 @@ class MainWindow(QMainWindow):
         self.zoom_level = 1.0
         self.page_data = {}
         self._ocr_processed_pages = set()  # OCR 实际处理过的页（用于准确完成状态提示）
+        # v37.8.x: 人工干预 override store + 当前文档 hash
+        self._override_store = HitOverrideStore.instance()
+        self._current_doc_hash = ""
         self.word_data = {}  # Word 文档数据结构
         self.word_replace_rules = []  # 会话级多字段替换规则
         self.word_compare_mode = False  # Word 预览是否开启原文/替换后对比
@@ -5790,6 +5838,9 @@ class MainWindow(QMainWindow):
         # v22.9: 使用固定的 canvas_container，通过隐藏/显示实现单/双页切换
         self.canvas_left = SinglePageCanvas(0)
         self.canvas_right = SinglePageCanvas(1)
+        # v37.8.x: 注入 main_window 引用,供 canvas 右键菜单访问 override store
+        self.canvas_left.set_main_window(self)
+        self.canvas_right.set_main_window(self)
 
         # 容器始终作为 scroll 的 widget
         self.canvas_container = QWidget()
@@ -10571,6 +10622,11 @@ class MainWindow(QMainWindow):
         self.doc_type = 'pdf'
         total = len(self.doc)
         self.page_data = {i: {'ocr': [], 'manual': []} for i in range(total)}
+        # v37.8.x: 计算当前文档 hash,用于 HitOverrideStore 关联 override
+        try:
+            self._current_doc_hash = compute_doc_hash(fname)
+        except OSError:
+            self._current_doc_hash = ""
         self.current_page = 0
         self.word_doc = None
         self.word_data = {}
@@ -11015,8 +11071,10 @@ sudo dnf install antiword
             img_fmt = QImage.Format.Format_RGB888
             qimg = QImage(pix.samples, pix.width, pix.height, pix.stride, img_fmt).copy()
             data = self.page_data[page_idx]
-            # 使用安全的更新方法
-            self._safe_canvas_update(canvas, QPixmap.fromImage(qimg), self.zoom_level, data['ocr'], data['manual'])
+            # v37.8.x: 用 _rects_for_page 走 store 过滤后再喂 canvas
+            ocr_rects = self._rects_for_page(page_idx)
+            self._safe_canvas_update(canvas, QPixmap.fromImage(qimg), self.zoom_level,
+                                     ocr_rects, data['manual'])
             self._safe_canvas_set_mask_color(canvas, self.current_color)
         except RuntimeError as e:
             print(f"[错误] 渲染页面 {page_idx} 时出错: {e}")
@@ -11185,8 +11243,9 @@ sudo dnf install antiword
                                     enable_name_recognition=self.enable_name_recognition)
             self.active_worker = self.worker  # 追踪线程
             self.worker.progress_signal.connect(self.progress.setValue)
-            # v36.4: 使用线程安全的逐页结果信号
-            self.worker.page_result_signal.connect(self._on_ocr_page_result)
+            # v37.8.x: connect 到 _receive_page_hits(新签名,接 list[dict])
+            # 旧 _on_ocr_page_result 仍存在但已废弃,仅作 QRectF 路径的 fallback
+            self.worker.page_result_signal.connect(self._receive_page_hits)
             # v37.0.5: 连接错误信号
             self.worker.error_signal.connect(self._on_ocr_error)
             # 先连接原有的完成处理，再连接清理
@@ -11306,15 +11365,78 @@ sudo dnf install antiword
         self._pending_error_msg = error_msg
 
     # v36.4: 线程安全的 OCR 结果处理方法
+    # v37.8.x: 旧签名 _on_ocr_page_result(page_num, list[QRectF]) 已废弃。
+    # 新签名 _receive_page_hits(page_num, list[dict]) 由 Task 4 引入,
+    # 通过 store 过滤后渲染/导出。旧方法保留以防遗留 connect,但不再被使用。
     def _on_ocr_page_result(self, page_num: int, rects: list):
-        """v36.4: 线程安全 - 接收单页 OCR 结果（在主线程执行）"""
-        self._ocr_processed_pages.add(page_num)
-        if page_num in self.page_data:
-            # 去重：移除重复或高度重叠的矩形
-            deduped = self._deduplicate_rects(rects)
-            self.page_data[page_num]['ocr'] = deduped
-            if DEBUG_MODE and len(rects) != len(deduped):
-                print(f"[DEBUG] 页面{page_num}: 去重前{len(rects)}个矩形, 去重后{len(deduped)}个")
+        """v37.8.x: 已废弃 - 委托给 _receive_page_hits(自动包装 dict).
+
+        旧签名接收 list[QRectF],新签名接收 list[dict{rect,source,text,rule_name}]。
+        此兼容方法在 QRectF 路径上模拟成 dict 后转交,确保任何遗留 connect 不爆。
+        """
+        wrapped = []
+        for r in rects:
+            if isinstance(r, dict):
+                wrapped.append(r)
+            else:
+                # 旧 QRectF 路径 — 包装成 source='ocr' 的 dict
+                wrapped.append({
+                    "rect": r, "source": "ocr", "text": "", "rule_name": "legacy"
+                })
+        self._receive_page_hits(page_num, wrapped)
+
+    def _receive_page_hits(self, page_idx: int, hits: list) -> None:
+        """v37.8.x: 接收 OCRWorker 逐页 hit dict 列表,过滤后存 page_data + 渲染。
+
+        参数:
+            page_idx: 页码(0-based)
+            hits: list[dict],每个 dict 含 rect(QRectF)/source(str)/text(str)/rule_name(str)
+
+        行为:
+            1. raw 全量写入 page_data[idx]['ocr'](便于 revert 后再次出现)
+            2. store.filtered_hits 过滤(manual 永远保留,ignore 命中剔除)
+            3. 若本页当前正在显示(canvas_left = current_page 或 dual 时 right=current_page+1),
+               调用 render_view() 走 _rects_for_page 自动喂过滤后的 QRectF
+        """
+        self._ocr_processed_pages.add(page_idx)
+        self.page_data.setdefault(page_idx, {"ocr": [], "manual": []})
+        self.page_data[page_idx]["ocr"] = list(hits)
+
+        # 触发 canvas 刷新(只在当前显示页时)
+        if self.doc is None:
+            return
+        displayed_pages = {self.current_page}
+        if self.dual_view and self.current_page + 1 < len(self.doc):
+            displayed_pages.add(self.current_page + 1)
+        if page_idx in displayed_pages:
+            self.render_view()
+
+    def _rects_for_page(self, page_idx: int) -> list:
+        """v37.8.x: 返回过滤后的 QRectF 列表,供 canvas 渲染与 PDF 导出共用。
+
+        filtered_hits:
+          - manual 永远保留
+          - ignore 命中剔除
+          - confirm / 未操作 保留
+
+        返回 list[QRectF],不可用于写回 — 仅供渲染与导出。
+        """
+        return _filter_hits_to_rects(
+            self.page_data.get(page_idx, {}).get("ocr", []),
+            store=self._override_store,
+            location=f"page_{page_idx}",
+            doc_hash=self._current_doc_hash,
+        )
+
+
+def _filter_hits_to_rects(hits: list, *, store, location: str, doc_hash: str) -> list:
+    """v37.8.x: 模块级纯函数 — store 过滤 + 抽 QRectF.
+
+    抽到这里便于直接单测,无需启动 QMainWindow 实例。
+    语义: manual 永远保留;ignore 命中剔除;confirm / 未操作保留。
+    """
+    kept = store.filtered_hits(hits, location=location, doc_hash=doc_hash)
+    return [h["rect"] for h in kept]
 
     def _on_ocr_finished_safe(self, _):
         """v36.4: 线程安全 - OCR 完成处理（在主线程执行）
@@ -12410,7 +12532,8 @@ sudo dnf install antiword
 
                         # v37.3.1: 修复内部编辑功能 - 使用副本避免修改原始数据
                         # 从 page_data 中获取脱敏区域列表
-                        ocr_list = self.page_data[i].get('ocr', [])
+                        # v37.8.x: 走 _rects_for_page 应用 store 过滤(已 ignore 剔除)
+                        ocr_list = self._rects_for_page(i)
                         manual_list = self.page_data[i].get('manual', [])
 
                         # 1. 添加脱敏注释
