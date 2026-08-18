@@ -78,7 +78,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QAbstractItemView, QSlider, QTableWidget, QMenu,
                              QTableWidgetItem, QHeaderView, QStyle,
                              QDockWidget)
-from PyQt6.QtGui import QPixmap, QImage, QPainter, QPen, QColor, QWheelEvent, QCursor, QIcon, QDesktopServices, QShortcut, QKeySequence
+from PyQt6.QtGui import QPixmap, QImage, QPainter, QPen, QColor, QWheelEvent, QCursor, QIcon, QDesktopServices
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QRectF, QPointF, QSettings, QMutex, QMutexLocker, QObject, pyqtSlot, QSize, QTimer, QUrl
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebChannel import QWebChannel
@@ -1038,8 +1038,7 @@ class SettingsDialog(QDialog):
                  scan_level=2.0, offset_x=0, offset_w=0, replacement_text="[已脱敏]",
                  word_replace_rules=None,
                  config_manager=None,
-                 enable_name_recognition=False,
-                 enable_hit_override=True):
+                 enable_name_recognition=False):
         super().__init__(parent)
         self.config = config_manager
 
@@ -1095,8 +1094,6 @@ class SettingsDialog(QDialog):
         self.recommended_rule_names = ["身份证号", "手机号码"]
         # v37.7.x: 中文姓名启发式识别开关(默认 False,向后兼容)
         self.enable_name_recognition = bool(enable_name_recognition)
-        # v37.8.x: 人工干预主开关(默认 True,与 config 默认一致)
-        self.enable_hit_override = bool(enable_hit_override)
 
         # v37.0: 从配置读取范围和标签
         if self.config:
@@ -1387,16 +1384,6 @@ class SettingsDialog(QDialog):
             "适用于法律文书等含姓名角色的场景;非中文或纯文本场景建议关闭。"
         )
         left_panel.addWidget(self.cb_name_recognition)
-        # v37.8.x: 人工干预主开关(显式持久化,避免仅依赖 config 默认值)
-        self.cb_hit_override = QCheckBox("启用人工干预面板 (Override Dock)")
-        self.cb_hit_override.setObjectName("settingsInlineCheckbox")
-        self.cb_hit_override.setChecked(self.enable_hit_override)
-        self.cb_hit_override.setToolTip(
-            "开启后,主窗口底部会显示人工干预 Dock,支持对 OCR/Word 命中进行"
-            "ignore / confirm / promote 等手动操作。\n"
-            "关闭后 Dock 会隐藏,所有 override 操作也会随之失效。"
-        )
-        left_panel.addWidget(self.cb_hit_override)
         self.txt_custom = QTextEdit()
         self.txt_custom.setPlaceholderText("例如：法院 张三 (支持多行)")
         self.txt_custom.setPlainText(custom_keywords)
@@ -2757,8 +2744,6 @@ class SettingsDialog(QDialog):
 
         # v37.7.x: 中文姓名启发式识别开关
         self.enable_name_recognition = self.cb_name_recognition.isChecked()
-        # v37.8.x: 人工干预主开关
-        self.enable_hit_override = self.cb_hit_override.isChecked()
 
         # v37.0: 保存到配置文件
         if self.config:
@@ -2774,9 +2759,6 @@ class SettingsDialog(QDialog):
                 # v37.7.x: 姓名识别开关持久化
                 self.config.set("redaction.enable_name_recognition",
                                 self.enable_name_recognition, persist=False)
-                # v37.8.x: 人工干预主开关持久化(允许用户在 UI 显式切换)
-                self.config.set("redaction.enable_hit_override",
-                                self.enable_hit_override, persist=False)
                 self.config.save()
             except Exception as e:
                 print(f"[设置] 保存配置失败: {e}")
@@ -4293,7 +4275,7 @@ class SinglePageCanvas(QLabel):
 
             # 重画 canvas
             self.update()
-            # 触发过滤重渲染 — main_window 暴露 _refresh_override_dock 是可选的,这里用 render_view 兜底
+            # 触发过滤重渲染
             if hasattr(self.main_window, "render_view"):
                 self.main_window.render_view()
 
@@ -4392,55 +4374,6 @@ class SinglePageCanvas(QLabel):
                 self.page_change_request.emit(-1)
             # 同时传递给父类以支持正常滚动
             super().wheelEvent(event)
-
-
-# === v37.8.x: 干预面板 dock ===
-class OverrideDock(QDockWidget):
-    """显示当前文档的会话级 + 永久级 override 列表.
-
-    - 5 列表格: 文本 / 来源 / 位置 / 操作 / 作用域
-    - 顶部摘要: 已忽略 N 条 / 已确认 N 条
-    - 通过 MainWindow._override_store 实时拉数据
-    """
-
-    def __init__(self, parent=None):
-        super().__init__("脱敏干预", parent)
-        self._main_window = None
-        self._table = QTableWidget(0, 5)
-        self._table.setHorizontalHeaderLabels(["文本", "来源", "位置", "操作", "作用域"])
-        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self._summary_label = QLabel("已忽略 0 条 / 已确认 0 条")
-        layout = QVBoxLayout()
-        layout.addWidget(self._summary_label)
-        layout.addWidget(self._table)
-        container = QWidget()
-        container.setLayout(layout)
-        self.setWidget(container)
-        self.hide()
-
-    def attach(self, main_window):
-        self._main_window = main_window
-
-    def refresh(self):
-        if not self._main_window:
-            return
-        store = getattr(self._main_window, "_override_store", None)
-        if store is None:
-            return
-        items = list(store.iter_overrides())
-        self._table.setRowCount(len(items))
-        ig = cf = 0
-        for row, ov in enumerate(items):
-            self._table.setItem(row, 0, QTableWidgetItem(ov.ref.text))
-            self._table.setItem(row, 1, QTableWidgetItem(ov.ref.source))
-            self._table.setItem(row, 2, QTableWidgetItem(ov.ref.location))
-            self._table.setItem(row, 3, QTableWidgetItem(ov.action))
-            self._table.setItem(row, 4, QTableWidgetItem(ov.scope))
-            if ov.action == "ignore":
-                ig += 1
-            else:
-                cf += 1
-        self._summary_label.setText(f"已忽略 {ig} 条 / 已确认 {cf} 条")
 
 
 # === OCR 线程 ===
@@ -4602,8 +4535,6 @@ class WebViewBridge(QObject):
             return
         self.main_window._override_store.ignore(ref, scope="session")
         self.main_window.render_word_preview()
-        if hasattr(self.main_window, "_refresh_override_dock"):
-            self.main_window._refresh_override_dock()
 
     @pyqtSlot(str, str, str, str)
     def confirm_ocr_hit(self, key, source, text, hit_id):
@@ -4618,18 +4549,14 @@ class WebViewBridge(QObject):
             return
         self.main_window._override_store.confirm(ref, scope="session")
         self.main_window.render_word_preview()
-        if hasattr(self.main_window, "_refresh_override_dock"):
-            self.main_window._refresh_override_dock()
 
     @pyqtSlot(str)
     def promote_override(self, hit_id):
         """JS 调用:把已记录的 session override 提升为 permanent."""
         store = self.main_window._override_store
         store.promote(hit_id)
-        # v37.8.x: 提升后立即落盘 + 刷新 dock
+        # v37.8.x: 提升后立即落盘
         store.save_permanent()
-        if hasattr(self.main_window, "_refresh_override_dock"):
-            self.main_window._refresh_override_dock()
 
     @pyqtSlot(str)
     def revert_override(self, hit_id):
@@ -4638,8 +4565,6 @@ class WebViewBridge(QObject):
         # v37.8.x: 若该 hit 是 permanent, 撤销后需落盘
         self.main_window._override_store.save_permanent()
         self.main_window.render_word_preview()
-        if hasattr(self.main_window, "_refresh_override_dock"):
-            self.main_window._refresh_override_dock()
 
     @pyqtSlot(str, str, str, str, int, int)
     def handle_ocr_hit_contextmenu(self, key, source, text, hit_id, x, y):
@@ -5262,9 +5187,6 @@ class MainWindow(QMainWindow):
             # v37.7.x: 中文姓名启发式识别开关(默认 False,向后兼容)
             self.enable_name_recognition = config.get(
                 "redaction.enable_name_recognition", False)
-            # v37.8.x: 人工干预主开关(默认 True,与 SimpleConfig 一致)
-            self.enable_hit_override = bool(config.get(
-                "redaction.enable_hit_override", True))
             # v37.4.0: 移除 OCR 引擎配置，只使用 RapidOCR
         else:
             min_width, min_height = 900, 600
@@ -5274,8 +5196,6 @@ class MainWindow(QMainWindow):
             self.offset_x = 0
             self.offset_w = 0
             self.custom_keywords = ""
-            # v37.7.x: 姓名识别开关(无 config 时默认 False)
-            self.enable_hit_override = True
             self.enable_name_recognition = False
 
         # 窗口尺寸设置：最小尺寸 + 默认尺寸
@@ -5360,26 +5280,12 @@ class MainWindow(QMainWindow):
 
         self.setup_ui()
 
-        # v37.8.x: 干预面板 dock
+        # v37.8.x: 干预 override store (右键菜单 + 永久 override)
         self._override_store.bind_config(config)
         # 启动时加载 config.json 中的 permanent overrides
         perms = config.get("redaction.overrides.permanent", []) if config else []
         if perms:
             self._override_store.load_permanent(perms)
-        self._override_dock = OverrideDock(self)
-        self._override_dock.attach(self)
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._override_dock)
-        # 启动时根据配置决定 dock 是否可见
-        if config and config.get("redaction.enable_hit_override", True):
-            self._override_dock.show()
-        # Ctrl+Shift+H 快捷键 toggle dock 显隐
-        self._override_dock_shortcut = QShortcut(
-            QKeySequence("Ctrl+Shift+H"), self
-        )
-        self._override_dock_shortcut.activated.connect(
-            lambda: self._override_dock.setVisible(not self._override_dock.isVisible())
-        )
-        self._refresh_override_dock()
 
         # v37.6.0: 启用拖拽支持
         self.setAcceptDrops(True)
@@ -5965,12 +5871,6 @@ class MainWindow(QMainWindow):
 
         # 清理旧版临时文件
         self._cleanup_temp_file()
-
-    def _refresh_override_dock(self):
-        """v37.8.x: 刷新干预面板数据,被桥槽调用."""
-        dock = getattr(self, "_override_dock", None)
-        if dock is not None:
-            dock.refresh()
 
     # v22.4: 移除 eventFilter，直接在 SinglePageCanvas.mousePressEvent 中处理
 
@@ -10360,8 +10260,7 @@ class MainWindow(QMainWindow):
                             self.scan_level, self.offset_x, self.offset_w, self.replacement_text,
                             self.word_replace_rules,
                             config_manager=config,
-                            enable_name_recognition=self.enable_name_recognition,
-                            enable_hit_override=self.enable_hit_override)
+                            enable_name_recognition=self.enable_name_recognition)
         if dlg.exec():
             self.active_rules = dlg.selected_rules
             self.use_enhance = dlg.use_enhance
@@ -10373,14 +10272,6 @@ class MainWindow(QMainWindow):
             self.word_replace_rules = dlg.word_replace_rules
             # v37.7.x: 同步姓名识别开关
             self.enable_name_recognition = dlg.enable_name_recognition
-            # v37.8.x: 同步人工干预主开关,并刷新 Dock 显隐
-            self.enable_hit_override = dlg.enable_hit_override
-            if self.enable_hit_override:
-                if self._override_dock and not self._override_dock.isVisible():
-                    self._override_dock.show()
-            else:
-                if self._override_dock and self._override_dock.isVisible():
-                    self._override_dock.hide()
             if self.word_doc:
                 if not self._has_word_replacement_candidates():
                     self.word_compare_user_hidden = False
