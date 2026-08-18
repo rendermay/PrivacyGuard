@@ -76,6 +76,8 @@ class OCRWorker(QThread):
         # v37.5.0: 印章检测功能
         self.seal_detection_enabled = seal_detection_enabled
         self._seal_detector = None  # 延迟加载
+        # v37.9.0: 黑/白名单注入/过滤用. _process_page 开头会覆盖, 此处先建空槽.
+        self._ocr_engine = None  # type: ignore[assignment]
         print(f"[OCRWorker] 初始化, seal_detection_enabled={seal_detection_enabled}")
 
     def preprocess_image(self, img_np):
@@ -519,6 +521,8 @@ class OCRWorker(QThread):
 
         同时通过 page_result_signal.emit(page_idx, rects) 通知消费者.
         """
+        # v37.9.0: 把 ocr_engine 挂到 self, 供 _collect_blacklist_hits 等用
+        self._ocr_engine = ocr_engine
         rects = []
         page_text = page.get_text()
         page_dict = page.get_text("dict")
@@ -639,6 +643,19 @@ class OCRWorker(QThread):
                 "rule_name": "OCR图像通道",
             } for qr in image_hit_rects)
             image_hit_count = len(image_hit_rects)
+
+        # v37.9.0: 黑/白名单串联. 先 whitelist 过滤剥掉已有命中, 再 blacklist 注入.
+        rects = self._apply_whitelist_filter(rects, page_idx)
+
+        blacklist = BlackWhiteListStore.instance().effective_blacklist()
+        if blacklist:
+            blacklist_hits = self._collect_blacklist_hits(
+                page, page_idx, blacklist, scan_scale
+            )
+            rects.extend(blacklist_hits)
+
+        # blacklist 注入后再过一次 whitelist 过滤, 确保同条目场景下白名单赢.
+        rects = self._apply_whitelist_filter(rects, page_idx)
 
         if image_clip_rects or (page_text.strip() and rects):
             text_count = len(rects) - image_hit_count
