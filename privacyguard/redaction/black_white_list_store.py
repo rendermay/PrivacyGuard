@@ -95,4 +95,23 @@ class BlackWhiteListStore:
         pass
 
     def load_permanent(self, black: list, white: list) -> None:
-        pass
+        """从 config.json 加载永久层. 损坏条目静默跳过."""
+        with self._lock:
+            self._permanent_blacklist = self._sanitize(black, "blacklist")
+            self._permanent_whitelist = self._sanitize(white, "whitelist")
+
+    @staticmethod
+    def _sanitize(raw, label: str) -> List[str]:
+        if not isinstance(raw, list):
+            logger.warning("load_permanent: %s 期望 list,得到 %s", label, type(raw).__name__)
+            return []
+        out: List[str] = []
+        for item in raw:
+            if not isinstance(item, str):
+                logger.warning("load_permanent: %s 跳过非字符串条目: %r", label, item)
+                continue
+            stripped = item.strip()
+            if not stripped:
+                continue
+            out.append(stripped)
+        return out

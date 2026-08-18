@@ -34,6 +34,31 @@ class BlackWhiteListStoreTest(unittest.TestCase):
         self.assertIsNot(s, s2)
         self.assertEqual(s2.effective_blacklist(), [])
 
+    def test_load_permanent_normal(self):
+        s = BlackWhiteListStore.instance()
+        s.load_permanent(["盖章", "签字"], ["12345"])
+        self.assertIn("盖章", s.effective_blacklist())
+        self.assertIn("签字", s.effective_blacklist())
+        self.assertEqual(s.effective_whitelist(), ["12345"])
+
+    def test_load_permanent_filters_empty_and_whitespace(self):
+        s = BlackWhiteListStore.instance()
+        s.load_permanent(["盖章", "", "  ", "\t"], [])
+        self.assertEqual(s.effective_blacklist(), ["盖章"])
+
+    def test_load_permanent_warns_on_non_list(self):
+        s = BlackWhiteListStore.instance()
+        # 不是 list → 回退到空, 不抛异常
+        s.load_permanent("not a list", "also not a list")
+        self.assertEqual(s.effective_blacklist(), [])
+        self.assertEqual(s.effective_whitelist(), [])
+
+    def test_load_permanent_filters_non_string_items(self):
+        s = BlackWhiteListStore.instance()
+        s.load_permanent(["盖章", 123, None, "签字"], [])
+        # 非字符串条目静默跳过
+        self.assertEqual(s.effective_blacklist(), ["盖章", "签字"])
+
 
 if __name__ == "__main__":
     unittest.main()
