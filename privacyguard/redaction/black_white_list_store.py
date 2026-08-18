@@ -75,16 +75,30 @@ class BlackWhiteListStore:
     # ---- 会话层写入（占位,Task 3 实现） ----
 
     def add_session_black(self, item: str) -> None:
-        pass
+        self._add_session(self._session_blacklist, item)
 
     def remove_session_black(self, item: str) -> None:
-        pass
+        self._remove_session(self._session_blacklist, item)
 
     def add_session_white(self, item: str) -> None:
-        pass
+        self._add_session(self._session_whitelist, item)
 
     def remove_session_white(self, item: str) -> None:
-        pass
+        self._remove_session(self._session_whitelist, item)
+
+    @staticmethod
+    def _add_session(target: List[str], item: str) -> None:
+        if not isinstance(item, str):
+            return
+        stripped = item.strip()
+        if not stripped or stripped in target:
+            return
+        target.append(stripped)
+
+    @staticmethod
+    def _remove_session(target: List[str], item: str) -> None:
+        if item in target:
+            target.remove(item)
 
     # ---- 持久化（占位,Task 4 实现） ----
 

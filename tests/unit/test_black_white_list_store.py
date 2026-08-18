@@ -59,6 +59,39 @@ class BlackWhiteListStoreTest(unittest.TestCase):
         # 非字符串条目静默跳过
         self.assertEqual(s.effective_blacklist(), ["盖章", "签字"])
 
+    def test_session_blacklist_add_and_effective(self):
+        s = BlackWhiteListStore.instance()
+        s.add_session_black("盖章")
+        s.add_session_black("  ")  # 空白应被忽略
+        s.add_session_black("签字")
+        self.assertEqual(s.effective_blacklist(), ["盖章", "签字"])
+
+    def test_session_blacklist_dedup_with_permanent(self):
+        s = BlackWhiteListStore.instance()
+        s.load_permanent(["盖章"], [])
+        s.add_session_black("盖章")  # 永久已有,不重复
+        s.add_session_black("签字")
+        self.assertEqual(s.effective_blacklist(), ["盖章", "签字"])
+
+    def test_session_blacklist_remove(self):
+        s = BlackWhiteListStore.instance()
+        s.add_session_black("盖章")
+        s.add_session_black("签字")
+        s.remove_session_black("盖章")
+        self.assertEqual(s.effective_blacklist(), ["签字"])
+
+    def test_session_blacklist_remove_unknown_is_noop(self):
+        s = BlackWhiteListStore.instance()
+        s.add_session_black("盖章")
+        s.remove_session_black("不存在的条目")
+        self.assertEqual(s.effective_blacklist(), ["盖章"])
+
+    def test_session_whitelist_mirrors_blacklist(self):
+        s = BlackWhiteListStore.instance()
+        s.add_session_white("12345")
+        s.remove_session_white("12345")
+        self.assertEqual(s.effective_whitelist(), [])
+
 
 if __name__ == "__main__":
     unittest.main()
