@@ -9,6 +9,8 @@ import copy
 import re
 from PyQt6.QtCore import QThread, pyqtSignal
 
+from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+
 # 常量定义
 PROGRESS_UPDATE_INTERVAL = 0.05
 
@@ -56,6 +58,14 @@ class WordWorker(QThread):
                 if key in self.word_data:
                     text = self.word_data[key]['text']
                     matches = self._find_matches(text)
+                    # v37.9.0: whiteList 过滤 + blackList 注入
+                    matches = self._filter_whitelist(matches)
+                    blacklist = BlackWhiteListStore.instance().effective_blacklist()
+                    if blacklist:
+                        bl_hits = self._scan_blacklist_in_text(text, blacklist)
+                        matches.extend(bl_hits)
+                    # 再过一次 whitelist (确保 blacklist + whitelist 同条目时白名单赢)
+                    matches = self._filter_whitelist(matches)
                     self.word_data[key]['ocr'] = matches
 
                 processed += 1
@@ -74,6 +84,14 @@ class WordWorker(QThread):
                             if key in self.word_data:
                                 text = self.word_data[key]['text']
                                 matches = self._find_matches(text)
+                                # v37.9.0: whiteList 过滤 + blackList 注入
+                                matches = self._filter_whitelist(matches)
+                                blacklist = BlackWhiteListStore.instance().effective_blacklist()
+                                if blacklist:
+                                    bl_hits = self._scan_blacklist_in_text(text, blacklist)
+                                    matches.extend(bl_hits)
+                                # 再过一次 whitelist (确保 blacklist + whitelist 同条目时白名单赢)
+                                matches = self._filter_whitelist(matches)
                                 self.word_data[key]['ocr'] = matches
 
                             processed += 1
@@ -169,3 +187,45 @@ class WordWorker(QThread):
             if pat == pattern:
                 return name
         return "自定义"
+
+    # ---- v37.9.0: 黑/白名单串联 ----
+
+    def _filter_whitelist(self, hits: list) -> list:
+        """剥掉包含白名单子串的 hit. manual 来源豁免."""
+        whitelist = BlackWhiteListStore.instance().effective_whitelist()
+        if not whitelist:
+            return hits
+        kept = []
+        for hit in hits:
+            if hit.get("source") == "manual":
+                kept.append(hit)
+                continue
+            text = hit.get("text", "") or ""
+            if any(wl and wl in text for wl in whitelist):
+                continue
+            kept.append(hit)
+        return kept
+
+    @staticmethod
+    def _scan_blacklist_in_text(text: str, blacklist: list) -> list:
+        """在 text 中扫描 blacklist 条目, 返回 [{start, end, text, source, rule_name}, ...]."""
+        hits = []
+        if not text or not blacklist:
+            return hits
+        for bl_item in blacklist:
+            if not bl_item:
+                continue
+            start = 0
+            while True:
+                idx = text.find(bl_item, start)
+                if idx < 0:
+                    break
+                hits.append({
+                    "start": idx,
+                    "end": idx + len(bl_item),
+                    "text": bl_item,
+                    "source": "blacklist",
+                    "rule_name": f"黑名单:{bl_item}",
+                })
+                start = idx + len(bl_item)
+        return hits
