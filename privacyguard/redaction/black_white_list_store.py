@@ -106,7 +106,23 @@ class BlackWhiteListStore:
         self._config = config
 
     def save_permanent(self) -> None:
-        pass
+        """写回 SimpleConfig.
+
+        若未 bind_config 则静默跳过 (避免污染测试态).
+        写入字段:
+          - redaction.blacklist
+          - redaction.whitelist
+        """
+        if self._config is None:
+            return
+        try:
+            with self._lock:
+                # 永久层回写 = 合并后的永久层 (会话层不持久化)
+                self._config.set("redaction.blacklist", list(self._permanent_blacklist), persist=False)
+                self._config.set("redaction.whitelist", list(self._permanent_whitelist), persist=False)
+            self._config.save()
+        except Exception as exc:
+            logger.warning("save_permanent 失败: %s", exc)
 
     def load_permanent(self, black: list, white: list) -> None:
         """从 config.json 加载永久层. 损坏条目静默跳过."""

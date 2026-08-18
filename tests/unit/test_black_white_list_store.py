@@ -92,6 +92,33 @@ class BlackWhiteListStoreTest(unittest.TestCase):
         s.remove_session_white("12345")
         self.assertEqual(s.effective_whitelist(), [])
 
+    def test_save_permanent_writes_to_config(self):
+        s = BlackWhiteListStore.instance()
+
+        # 模拟 SimpleConfig 接口（仅 set + save）
+        class _FakeConfig:
+            def __init__(self):
+                self.calls = []
+            def set(self, path, value, persist=False):
+                self.calls.append((path, value))
+            def save(self):
+                self.calls.append(("save",))
+
+        fake = _FakeConfig()
+        s.bind_config(fake)
+        s.load_permanent(["盖章"], [])
+        s.save_permanent()
+
+        paths = [c[0] for c in fake.calls if isinstance(c, tuple)]
+        self.assertIn("redaction.blacklist", paths)
+        self.assertIn("redaction.whitelist", paths)
+        self.assertIn("save", paths)
+
+    def test_save_permanent_without_config_is_noop(self):
+        s = BlackWhiteListStore.instance()
+        # 未 bind_config, 不抛异常
+        s.save_permanent()
+
 
 if __name__ == "__main__":
     unittest.main()
