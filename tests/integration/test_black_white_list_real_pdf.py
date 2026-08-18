@@ -6,8 +6,6 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-from PyQt6.QtCore import QRectF
-
 from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
 
 
