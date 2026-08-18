@@ -71,7 +71,8 @@ class _CollectBlacklistTest(unittest.TestCase):
             return_value=np.zeros((100, 100, 3), dtype=np.uint8)
         )
         w.calculate_sub_rect = MagicMock(return_value=QRectF(10, 20, 30, 10))
-        w._ocr_clip = MagicMock(return_value=[
+        # v37.9.0-hotfix: 实现统一走 _ocr_full_page_tokens 而非 _ocr_clip.
+        w._ocr_full_page_tokens = MagicMock(return_value=[
             ("签名或者盖章。", [[10, 20], [40, 20], [40, 30], [10, 30]]),
         ])
         page = MagicMock()
@@ -80,6 +81,37 @@ class _CollectBlacklistTest(unittest.TestCase):
         out = w._collect_blacklist_hits(page, page_idx=0, blacklist=["盖章"], scan_scale=2.0)
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]["source"], "blacklist")
+
+    @patch("privacyguard.workers.ocr_worker.collect_embedded_image_clip_rects")
+    def test_no_attribute_error_when_ocr_clip_undefined(self, mock_collect):
+        """v37.9.0-hotfix 回归测试: _collect_blacklist_hits 不应依赖不存在的 _ocr_clip.
+
+        历史 bug: 当 clip_rects 只有一个时, 旧实现调用 self._ocr_clip(...), 触发
+        AttributeError 被 try/except 静默吞掉, 导致生产中黑名单注入从未生效.
+        此测试确保方法不引用 _ocr_clip, 即便该方法不存在也能正常工作.
+        """
+        # 关键: 不设置 w._ocr_clip, 验证方法体不调用它
+        mock_collect.return_value = [(0, 0, 100, 100)]
+        w = OCRWorker.__new__(OCRWorker)
+        w._ocr_engine = MagicMock()
+        w._render_full_page_bgr = MagicMock(
+            return_value=np.zeros((100, 100, 3), dtype=np.uint8)
+        )
+        w.calculate_sub_rect = MagicMock(return_value=QRectF(10, 20, 30, 10))
+        # 关键 stub: _ocr_full_page_tokens 是真实 OCR path
+        w._ocr_full_page_tokens = MagicMock(return_value=[
+            ("签名或者盖章。", [[10, 20], [40, 20], [40, 30], [10, 30]]),
+        ])
+        page = MagicMock()
+        page.rect = MagicMock(x0=0, y0=0, x1=595, y1=842)
+
+        out = w._collect_blacklist_hits(
+            page, page_idx=0, blacklist=["盖章"], scan_scale=2.0
+        )
+        # 不抛 AttributeError, 且黑名单命中被注入
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["source"], "blacklist")
+        self.assertEqual(out[0]["text"], "盖章")
         self.assertEqual(out[0]["text"], "盖章")
         self.assertIn("盖章", out[0]["rule_name"])
 

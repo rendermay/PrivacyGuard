@@ -417,15 +417,36 @@ class OCRWorker(QThread):
             clip_rects = [(rect.x0, rect.y0, rect.x1, rect.y1)]
 
         # OCR 一次, 收集 (text, box) tokens
+        # v37.9.0-hotfix: 统一走 _ocr_full_page_tokens (worker 实际只有 full-page OCR fast path).
+        # 早期版本这里分支调用 self._ocr_clip(...), 但 _ocr_clip 从未实现, 实际生产中
+        # AttributeError 被 try/except 吞掉 → 黑名单注入静默失效. 现统一, 简单且与 _ocr_full_page_tokens 一致.
         ocr_engine = getattr(self, "_ocr_engine", None)
         if ocr_engine is None:
             return []
         try:
             full_img = self._render_full_page_bgr(page, scan_scale)
-            tokens = self._ocr_clip(page, clip_rects[0], scan_scale) if len(clip_rects) == 1 else self._ocr_full_page_tokens(page, scan_scale)
+            tokens = self._ocr_full_page_tokens(page, scan_scale)
         except Exception as exc:
             logger.warning("_collect_blacklist_hits OCR 失败: %s", exc)
             return []
+
+        # tok_box 是 OCR 坐标 (image / scan_scale 比例) 下的多边形 [[x,y], ...],
+        # 而页面 hit 是 PDF 坐标系. 我们没有 _process_page 的 per-clip clip_rect
+        # 上下文, 但 _ocr_full_page_tokens 用的就是整页 full_img, 所以 image → page
+        # 的偏移就是 (0,0), 仅需除以 scan_scale.
+        def _box_to_page_rect(tok_box):
+            if not tok_box or len(tok_box) < 4:
+                return None
+            xs = [p[0] for p in tok_box]
+            ys = [p[1] for p in tok_box]
+            x0, y0 = min(xs), min(ys)
+            x1, y1 = max(xs), max(ys)
+            return QRectF(
+                x0 / scan_scale,
+                y0 / scan_scale,
+                (x1 - x0) / scan_scale,
+                (y1 - y0) / scan_scale,
+            )
 
         hits = []
         for bl_item in blacklist:
@@ -433,11 +454,11 @@ class OCRWorker(QThread):
                 continue
             for tok_text, tok_box in tokens:
                 if bl_item in tok_text:
-                    rect = self.calculate_sub_rect(tok_box, tok_text, None, img_region=full_img)
+                    rect = _box_to_page_rect(tok_box)
                     if rect is None:
                         continue
                     hits.append({
-                        "rect": QRectF(rect),
+                        "rect": rect,
                         "source": "blacklist",
                         "text": bl_item,
                         "rule_name": f"黑名单:{bl_item}",
