@@ -27,6 +27,7 @@ from privacyguard.ocr.mixed_pdf import (
     collect_image_block_ocr_hits,
 )
 from privacyguard.ocr.text_pdf import collect_text_pdf_hit_boxes
+from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
 
 # 常量定义
 PROGRESS_UPDATE_INTERVAL = 0.05
@@ -295,6 +296,43 @@ class OCRWorker(QThread):
         except (ValueError, ZeroDivisionError, TypeError) as e:
             print(f"[WARN] calculate_sub_rect 错误: {e}")
             return None
+
+    def _apply_whitelist_filter(self, rects: list, page_idx: int) -> list:
+        """剥掉包含白名单子串的 hit. manual 来源豁免.
+
+        OCR/seal 通道 hit.text 为空时,委托 _resolve_text_from_rect 查回.
+        """
+        whitelist = BlackWhiteListStore.instance().effective_whitelist()
+        if not whitelist:
+            return rects
+        kept = []
+        for hit in rects:
+            source = hit.get("source", "ocr")
+            if source == "manual":
+                kept.append(hit)
+                continue
+            text = hit.get("text", "") or ""
+            if not text:
+                text = self._resolve_text_from_rect(hit.get("rect"), page_idx) or ""
+            if any(wl and wl in text for wl in whitelist):
+                continue
+            kept.append(hit)
+        return kept
+
+    def _resolve_text_from_rect(self, rect, page_idx: int) -> str:
+        """从该页已缓存的 rect → text 映射查回原文.
+
+        未命中返回空串.  由 OCRWorker 在 image 通道 OCR 时填充缓存.
+        """
+        cache = getattr(self, "_rect_text_cache", None)
+        if not cache:
+            return ""
+        # 用 (page_idx, rect 中心点) 做近似键
+        if rect is None:
+            return ""
+        cx = int(rect.x() + rect.width() / 2)
+        cy = int(rect.y() + rect.height() / 2)
+        return cache.get((page_idx, cx, cy), "")
 
     def _calculate_from_line(self, box, text, start_idx, end_idx, img_region=None):
         """v37.3.7: 行级坐标估算 + 像素边界检测 + CJK 智能字符权重
