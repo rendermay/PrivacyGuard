@@ -44,6 +44,17 @@ class HitRefTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             HitRef("a", "b", 0, 1, "t", "INVALID_SOURCE")
 
+    def test_hitref_accepts_v37_9_sources(self):
+        """v37.9.0: 黑名单 (blacklist) 与人工 (manual) 必须是合法 source.
+
+        历史 bug: VALID_SOURCES 只包含 (rule, ocr, jieba, seal),
+        导致 _hit_to_ref 在处理 source='blacklist' 时抛 ValueError,
+        try/except 静默吞掉 → 用户右键 ignore 永久提升失败, 永久 override 丢失.
+        """
+        for src in ("blacklist", "manual"):
+            ref = HitRef("a", "b", 0, 1, "t", src)
+            self.assertEqual(ref.source, src)
+
 
 if __name__ == "__main__":
     unittest.main()

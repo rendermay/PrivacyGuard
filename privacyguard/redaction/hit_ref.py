@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Literal, Optional
 
 
-VALID_SOURCES = ("rule", "ocr", "jieba", "seal")
+VALID_SOURCES = ("rule", "ocr", "jieba", "seal", "blacklist", "manual")
 VALID_ACTIONS = ("ignore", "confirm")
 VALID_SCOPES = ("session", "permanent")
 
