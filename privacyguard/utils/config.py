@@ -95,6 +95,8 @@ DEFAULT_CONFIG = {
         },
         "replacement_text": "*",
         "custom_keywords": "",
+        "blacklist": [],
+        "whitelist": [],
         "scan": {
             "default_level": 1.5,
             "available_levels": [1.0, 1.5, 2.0],

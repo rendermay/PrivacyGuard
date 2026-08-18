@@ -299,8 +299,11 @@ class TestWordReplaceRules(unittest.TestCase):
 
         self.assertEqual(labels[0], "1 通用规则 · 2项启用")
         self.assertEqual(labels[1], "2 自定义关键词 · 5条")
-        self.assertEqual(labels[2], "3 扫描与微调 · 已微调")
-        self.assertEqual(labels[3], "4 OCR 检测框 · +10%")
+        # v37.9.0: 黑/白名单 Tab 插入到 自定义关键词 与 扫描与微调 之间
+        self.assertEqual(labels[2], "3 黑名单 · 0条")
+        self.assertEqual(labels[3], "4 白名单 · 0条")
+        self.assertEqual(labels[4], "5 扫描与微调 · 已微调")
+        self.assertEqual(labels[5], "6 OCR 检测框 · +10%")
 
     def test_build_settings_hero_tags_reflects_common_and_advanced_state(self):
         common_tag, advanced_tag = build_settings_hero_tags(2, 5, 3, False, 10, "标准 (1.5x 推荐)")

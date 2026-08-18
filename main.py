@@ -36,6 +36,7 @@ from privacyguard.utils.doc_converter import convert_doc_to_docx as _shared_conv
 from privacyguard.redaction.hit_ref import HitRef  # v37.8.x: 人工干预
 from privacyguard.redaction.override_store import HitOverrideStore  # v37.8.x: override store 单例
 from privacyguard.redaction.doc_hash import compute_doc_hash  # v37.8.x: 文档 hash
+from privacyguard.redaction.black_white_list_store import BlackWhiteListStore  # v37.9.0: 黑/白名单 store
 
 # v37.0.5: 延迟导入 OCR 模块，便于错误处理
 RapidOCR = None
@@ -518,13 +519,15 @@ def format_signed_percent(value):
     return f"{number:+d}%" if number else "0%"
 
 
-def build_settings_nav_labels(enabled_rules, keyword_count, precision_is_default, ocr_adjust_value):
+def build_settings_nav_labels(enabled_rules, keyword_count, precision_is_default, ocr_adjust_value, blacklist_count=0, whitelist_count=0):
     """构建设置中心左侧导航标签。"""
     return [
         f"1 通用规则 · {max(0, int(enabled_rules))}项启用",
         f"2 自定义关键词 · {max(0, int(keyword_count))}条",
-        f"3 扫描与微调 · {'默认' if precision_is_default else '已微调'}",
-        f"4 OCR 检测框 · {format_signed_percent(ocr_adjust_value)}",
+        f"3 黑名单 · {max(0, int(blacklist_count))}条",
+        f"4 白名单 · {max(0, int(whitelist_count))}条",
+        f"5 扫描与微调 · {'默认' if precision_is_default else '已微调'}",
+        f"6 OCR 检测框 · {format_signed_percent(ocr_adjust_value)}",
     ]
 
 
@@ -1038,7 +1041,9 @@ class SettingsDialog(QDialog):
                  scan_level=2.0, offset_x=0, offset_w=0, replacement_text="[已脱敏]",
                  word_replace_rules=None,
                  config_manager=None,
-                 enable_name_recognition=False):
+                 enable_name_recognition=False,
+                 current_blacklist=None,
+                 current_whitelist=None):
         super().__init__(parent)
         self.config = config_manager
 
@@ -1094,6 +1099,9 @@ class SettingsDialog(QDialog):
         self.recommended_rule_names = ["身份证号", "手机号码"]
         # v37.7.x: 中文姓名启发式识别开关(默认 False,向后兼容)
         self.enable_name_recognition = bool(enable_name_recognition)
+        # v37.9.0: 黑/白名单(来自 config.json 的 redaction.blacklist/whitelist)
+        self._initial_blacklist = list(current_blacklist or [])
+        self._initial_whitelist = list(current_whitelist or [])
 
         # v37.0: 从配置读取范围和标签
         if self.config:
@@ -1182,7 +1190,7 @@ class SettingsDialog(QDialog):
         self.settings_nav = QListWidget()
         self.settings_nav.setObjectName("settingsNav")
         self.settings_nav.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
-        self._settings_nav_base_titles = ["1 通用规则", "2 自定义关键词", "3 扫描与微调", "4 OCR 检测框"]
+        self._settings_nav_base_titles = ["1 通用规则", "2 自定义关键词", "3 黑名单", "4 白名单", "5 扫描与微调", "6 OCR 检测框"]
         for title in self._settings_nav_base_titles:
             self.settings_nav.addItem(title)
         sidebar_layout.addWidget(self.settings_nav, stretch=1)
@@ -1449,6 +1457,98 @@ class SettingsDialog(QDialog):
         v_custom.addLayout(custom_row)
         layout.addWidget(box_custom)
 
+        # v37.9.0: 2.5 黑名单 (强制脱敏, 优先级最低 / 实际生效低于规则)
+        box_black = QFrame()
+        box_black.setObjectName("settingsSectionCard")
+        v_black = QVBoxLayout(box_black)
+        v_black.setContentsMargins(16, 16, 16, 16)
+        v_black.setSpacing(12)
+        black_lead = QLabel("每行一条子串,强制进入脱敏命中。即使通用规则和关键词都没命中,只要文本里包含这里的内容就会被遮盖。")
+        black_lead.setObjectName("settingsSectionLead")
+        black_lead.setWordWrap(True)
+        self.lbl_black_summary = QLabel("")
+        self.lbl_black_summary.setObjectName("settingsSectionSummary")
+        self.lbl_black_summary.setWordWrap(True)
+        v_black.addWidget(self._create_settings_section_header(
+            "3. 黑名单 (强制脱敏)", black_lead, self.lbl_black_summary))
+        black_actions = QHBoxLayout()
+        black_actions.setSpacing(8)
+        black_actions.addWidget(self._create_settings_action_hint("快捷操作"))
+        btn_clear_black = QPushButton("清空黑名单")
+        btn_clear_black.setObjectName("settingsInlineButton")
+        btn_clear_black.clicked.connect(self._clear_blacklist)
+        black_actions.addWidget(btn_clear_black)
+        black_actions.addStretch()
+        v_black.addLayout(black_actions)
+        black_card = QFrame()
+        black_card.setObjectName("settingsFieldCard")
+        black_card_layout = QVBoxLayout(black_card)
+        black_card_layout.setContentsMargins(16, 16, 16, 16)
+        black_card_layout.setSpacing(10)
+        black_card_title = QLabel("黑名单条目")
+        black_card_title.setObjectName("settingsFieldTitle")
+        black_card_note = QLabel("子串匹配 (不需完整词)。每行一条,实时生效,关闭对话框也会保留。")
+        black_card_note.setObjectName("settingsFieldNote")
+        black_card_note.setWordWrap(True)
+        black_card_layout.addWidget(black_card_title)
+        black_card_layout.addWidget(black_card_note)
+        black_card_layout.addWidget(self._create_settings_divider())
+        self.txt_blacklist = QTextEdit()
+        self.txt_blacklist.setPlaceholderText("例如: 盖章 / 内部资料 / 签字")
+        self.txt_blacklist.setPlainText("\n".join(self._initial_blacklist))
+        self.txt_blacklist.setMinimumHeight(120)
+        self.txt_blacklist.setMaximumHeight(190)
+        self.txt_blacklist.textChanged.connect(self._on_black_white_changed)
+        black_card_layout.addWidget(self.txt_blacklist)
+        v_black.addWidget(black_card)
+        layout.addWidget(box_black)
+
+        # v37.9.0: 2.6 白名单 (永不脱敏, 优先级最高)
+        box_white = QFrame()
+        box_white.setObjectName("settingsSectionCard")
+        v_white = QVBoxLayout(box_white)
+        v_white.setContentsMargins(16, 16, 16, 16)
+        v_white.setSpacing(12)
+        white_lead = QLabel("每行一条子串,即使被规则或黑名单命中也不会被脱敏。注意: 这里的\"永不脱敏\"会覆盖其它所有机制。")
+        white_lead.setObjectName("settingsSectionLead")
+        white_lead.setWordWrap(True)
+        self.lbl_white_summary = QLabel("")
+        self.lbl_white_summary.setObjectName("settingsSectionSummary")
+        self.lbl_white_summary.setWordWrap(True)
+        v_white.addWidget(self._create_settings_section_header(
+            "4. 白名单 (永不脱敏)", white_lead, self.lbl_white_summary))
+        white_actions = QHBoxLayout()
+        white_actions.setSpacing(8)
+        white_actions.addWidget(self._create_settings_action_hint("快捷操作"))
+        btn_clear_white = QPushButton("清空白名单")
+        btn_clear_white.setObjectName("settingsInlineButton")
+        btn_clear_white.clicked.connect(self._clear_whitelist)
+        white_actions.addWidget(btn_clear_white)
+        white_actions.addStretch()
+        v_white.addLayout(white_actions)
+        white_card = QFrame()
+        white_card.setObjectName("settingsFieldCard")
+        white_card_layout = QVBoxLayout(white_card)
+        white_card_layout.setContentsMargins(16, 16, 16, 16)
+        white_card_layout.setSpacing(10)
+        white_card_title = QLabel("白名单条目")
+        white_card_title.setObjectName("settingsFieldTitle")
+        white_card_note = QLabel("子串匹配 (不需完整词)。每行一条,实时生效。")
+        white_card_note.setObjectName("settingsFieldNote")
+        white_card_note.setWordWrap(True)
+        white_card_layout.addWidget(white_card_title)
+        white_card_layout.addWidget(white_card_note)
+        white_card_layout.addWidget(self._create_settings_divider())
+        self.txt_whitelist = QTextEdit()
+        self.txt_whitelist.setPlaceholderText("例如: 公司全称 / 产品代号")
+        self.txt_whitelist.setPlainText("\n".join(self._initial_whitelist))
+        self.txt_whitelist.setMinimumHeight(120)
+        self.txt_whitelist.setMaximumHeight(190)
+        self.txt_whitelist.textChanged.connect(self._on_black_white_changed)
+        white_card_layout.addWidget(self.txt_whitelist)
+        v_white.addWidget(white_card)
+        layout.addWidget(box_white)
+
         # 3. 精度与微调
         box_enhance = QFrame()
         box_enhance.setObjectName("settingsSectionCard")
@@ -1714,7 +1814,7 @@ class SettingsDialog(QDialog):
         footer_actions.addWidget(btn_ok)
         footer_layout.addLayout(footer_actions)
         outer_layout.addWidget(footer)
-        self._settings_sections = [box_rules, box_custom, box_enhance, box_ocr, box_overrides]
+        self._settings_sections = [box_rules, box_custom, box_black, box_white, box_enhance, box_ocr, box_overrides]
         self._settings_nav_syncing = False
         self.settings_nav.currentRowChanged.connect(self._scroll_to_settings_section)
         self.content_scroll.verticalScrollBar().valueChanged.connect(self._sync_settings_nav_from_scroll)
@@ -2491,6 +2591,51 @@ class SettingsDialog(QDialog):
         """清空自定义关键词文本框。"""
         self.txt_custom.clear()
 
+    def _clear_blacklist(self):
+        """清空黑名单文本框。"""
+        self.txt_blacklist.clear()
+
+    def _clear_whitelist(self):
+        """清空白名单文本框。"""
+        self.txt_whitelist.clear()
+
+    @staticmethod
+    def _parse_lines(text):
+        """按行解析文本, 去空 / 去空白 / 去重保序.
+
+        用于黑/白名单的文本编辑框 → store 列表转换.
+        """
+        if not isinstance(text, str):
+            return []
+        seen = set()
+        out = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped and stripped not in seen:
+                seen.add(stripped)
+                out.append(stripped)
+        return out
+
+    def _on_black_white_changed(self):
+        """v37.9.0: 黑/白名单文本变化时回写 store + config.json.
+
+        通过公开 API BlackWhiteListStore.update_permanent 写入,
+        会话层独立保留, 与 _initial_blacklist / _initial_whitelist 无关.
+        """
+        try:
+            black = self._parse_lines(self.txt_blacklist.toPlainText())
+            white = self._parse_lines(self.txt_whitelist.toPlainText())
+            store = BlackWhiteListStore.instance()
+            store.update_permanent(black, white)
+            store.save_permanent()
+            if hasattr(self, "lbl_black_summary"):
+                self.lbl_black_summary.setText(f"当前条目: {len(black)} 条 (已写入 config.json)")
+            if hasattr(self, "lbl_white_summary"):
+                self.lbl_white_summary.setText(f"当前条目: {len(white)} 条 (已写入 config.json)")
+            self._refresh_settings_sidebar()
+        except Exception as exc:
+            print(f"[Settings] 黑/白名单回写失败: {exc}")
+
     def _reset_replacement_text(self):
         """恢复默认统一替换文本。"""
         self.input_replacement_text.setText(self.default_replacement_text)
@@ -2593,6 +2738,8 @@ class SettingsDialog(QDialog):
 
         enabled_rules = len([name for name, cb in self.checks.items() if cb.isChecked()]) if hasattr(self, "checks") else 0
         keyword_count = len([line.strip() for line in self.txt_custom.toPlainText().splitlines() if line.strip()]) if hasattr(self, "txt_custom") else 0
+        blacklist_count = len([line.strip() for line in self.txt_blacklist.toPlainText().splitlines() if line.strip()]) if hasattr(self, "txt_blacklist") else 0
+        whitelist_count = len([line.strip() for line in self.txt_whitelist.toPlainText().splitlines() if line.strip()]) if hasattr(self, "txt_whitelist") else 0
         precision_is_default = True
         if hasattr(self, "combo_precision") and hasattr(self, "spin_offset_x") and hasattr(self, "spin_offset_w") and hasattr(self, "cb_enhance"):
             precision_is_default = (
@@ -2603,7 +2750,7 @@ class SettingsDialog(QDialog):
             )
         adjust_value = self.slider_adjust.value() if hasattr(self, "slider_adjust") else 0
 
-        nav_labels = build_settings_nav_labels(enabled_rules, keyword_count, precision_is_default, adjust_value)
+        nav_labels = build_settings_nav_labels(enabled_rules, keyword_count, precision_is_default, adjust_value, blacklist_count, whitelist_count)
         for index, text in enumerate(nav_labels):
             item = self.settings_nav.item(index)
             if item and item.text() != text:
@@ -5187,6 +5334,9 @@ class MainWindow(QMainWindow):
             # v37.7.x: 中文姓名启发式识别开关(默认 False,向后兼容)
             self.enable_name_recognition = config.get(
                 "redaction.enable_name_recognition", False)
+            # v37.9.0: 黑/白名单(用于设置中心初始化)
+            self.current_blacklist = config.get("redaction.blacklist", []) or []
+            self.current_whitelist = config.get("redaction.whitelist", []) or []
             # v37.4.0: 移除 OCR 引擎配置，只使用 RapidOCR
         else:
             min_width, min_height = 900, 600
@@ -5197,6 +5347,8 @@ class MainWindow(QMainWindow):
             self.offset_w = 0
             self.custom_keywords = ""
             self.enable_name_recognition = False
+            self.current_blacklist = []
+            self.current_whitelist = []
 
         # 窗口尺寸设置：最小尺寸 + 默认尺寸
         self.setMinimumSize(min_width, min_height)
@@ -5286,6 +5438,13 @@ class MainWindow(QMainWindow):
         perms = config.get("redaction.overrides.permanent", []) if config else []
         if perms:
             self._override_store.load_permanent(perms)
+
+        # v37.9.0: 黑/白名单 store 引导 (bind_config + load_permanent)
+        BlackWhiteListStore.instance().bind_config(config)
+        BlackWhiteListStore.instance().load_permanent(
+            config.get("redaction.blacklist", []) if config else [],
+            config.get("redaction.whitelist", []) if config else [],
+        )
 
         # v37.6.0: 启用拖拽支持
         self.setAcceptDrops(True)
@@ -10260,7 +10419,9 @@ class MainWindow(QMainWindow):
                             self.scan_level, self.offset_x, self.offset_w, self.replacement_text,
                             self.word_replace_rules,
                             config_manager=config,
-                            enable_name_recognition=self.enable_name_recognition)
+                            enable_name_recognition=self.enable_name_recognition,
+                            current_blacklist=self.current_blacklist,
+                            current_whitelist=self.current_whitelist)
         if dlg.exec():
             self.active_rules = dlg.selected_rules
             self.use_enhance = dlg.use_enhance
@@ -10272,6 +10433,9 @@ class MainWindow(QMainWindow):
             self.word_replace_rules = dlg.word_replace_rules
             # v37.7.x: 同步姓名识别开关
             self.enable_name_recognition = dlg.enable_name_recognition
+            # v37.9.0: 同步黑/白名单(已在文本变化时实时落盘,此处再拉一次 store 的最终值)
+            self.current_blacklist = list(BlackWhiteListStore.instance().effective_blacklist())
+            self.current_whitelist = list(BlackWhiteListStore.instance().effective_whitelist())
             if self.word_doc:
                 if not self._has_word_replacement_candidates():
                     self.word_compare_user_hidden = False

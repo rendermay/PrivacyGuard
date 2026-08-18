@@ -130,6 +130,15 @@ class BlackWhiteListStore:
             self._permanent_blacklist = self._sanitize(black, "blacklist")
             self._permanent_whitelist = self._sanitize(white, "whitelist")
 
+    def update_permanent(self, black: list, white: list) -> None:
+        """替换永久层(用于 SettingsDialog 编辑场景).
+
+        会话层独立保留. 入参走 _sanitize 校验, 损坏条目静默跳过.
+        """
+        with self._lock:
+            self._permanent_blacklist = self._sanitize(black, "blacklist")
+            self._permanent_whitelist = self._sanitize(white, "whitelist")
+
     @staticmethod
     def _sanitize(raw, label: str) -> List[str]:
         if not isinstance(raw, list):
