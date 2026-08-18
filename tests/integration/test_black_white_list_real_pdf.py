@@ -44,7 +44,7 @@ class RealPDFIntegrationTest(unittest.TestCase):
         w.enable_name_recognition = False  # 隔离 jieba 噪声
         w.seal_detection_enabled = False  # 屏蔽印章检测,避免冗余 OCR
         w._ocr_engine = RapidOCREngine()
-        w._rect_text_cache = {}
+        w._rect_tokens_per_page = {}
 
         page = self.doc[page_idx]
         return w._process_page(page, page_idx, ocr_engine=w._ocr_engine, scan_scale=2.0)

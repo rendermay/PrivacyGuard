@@ -68,6 +68,45 @@ class ApplyWhitelistFilterTest(unittest.TestCase):
         out = w._apply_whitelist_filter(rects, page_idx=0)
         self.assertEqual(out, [])
 
+    def test_warm_cache_populates_tokens_for_bbox_lookup(self):
+        """v37.9.0-hotfix2: _warm_rect_text_cache 必须填充 _rect_tokens_per_page.
+
+        历史 bug: 旧版 _rect_text_cache 是 (page_idx, cx, cy) → text 字典,
+        _resolve_text_from_rect 用 center 查, 但 hit rect 经过 merge_adjacent_hit_rects
+        合并后, hit center 可能落在两个 token 之间的空隙 → 查不到.
+
+        新设计: _rect_tokens_per_page = {page_idx: [(QRectF, text), ...]},
+        _resolve_text_from_rect 用 QRectF.contains(point) 反查, 容错大幅提升.
+        """
+        from PyQt6.QtCore import QRectF
+        BlackWhiteListStore.reset_singleton()
+
+        class _W:
+            def _warm_rect_text_cache(self_, page, page_idx, scan_scale):
+                self_._rect_tokens_per_page = {
+                    0: [
+                        (QRectF(0, 0, 50, 12), "签名或者盖章"),  # 整 token
+                    ],
+                }
+
+        w = _W()
+        w._warm_rect_text_cache(None, page_idx=0, scan_scale=2.0)
+        # hit center 落在 token bbox 内 → 查回完整 text
+        hit_rect = QRectF(5, 2, 30, 10)
+        resolved = OCRWorker._resolve_text_from_rect(w, hit_rect, page_idx=0)
+        self.assertEqual(resolved, "签名或者盖章")
+
+    def test_resolve_returns_empty_when_token_outside_bbox(self):
+        """bbox 之外 → 返回 '' 而非错命中."""
+        from PyQt6.QtCore import QRectF
+        # token 在 (0,0)-(50,12), hit 在 (100, 0) → 远离
+        w = type("W", (), {
+            "_rect_tokens_per_page": {0: [(QRectF(0, 0, 50, 12), "盖章")]},
+        })()
+        hit_rect = QRectF(100, 0, 30, 10)
+        resolved = OCRWorker._resolve_text_from_rect(w, hit_rect, page_idx=0)
+        self.assertEqual(resolved, "")
+
 
 if __name__ == "__main__":
     unittest.main()

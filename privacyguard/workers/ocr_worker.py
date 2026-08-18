@@ -325,19 +325,55 @@ class OCRWorker(QThread):
         return kept
 
     def _resolve_text_from_rect(self, rect, page_idx: int) -> str:
-        """从该页已缓存的 rect → text 映射查回原文.
+        """从该页已缓存的 OCR token 列表中, 找包含 rect 中心的 token, 返回其原文.
 
-        未命中返回空串.  由 OCRWorker 在 image 通道 OCR 时填充缓存.
+        未命中返回空串.  由 _warm_rect_text_cache 填充缓存.
         """
-        cache = getattr(self, "_rect_text_cache", None)
-        if not cache:
-            return ""
-        # 用 (page_idx, rect 中心点) 做近似键
         if rect is None:
             return ""
-        cx = int(rect.x() + rect.width() / 2)
-        cy = int(rect.y() + rect.height() / 2)
-        return cache.get((page_idx, cx, cy), "")
+        tokens_per_page = getattr(self, "_rect_tokens_per_page", None)
+        if not tokens_per_page:
+            return ""
+        cx = rect.x() + rect.width() / 2
+        cy = rect.y() + rect.height() / 2
+        for token_rect, text in tokens_per_page.get(page_idx, []):
+            if token_rect.contains(cx, cy):
+                return text
+        return ""
+
+    def _warm_rect_text_cache(self, page, page_idx: int, scan_scale: float) -> None:
+        """v37.9.0-hotfix2: 把整页 OCR token 的 (bbox → text) 填进缓存.
+
+        上下文: OCR 通道 hit.text 默认空字符串, _apply_whitelist_filter 无法做子串匹配.
+        本方法做一次整页 OCR, 把每个 token 的 QRectF + 原文 存到 _rect_tokens_per_page,
+        让 _resolve_text_from_rect 能用 bbox-containment 反查.
+        只在 whitelist 非空时调用, 避免无意义 OCR 开销.
+
+        注意: token bbox 在 image 坐标 (0..image_h, 0..image_w), 而 hit rect 是 page 坐标 (PDF 点),
+        需要除以 scan_scale 对齐. 这里存的是 image 坐标 (因为 hit rect 是 image 坐标除以 scan_scale).
+        """
+        tokens_per_page = getattr(self, "_rect_tokens_per_page", None)
+        if tokens_per_page is None:
+            tokens_per_page = {}
+            self._rect_tokens_per_page = tokens_per_page
+        tokens = self._ocr_full_page_tokens(page, scan_scale)
+        cache_list = []
+        for text, box in tokens:
+            if not text or not box or len(box) < 4:
+                continue
+            xs = [p[0] for p in box]
+            ys = [p[1] for p in box]
+            x0, y0 = min(xs), min(ys)
+            x1, y1 = max(xs), max(ys)
+            # image 坐标 → page 坐标: 除以 scan_scale
+            token_rect = QRectF(
+                x0 / scan_scale,
+                y0 / scan_scale,
+                (x1 - x0) / scan_scale,
+                (y1 - y0) / scan_scale,
+            )
+            cache_list.append((token_rect, text))
+        tokens_per_page[page_idx] = cache_list
 
     @staticmethod
     def _rects_overlap(a, b) -> bool:
@@ -664,6 +700,12 @@ class OCRWorker(QThread):
                 "rule_name": "OCR图像通道",
             } for qr in image_hit_rects)
             image_hit_count = len(image_hit_rects)
+
+        # v37.9.0-hotfix2: OCR 通道 hit.text 默认为空,
+        # whitelist 过滤需要从 (page_idx, rect_center) 反查原文.
+        # warm cache 让 _resolve_text_from_rect 能查回 OCR token 文本.
+        if BlackWhiteListStore.instance().effective_whitelist():
+            self._warm_rect_text_cache(page, page_idx, scan_scale)
 
         # v37.9.0: 黑/白名单串联. 先 whitelist 过滤剥掉已有命中, 再 blacklist 注入.
         rects = self._apply_whitelist_filter(rects, page_idx)
