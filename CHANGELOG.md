@@ -14,6 +14,34 @@
 
 ---
 
+## [37.9.0] - 2026-08-18 — 黑名单 / 白名单
+
+### Added
+- **黑名单**：用户配置的强制脱敏条目（substring 匹配），即使无规则命中也生成 hit
+- **白名单**：用户配置的永不脱敏条目（substring 匹配），优先级高于所有规则
+- 永久层（config.json `redaction.blacklist` / `redaction.whitelist`）+ 会话层（内存）
+- 设置中心新增「黑名单」/「白名单」两个独立 Tab
+- `BlackWhiteListStore` 单例（与 `HitOverrideStore` 同款设计）
+- OCRWorker `_apply_whitelist_filter` / `_collect_blacklist_hits` / `_dedupe_overlapping`
+- WordWorker `_filter_whitelist` / `_scan_blacklist_in_text`
+
+### Changed
+- `privacyguard.utils.config.DEFAULT_CONFIG` 新增 `redaction.blacklist` / `redaction.whitelist` 默认值 `[]`
+
+### Fixed
+- 修复 jieba 把「盖章」「吉铁」等非人名词误标为 `nr` 后被脱敏的问题（用户可通过白名单主动豁免）
+
+### Tests
+- 新增 `tests/unit/test_black_white_list_store.py` (15 例)
+- 新增 `tests/unit/test_ocr_worker_blacklist.py` (6 例)
+- 新增 `tests/unit/test_ocr_worker_whitelist.py` (5 例)
+- 新增 `tests/unit/test_ocr_worker_integration.py` (2 例)
+- 新增 `tests/unit/test_word_worker_black_white.py` (6 例)
+- 新增 `tests/unit/test_black_white_list_config.py` (2 例)
+- 新增 `tests/integration/test_black_white_list_real_pdf.py` (3 例)
+
+---
+
 ## v37.8.0 - 2026-08-17 — 人工干预机制 (Manual Redaction Intervention)
 
 ### 新增
