@@ -16,11 +16,14 @@ v37.7.6: 全面上行 main.py 的高级特性：
 import time
 import traceback
 import gc
+import logging
 import numpy as np
 import cv2
 import fitz
 from PyQt6.QtCore import QThread, pyqtSignal, QRectF
 import re
+
+logger = logging.getLogger(__name__)
 
 from privacyguard.ocr.mixed_pdf import (
     collect_embedded_image_clip_rects,
@@ -333,6 +336,111 @@ class OCRWorker(QThread):
         cx = int(rect.x() + rect.width() / 2)
         cy = int(rect.y() + rect.height() / 2)
         return cache.get((page_idx, cx, cy), "")
+
+    @staticmethod
+    def _rects_overlap(a, b) -> bool:
+        """两个 rect 是否重叠 / 相邻 (相邻 2 像素以内也算)."""
+        if a is None or b is None:
+            return False
+        pad = 2
+        return not (
+            a.x() + a.width() + pad < b.x()
+            or b.x() + b.width() + pad < a.x()
+            or a.y() + a.height() + pad < b.y()
+            or b.y() + b.height() + pad < a.y()
+        )
+
+    @staticmethod
+    def _dedupe_overlapping(hits: list) -> list:
+        """合并 rect 重叠或相邻的 blacklist hit.
+
+        合并后保留第一个 hit 的 text/rule_name/source, 更新 rect 为最小外接矩形.
+        """
+        if not hits:
+            return hits
+        # 简单 O(n^2): blacklist 注入量小 (每条目 1-几个 hit), 足够
+        groups: list = []
+        for hit in hits:
+            rect = hit["rect"]
+            placed = False
+            for grp in groups:
+                gr = grp[0]["rect"]
+                if OCRWorker._rects_overlap(gr, rect):
+                    grp.append(hit)
+                    placed = True
+                    break
+            if not placed:
+                groups.append([hit])
+        merged = []
+        for grp in groups:
+            if len(grp) == 1:
+                merged.append(grp[0])
+                continue
+            xs = [h["rect"].x() for h in grp]
+            ys = [h["rect"].y() for h in grp]
+            x_max = [h["rect"].x() + h["rect"].width() for h in grp]
+            y_max = [h["rect"].y() + h["rect"].height() for h in grp]
+            union = QRectF(min(xs), min(ys), max(x_max) - min(xs), max(y_max) - min(ys))
+            first = dict(grp[0])  # 浅拷贝
+            first["rect"] = union
+            merged.append(first)
+        return merged
+
+    def _ocr_full_page_tokens(self, page, scan_scale) -> list:
+        """整页 OCR, 返回 [(text, box)] 列表. 由 _collect_blacklist_hits 使用."""
+        ocr_engine = getattr(self, "_ocr_engine", None)
+        if ocr_engine is None:
+            return []
+        try:
+            full_img = self._render_full_page_bgr(page, scan_scale)
+            results = ocr_engine.recognize(full_img)
+        except Exception:
+            return []
+        out = []
+        for r in results:
+            out.append((getattr(r, "text", ""), getattr(r, "box", None)))
+        return out
+
+    def _collect_blacklist_hits(self, page, page_idx: int, blacklist: list, scan_scale: float) -> list:
+        """扫描 image 通道 OCR tokens,命中 blacklist 条目 → 构造 hit."""
+        from privacyguard.ocr.mixed_pdf import collect_embedded_image_clip_rects
+        from PyQt6.QtCore import QRectF
+
+        if not blacklist:
+            return []
+        page_dict = page.get_text("dict")
+        clip_rects = collect_embedded_image_clip_rects(page_dict)
+        if not clip_rects:
+            rect = page.rect
+            clip_rects = [(rect.x0, rect.y0, rect.x1, rect.y1)]
+
+        # OCR 一次, 收集 (text, box) tokens
+        ocr_engine = getattr(self, "_ocr_engine", None)
+        if ocr_engine is None:
+            return []
+        try:
+            full_img = self._render_full_page_bgr(page, scan_scale)
+            tokens = self._ocr_clip(page, clip_rects[0], scan_scale) if len(clip_rects) == 1 else self._ocr_full_page_tokens(page, scan_scale)
+        except Exception as exc:
+            logger.warning("_collect_blacklist_hits OCR 失败: %s", exc)
+            return []
+
+        hits = []
+        for bl_item in blacklist:
+            if not bl_item:
+                continue
+            for tok_text, tok_box in tokens:
+                if bl_item in tok_text:
+                    rect = self.calculate_sub_rect(tok_box, tok_text, None, img_region=full_img)
+                    if rect is None:
+                        continue
+                    hits.append({
+                        "rect": QRectF(rect),
+                        "source": "blacklist",
+                        "text": bl_item,
+                        "rule_name": f"黑名单:{bl_item}",
+                    })
+        return self._dedupe_overlapping(hits)
 
     def _calculate_from_line(self, box, text, start_idx, end_idx, img_region=None):
         """v37.3.7: 行级坐标估算 + 像素边界检测 + CJK 智能字符权重
