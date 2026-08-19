@@ -154,16 +154,19 @@ class OCRFilterWhitelistTrimTest(unittest.TestCase):
         out = self._filter(rects, trim_only=True)
         self.assertEqual(out, [])
 
-    def test_ocr_channel_resolves_text_then_trims(self):
-        # OCR 通道 hit.text="", 通过 _resolve_text_from_rect 查回
+    def test_ocr_channel_resolves_text_then_drops_when_wl_in_resolved(self):
+        """v38.0.1 hotfix: image-channel hit (text="") + wl 在反查文本中 → 整条 drop (v37.9.0 行为).
+
+        不再 trim — 避免 sub-rect 错位 (custom_keyword 命中「签名或者盖章」中的「盖章」子串时,
+        resolve 拿到整条 token, trim 会把「签名或者」画到「盖章」位置).
+        """
         hit = _hit("", source="ocr", x=0, y=0, w=100, h=12)
         out = self._filter(
             [hit],
             trim_only=True,
             resolve_map={id(hit["rect"]): "法定代表人：周超"},
         )
-        self.assertEqual(len(out), 1)
-        self.assertEqual(out[0]["text"], "：周超")
+        self.assertEqual(out, [])
 
     def test_multi_line_text_in_kept_span_falls_back(self):
         # 保留片段含换行 → 保守回退 → 该片段丢弃
@@ -213,6 +216,53 @@ class OCRFilterWhitelistTrimTest(unittest.TestCase):
         self.assertIsNone(OCRWorker._sub_rect_for_text_span(None, "abc", 0, 1))
         self.assertIsNone(OCRWorker._sub_rect_for_text_span(rect, "", 0, 0))
         self.assertIsNone(OCRWorker._sub_rect_for_text_span(rect, "abc", 2, 2))
+
+
+class OCRFilterImageChannelEmptyTextTest(unittest.TestCase):
+    """v38.0.1 hotfix: image-channel / seal hit (原 text 空) 走 v37.9.0 整条剥掉.
+
+    不做 trim — _resolve_text_from_rect 反查可能返回比原 hit rect 更长的 OCR token
+    (例如 custom_keyword 命中「签名或者盖章」中的「盖章」子串), 此时 _sub_rect_for_text_span
+    用原小 rect 做权重切分会把「签名或者」画到「盖章」位置, 导致错误脱敏.
+    """
+
+    def setUp(self):
+        BlackWhiteListStore.reset_singleton()
+
+    def tearDown(self):
+        BlackWhiteListStore.reset_singleton()
+
+    def _filter(self, rects, wl, trim_only):
+        store = BlackWhiteListStore.instance()
+        store.load_permanent([], wl)
+        store.set_trim_only(trim_only)
+        w = _StubOCRWorker()
+        w._resolve_text_from_rect = lambda rect, page_idx: "签名或者盖章"
+        return w._apply_whitelist_filter(rects, page_idx=0)
+
+    def test_empty_text_resolved_text_contains_wl_dropped_under_trim(self):
+        """v38.0.1 hotfix: image-channel hit (text="") + wl 含子串 → 整条 drop, 即使 trim_only=True."""
+        hit = _hit("", source="ocr", x=472, y=455, w=28, h=20)
+        out = self._filter([hit], wl=["盖章"], trim_only=True)
+        self.assertEqual(out, [], "image-channel hit 应被整条 drop, 而不是错误 trim")
+
+    def test_empty_text_resolved_no_wl_kept_under_trim(self):
+        """image-channel hit (text="") + resolve 文本不含 wl → 原样保留, 即便 trim_only=True."""
+        hit = _hit("", source="ocr", x=100, y=200, w=50, h=12)
+        out = self._filter([hit], wl=["不相关"], trim_only=True)
+        self.assertEqual(out, [hit])
+
+    def test_text_channel_hit_still_trims_correctly(self):
+        """text-channel hit (text 非空) 继续走 trim 行为 (spec 主路径不被影响)."""
+        store = BlackWhiteListStore.instance()
+        store.load_permanent([], ["法定代表人"])
+        store.set_trim_only(True)
+        w = _StubOCRWorker()
+        hit = _hit("法定代表人：周超", x=0, y=0, w=200, h=12)
+        out = w._apply_whitelist_filter([hit], page_idx=0)
+        # text 非空 → 走 trim → 保留 「：周超」 子段
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["text"], "：周超")
 
 
 if __name__ == "__main__":

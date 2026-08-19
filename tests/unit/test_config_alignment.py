@@ -107,5 +107,5 @@ class TestVersionSource(unittest.TestCase):
         version_from_file = read_app_version()
         version_txt = (Path(__file__).resolve().parents[2] / "version.txt").read_text(encoding="utf-8").strip()
         self.assertEqual(version_from_file, version_txt)
-        self.assertTrue(version_from_file.startswith("37."),
+        self.assertTrue(version_from_file.startswith("38."),
             f"版本号格式异常: {version_from_file}")

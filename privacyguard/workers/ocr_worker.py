@@ -308,6 +308,13 @@ class OCRWorker(QThread):
 
         OCR/seal 通道 hit.text 为空时,委托 _resolve_text_from_rect 查回.
         manual 来源豁免 (人工框选是显式意图).
+
+        v38.0.1 hotfix: image-channel / seal hit (原 text 为空) 走 v37.9.0 行为 (整条剥掉),
+        不做 trim — 因为 _resolve_text_from_rect 反查可能返回比原 hit rect 更长的 OCR token
+        文本 (例如 custom_keyword 命中「签名或者盖章」中的「盖章」子串, 原 hit rect 只覆盖
+        「盖章」位置, 但 resolve 返回整条「签名或者盖章」), 此时 _sub_rect_for_text_span
+        用原小 rect 做权重切分会把「签名或者」画到「盖章」位置, 导致错误脱敏.
+        text-channel hit (原 text 非空) 继续走 trim.
         """
         store = BlackWhiteListStore.instance()
         whitelist = store.effective_whitelist()
@@ -321,10 +328,19 @@ class OCRWorker(QThread):
                 kept.append(hit)
                 continue
             text = hit.get("text", "") or ""
+            original_text_was_empty = (text == "")
             if not text:
                 text = self._resolve_text_from_rect(hit.get("rect"), page_idx) or ""
             if not text:
                 # 解析失败 → 沿用旧行为保留
+                kept.append(hit)
+                continue
+            # image-channel / seal hit (原 text 空): 走 v37.9.0 整条剥掉.
+            # 理由: 反查得到的 text 可能远超原 hit rect 实际覆盖范围,
+            # trim + sub-rect 计算会画到错误位置.
+            if original_text_was_empty:
+                if any(wl and wl in text for wl in whitelist):
+                    continue  # 整条剥掉
                 kept.append(hit)
                 continue
             spans = _split_text_by_whitelist(text, whitelist)
