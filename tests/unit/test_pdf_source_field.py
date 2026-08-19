@@ -11,8 +11,8 @@ import unittest
 
 from PyQt6.QtCore import QRectF
 
-from privacyguard.redaction.hit_ref import HitRef
-from privacyguard.redaction.override_store import HitOverrideStore
+from secureredact.redaction.hit_ref import HitRef
+from secureredact.redaction.override_store import HitOverrideStore
 
 
 class PDFSourceFieldTest(unittest.TestCase):

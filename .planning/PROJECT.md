@@ -1,8 +1,8 @@
-# PrivacyGuard 脱敏卫士
+# SecureRedact 信息脱敏助手
 
 ## What This Is
 
-PrivacyGuard 是一款 Python + PyQt6 桌面应用，面向中文法律/政务/商务场景，对本地 Word 与 PDF 文档进行隐私信息（身份证、手机号、银行卡、姓名、地址等）的一键识别、可预览与可审计脱敏。所有计算在本地完成，不上传原文。
+SecureRedact 是一款 Python + PyQt6 桌面应用，面向中文法律/政务/商务场景，对本地 Word 与 PDF 文档进行隐私信息（身份证、手机号、银行卡、姓名、地址等）的一键识别、可预览与可审计脱敏。所有计算在本地完成，不上传原文。
 
 ## Core Value
 
@@ -41,7 +41,7 @@ PrivacyGuard 是一款 Python + PyQt6 桌面应用，面向中文法律/政务/�
 
 #### 架构（ARCH）
 
-- [ ] **ARCH-01**: 把 WordWorker / 规则 / 命中 / 预览从 main.py 抽出到 `privacyguard/word/*`，main.py 仅留胶水
+- [ ] **ARCH-01**: 把 WordWorker / 规则 / 命中 / 预览从 main.py 抽出到 `secureredact/word/*`，main.py 仅留胶水
 - [ ] **ARCH-02**: 规则 / 命中 / 预览三层走明确接口契约，调一处不破另一处
 - [ ] **ARCH-03**: 与 PDF 端共用部分（OCRWorker / HitOverrideStore / whitelist_split）划清复用边界并产出接口边界文档
 - [ ] **ARCH-04**: 统一 `source / start / end / rect / text` 字段命名，产出字段映射表
@@ -74,14 +74,14 @@ PrivacyGuard 是一款 Python + PyQt6 桌面应用，面向中文法律/政务/�
 - **UI 视觉重做 / 新交互** — 当前 UI 已稳定；v39 不动 UI 视觉（结构性 UI 调整允许）
 - **打包 / Windows / macOS 构建链路改动** — v37-v38 打包链路已稳定，不在本里程碑范围
 - **PDF 端** — v37.9 黑/白名单 + v38 trim 已收敛完成；本里程碑不动 PDF 通道（修复 v39 引入的回归除外）
-- **DOC 格式 → DOCX 转换逻辑** — 已收敛到 `privacyguard/utils/doc_converter.py`，不在 v39 范围
+- **DOC 格式 → DOCX 转换逻辑** — 已收敛到 `secureredact/utils/doc_converter.py`，不在 v39 范围
 
 ## Context
 
 - **当前版本**: v38.0.1（2026-08-19，`whitelist_trim_only` hotfix 后）
 - **架构现状**:
   - `main.py` 仍是 active runtime entry，~583 KB / 12k+ 行
-  - `privacyguard/` 已抽出 `ocr / workers / utils / redaction / core / pii / ui` 七个包
+  - `secureredact/` 已抽出 `ocr / workers / utils / redaction / core / pii / ui` 七个包
   - 但 Word 相关逻辑仍大量内联在 `main.py`，规则 / 命中 / 预览耦合度高
 - **真实样本**:
   - 主样本：`pdf/抵账协议0522.docx----刘骁毅原版.docx`（32 KB，含姓名+法律条款）
@@ -99,7 +99,7 @@ PrivacyGuard 是一款 Python + PyQt6 桌面应用，面向中文法律/政务/�
 - **Tech stack**: Python 3.x + PyQt6；`python-docx` 处理 Word；`mammoth` DOCX→HTML 预览；`RapidOCR` 图像通道
 - **Local-first**: 不引入任何强制联网依赖；OCR / 规则 / 字典全部本地
 - **Compatibility**: 与 v37.x / v38.x 现有 `HitOverrideStore` / `whitelist_trim_only` / `BlackWhiteListStore` 行为兼容，外部观察者（用户、测试、UI）看不出语义差异
-- **Versioning**: 单一版本源 `version.txt`；`main.py` 与 `privacyguard.__version__` 同源；release 必须同步 Windows / macOS 资源版本
+- **Versioning**: 单一版本源 `version.txt`；`main.py` 与 `secureredact.__version__` 同源；release 必须同步 Windows / macOS 资源版本
 - **Regression**: 162 项测试基线不退化（含已知 2 项失败）
 - **Hotfix policy**: 涉及对外语义变化（如 trim 行为变化、override scope 变化）走 v38.0.x hotfix；架构级重构走 v39.0.0 主版本
 
@@ -149,5 +149,5 @@ This document evolves at phase transitions and milestone boundaries.
 
 **Acceptance criteria (v39.0.0 必达)**:
 1. 现有 162 项全量回归不退化（已知 2 项失败保持）
-2. Word 脱敏有独立可调用接口（`privacyguard/word/*` 边界清晰，main.py 仅留胶水）
+2. Word 脱敏有独立可调用接口（`secureredact/word/*` 边界清晰，main.py 仅留胶水）
 3. Word 结构全覆盖（表格 / 页眉页脚 / 批注 / 脚注 / 尾注 每类 ≥1 fixture 端到端验证）

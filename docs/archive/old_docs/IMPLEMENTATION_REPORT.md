@@ -1,8 +1,8 @@
-# PrivacyGuard v22.1 实施报告
+# SecureRedact v22.1 实施报告
 
 ## 📋 执行概要
 
-**项目名称**: PrivacyGuard 脱敏卫士
+**项目名称**: SecureRedact 信息脱敏助手
 **当前版本**: v22.1 - Viewport Filter
 **修复日期**: 2026-02-09
 **项目路径**: `/Users/a49144/Desktop/临时coding/PrivacyApp`
@@ -182,7 +182,7 @@ bash test.sh
    ```bash
    cd /Users/a49144/Desktop/临时coding/PrivacyApp
    source venv/bin/activate
-   pyinstaller PrivacyGuard.spec
+   pyinstaller SecureRedact.spec
    ```
 
 #### 如果测试失败 ✗

@@ -6,12 +6,12 @@ This file is the primary development guide for Claude Code and other coding agen
 
 ## Project Overview
 
-**Project**: PrivacyGuard 脱敏卫士  
+**Project**: SecureRedact 信息脱敏助手  
 **Current Version**: v37.8.0 (`37.8.0 - Manual Redaction Intervention`)  
 **Last Updated**: 2026-08-17  
 **Status**: v37.8.0 自动脱敏人工干预机制完成；Wave 1-5 全部完成；全量回归 162 项 / 160 通过（2 项为 v37.7.6 起既有失败）
 
-PrivacyGuard is a Python + PyQt6 desktop application for intelligent redaction of PDF and Word documents.
+SecureRedact is a Python + PyQt6 desktop application for intelligent redaction of PDF and Word documents.
 
 ### Current active capabilities
 
@@ -64,26 +64,26 @@ When resuming work, read these files in order:
 ### Main architecture
 
 - `main.py` is still the active runtime entry and remains monolithic.
-- `privacyguard/` contains shared modules and partial extractions, but not all runtime logic has moved there.
-- Avoid reintroducing drift between `main.py` and `privacyguard/*`.
+- `secureredact/` contains shared modules and partial extractions, but not all runtime logic has moved there.
+- Avoid reintroducing drift between `main.py` and `secureredact/*`.
 
 ### Version source
 
 - Single source of truth: `version.txt`
-- `main.py` and `privacyguard.__version__` both read from it
+- `main.py` and `secureredact.__version__` both read from it
 - Packaging defaults and version resources must stay aligned with `version.txt`
 
 ### Active config path
 
 - Runtime currently uses `SimpleConfig` in `main.py`
-- Shared config utilities also exist in `privacyguard/utils/config.py`
+- Shared config utilities also exist in `secureredact/utils/config.py`
 - Do not assume `ConfigManager` is the active runtime path unless you have explicitly switched the app over
 - **v37.7.x 中文姓名启发式识别 (jieba X3)**：新增 `redaction.enable_name_recognition` 键，默认 False；详见 `docs/current/PHASE_NAME_RECOGNITION.md`
 - **v37.8.0 人工干预 (Hit Override)**：新增 `redaction.enable_hit_override`（默认 True）与 `redaction.overrides.permanent`；详见 `docs/current/PHASE_HIT_OVERRIDE.md`
 
 ### Hit override store (人工干预)
 
-- 核心包：`privacyguard/redaction/`
+- 核心包：`secureredact/redaction/`
   - `hit_ref.py` — `HitRef`(frozen) + `Override`；`hit_id = f"{doc_hash}|{location}|{start}|{end}|{source}"`
   - `doc_hash.py` — `compute_doc_hash(file_path)`，基于 路径 + size + mtime 的 8 位标识
   - `override_store.py` — `HitOverrideStore` 单例，session / permanent 双层作用域
@@ -96,9 +96,9 @@ When resuming work, read these files in order:
 
 ### OCR dependency behavior
 
-- `privacyguard` package import is now lazy
+- `secureredact` package import is now lazy
 - `RapidOCR` must only initialize at actual OCR execution time
-- Do not add package-level eager OCR imports back into `privacyguard/__init__.py` or `privacyguard/workers/__init__.py`
+- Do not add package-level eager OCR imports back into `secureredact/__init__.py` or `secureredact/workers/__init__.py`
 
 ### Mixed PDF handling
 
@@ -108,7 +108,7 @@ When resuming work, read these files in order:
   2. embedded image block discovery via `page.get_text("dict")`
   3. image-block OCR
   4. local OCR box offset back into page coordinates
-- Shared logic lives in `privacyguard/ocr/mixed_pdf.py`
+- Shared logic lives in `secureredact/ocr/mixed_pdf.py`
 
 ---
 
@@ -148,20 +148,20 @@ Important:
 - `theme.py` - UI theme definitions
 - `version.txt` - single version source
 - `config.json` - local runtime config
-- `privacyguard/__init__.py` - package metadata + lazy exports
-- `privacyguard/ocr/text_pdf.py` - shared text-PDF hit collection
-- `privacyguard/ocr/mixed_pdf.py` - shared mixed-PDF image-block OCR helper
-- `privacyguard/workers/ocr_worker.py` - modular OCR worker
-- `privacyguard/workers/word_worker.py` - modular Word worker
-- `privacyguard/workers/image_merge.py` - modular image merge worker
-- `privacyguard/utils/doc_converter.py` - shared DOC→DOCX converter
-- `privacyguard/utils/config.py` - modular config manager
-- `privacyguard/utils/exceptions.py` - shared exception classes
-- `privacyguard/utils/temp_manager.py` - shared temp file manager
-- `privacyguard/utils/security.py` - shared path validation & resource_path
-- `privacyguard/redaction/hit_ref.py` - `HitRef` / `Override` 数据模型
-- `privacyguard/redaction/doc_hash.py` - 文档 8 位标识
-- `privacyguard/redaction/override_store.py` - `HitOverrideStore` 单例 + `filtered_hits`
+- `secureredact/__init__.py` - package metadata + lazy exports
+- `secureredact/ocr/text_pdf.py` - shared text-PDF hit collection
+- `secureredact/ocr/mixed_pdf.py` - shared mixed-PDF image-block OCR helper
+- `secureredact/workers/ocr_worker.py` - modular OCR worker
+- `secureredact/workers/word_worker.py` - modular Word worker
+- `secureredact/workers/image_merge.py` - modular image merge worker
+- `secureredact/utils/doc_converter.py` - shared DOC→DOCX converter
+- `secureredact/utils/config.py` - modular config manager
+- `secureredact/utils/exceptions.py` - shared exception classes
+- `secureredact/utils/temp_manager.py` - shared temp file manager
+- `secureredact/utils/security.py` - shared path validation & resource_path
+- `secureredact/redaction/hit_ref.py` - `HitRef` / `Override` 数据模型
+- `secureredact/redaction/doc_hash.py` - 文档 8 位标识
+- `secureredact/redaction/override_store.py` - `HitOverrideStore` 单例 + `filtered_hits`
 
 ---
 
@@ -170,14 +170,14 @@ Important:
 ### Run app
 
 ```bash
-cd /Users/a49144/Desktop/codexhub/PrivacyGuardApp
+cd /Users/a49144/Desktop/codexhub/SecureRedactApp
 python3 main.py
 ```
 
 ### Compile check
 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 ```
 
 ### Main regression suite
@@ -221,7 +221,7 @@ python3 -m unittest \
 ### Full regression (v37.8.0 基线)
 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 python3 -m unittest \
   tests.unit.test_hit_ref \
   tests.unit.test_doc_hash \

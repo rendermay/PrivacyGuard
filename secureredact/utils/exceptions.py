@@ -1,5 +1,5 @@
 """
-PrivacyGuard 自定义异常类
+SecureRedact 自定义异常类
 
 v36.5: 模块化拆分，从 main.py 提取
 """

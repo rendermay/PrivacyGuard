@@ -66,7 +66,7 @@ js: [SaveScroll] localStorage 不可用，使用内存存储
 
 我盯着代码看了半小时，突然灵光一闪。
 
-PrivacyGuard 打开 Word 文档时，用的是 `QWebEngineView` 来显示 HTML 预览。而打开 PDF 时，用的是自定义的 `SinglePageCanvas`。
+SecureRedact 打开 Word 文档时，用的是 `QWebEngineView` 来显示 HTML 预览。而打开 PDF 时，用的是自定义的 `SinglePageCanvas`。
 
 问题就在这里！
 

@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PrivacyGuard macOS 应用打包配置
+SecureRedact macOS 应用打包配置
 PyInstaller Spec 文件
 """
 
@@ -26,10 +26,10 @@ bs4_datas, bs4_binaries, bs4_hiddenimports = collect_all('bs4')
 soupsieve_datas, soupsieve_binaries, soupsieve_hiddenimports = collect_all('soupsieve')
 lxml_datas, lxml_binaries, lxml_hiddenimports = collect_all('lxml')
 
-# 收集 privacyguard 包的所有子模块（修复 ModuleNotFoundError）
+# 收集 secureredact 包的所有子模块（修复 ModuleNotFoundError）
 from PyInstaller.utils.hooks import collect_submodules
-privacyguard_hiddenimports = collect_submodules('privacyguard')
-print(f"[INFO] Collected {len(privacyguard_hiddenimports)} privacyguard submodules")
+secureredact_hiddenimports = collect_submodules('secureredact')
+print(f"[INFO] Collected {len(secureredact_hiddenimports)} secureredact submodules")
 
 a = Analysis(
     [os.path.join(project_root, 'main.py')],
@@ -70,26 +70,26 @@ a = Analysis(
         'soupsieve',
         'lxml',
         'lxml.etree',
-        # privacyguard 包（修复 ModuleNotFoundError）
-        'privacyguard',
-        'privacyguard.utils',
-        'privacyguard.utils.security',
-        'privacyguard.utils.config',
-        'privacyguard.utils.exceptions',
-        'privacyguard.utils.temp_manager',
-        'privacyguard.ocr',
-        'privacyguard.ocr.base',
-        'privacyguard.ocr.manager',
-        'privacyguard.ocr.rapidocr',
-        'privacyguard.ocr.text_pdf',
-        'privacyguard.ocr.mixed_pdf',
-        'privacyguard.workers',
-        'privacyguard.workers.ocr_worker',
-        'privacyguard.workers.word_worker',
-        'privacyguard.workers.image_merge',
-        'privacyguard.core',
-        'privacyguard.ui',
-    ] + onnx_hiddenimports + rapid_hiddenimports + bs4_hiddenimports + soupsieve_hiddenimports + lxml_hiddenimports + privacyguard_hiddenimports,
+        # secureredact 包（修复 ModuleNotFoundError）
+        'secureredact',
+        'secureredact.utils',
+        'secureredact.utils.security',
+        'secureredact.utils.config',
+        'secureredact.utils.exceptions',
+        'secureredact.utils.temp_manager',
+        'secureredact.ocr',
+        'secureredact.ocr.base',
+        'secureredact.ocr.manager',
+        'secureredact.ocr.rapidocr',
+        'secureredact.ocr.text_pdf',
+        'secureredact.ocr.mixed_pdf',
+        'secureredact.workers',
+        'secureredact.workers.ocr_worker',
+        'secureredact.workers.word_worker',
+        'secureredact.workers.image_merge',
+        'secureredact.core',
+        'secureredact.ui',
+    ] + onnx_hiddenimports + rapid_hiddenimports + bs4_hiddenimports + soupsieve_hiddenimports + lxml_hiddenimports + secureredact_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -115,7 +115,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='PrivacyGuard',
+    name='SecureRedact',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -136,23 +136,23 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='PrivacyGuard',
+    name='SecureRedact',
 )
 
 app = BUNDLE(
     coll,
-    name='PrivacyGuard.app',
+    name='SecureRedact.app',
     icon=os.path.join(project_root, 'assets', 'logo', 'macos', 'AppIcon.icns'),
-    bundle_identifier='com.privacyguard.app',
+    bundle_identifier='com.secureredact.app',
     info_plist={
-        'CFBundleName': 'PrivacyGuard',
-        'CFBundleDisplayName': 'PrivacyGuard 脱敏卫士',
+        'CFBundleName': 'SecureRedact',
+        'CFBundleDisplayName': 'SecureRedact 信息脱敏助手',
         'CFBundleVersion': app_version,
         'CFBundleShortVersionString': app_version,
         'CFBundlePackageType': 'APPL',
         'CFBundleSignature': '????',
-        'CFBundleExecutable': 'PrivacyGuard',
-        'CFBundleIdentifier': 'com.privacyguard.app',
+        'CFBundleExecutable': 'SecureRedact',
+        'CFBundleIdentifier': 'com.secureredact.app',
         'NSHighResolutionCapable': True,
         'LSMinimumSystemVersion': '10.13.0',
         'NSRequiresAquaSystemAppearance': False,

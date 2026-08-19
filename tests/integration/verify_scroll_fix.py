@@ -179,7 +179,7 @@ def main():
     """主函数"""
     filepath = 'main.py'
 
-    print("\n" + "🔍 PrivacyGuard 滚动位置修复验证")
+    print("\n" + "🔍 SecureRedact 滚动位置修复验证")
     print("=" * 60)
 
     try:

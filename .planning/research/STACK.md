@@ -13,7 +13,7 @@
 |------|------|------|
 | Word 结构遍历 | **复用 `python-docx 1.2.0` + `lxml` 直访 footnote/endnote** | 无需新增 |
 | 嵌入图 OCR | **复用 `rapidocr-onnxruntime 1.4.4`**（同 PDF `mixed_pdf.py` 路径） | 无需新增 |
-| 中文 NER | **复用 `jieba 0.42.1` + 自定义词典 + 黑名单**（`privacyguard/pii/name_recognizer.py`） | 无需新增 |
+| 中文 NER | **复用 `jieba 0.42.1` + 自定义词典 + 黑名单**（`secureredact/pii/name_recognizer.py`） | 无需新增 |
 | 测试 fixture 生成 | **复用 `python-docx`** 直接构造 | 无需新增 |
 | 脱敏前后 diff | **复用 `difflib`（stdlib）+ `mammoth 1.11.0` 双 HTML 并排** | 无需新增 |
 | spaCy / HanLP / PaddleNLP | **不引入**（v2+ 通过 ARCH-03 接口位再接） | 显式排除 |
@@ -32,7 +32,7 @@
 | **python-docx** | 1.2.0（2025-06-16 发布，Context7 验证） | Word 文档结构遍历 / 读写 | 事实标准；v1.2.0 新增 `document.comments` 原生 API；header/footer/table/section 全覆盖 |
 | **lxml** | 6.1.1 实装 / requirements.txt 6.0.2 | python-docx 底层 + 补 footnotes/endnotes 缺位 | python-docx 1.2.0 仍无 footnotes/endnotes 公开 API，需 lxml 直访 doc.part.rels 拿 `footnotes.xml` |
 | **mammoth** | 1.11.0（main.py 5614 行已用） | DOCX→HTML 预览 + 抽 raw text | 主流 DOCX→HTML 转换器；`extract_raw_text` 拿全文（含 footnote/endnote） |
-| **jieba** | 0.42.1 | 中文分词 + nr 词性 + 自定义词典 | `privacyguard/pii/name_recognizer.py` 已实现 X3 方案；POS `nr` 前缀覆盖 person-name |
+| **jieba** | 0.42.1 | 中文分词 + nr 词性 + 自定义词典 | `secureredact/pii/name_recognizer.py` 已实现 X3 方案；POS `nr` 前缀覆盖 person-name |
 | **rapidocr-onnxruntime** | 1.4.4 实装 / requirements.txt 1.2.3 | Word 嵌入图 OCR（同 PDF） | 完全离线；CPU 默认，CUDA 可选；ONNX 模型 ~10-50MB；中文+英文模型随包 |
 | **difflib**（stdlib） | Python 3.x 自带 | 脱敏前后段落级 diff | 零依赖；`SequenceMatcher` + `get_opcodes` 给 in/del/eq/rep 四类操作 |
 | **PyMuPDF (fitz)** | 1.27.1 | 仅作 utility（Word 不直接使用） | PDF 端依赖；v39 不动 |
@@ -63,7 +63,7 @@
 | `mammoth 1.11.0` | `docx2python` | 第三方 docx 提取器，覆盖全但与 mammoth + python-docx 重叠；引入只会增加维护面 |
 | `jieba 0.42.1` | `spacy zh_core_web_trf` | trf 模型 ~500MB、依赖 PyTorch+CUDA-friendly 环境；违反 local-first；FP-02 可用 jieba 用户词典 + EXCLUDE_WORDS 解决（已 v37.7.x 验证） |
 | `jieba 0.42.1` | `paddlenlp + ernie-tiny` | 拉入 paddlepaddle 全家桶 (~700MB)；与 `rapidocr-onnxruntime` 的 onnxruntime 偶发版本冲突；本地优先架构不变前提下不接 |
-| `jieba 0.42.1` | `HanLP` | 安装拉入 torch/tensorflow 依赖；PrivacyGuard 法律文书场景 jieba X3 已收敛 |
+| `jieba 0.42.1` | `HanLP` | 安装拉入 torch/tensorflow 依赖；SecureRedact 法律文书场景 jieba X3 已收敛 |
 | `rapidocr-onnxruntime 1.4.4` | `paddleocr 2.10.0`（已装但未启用） | paddleocr 拉 PaddlePaddle 大依赖；onnxruntime 路线更轻 |
 | `difflib` (stdlib) | `python-docx-diff` 第三方 | 第三方 lib 维护差；difflib 段落级 opcode 已够用 |
 | `difflib` (stdlib) | `diff-match-patch` | Google 出品但对中文支持一般；段落级 diff 不需要字符级操作码 |
@@ -76,7 +76,7 @@
 | 避免 | 为什么 | 用什么代替 |
 |------|--------|----------|
 | spaCy 全家桶 | trf 中文模型 ~500MB + torch 依赖；与 local-first 不兼容 | jieba + 用户词典（v37.7.x X3 已落地） |
-| HanLP / pkuseg | 拉入 tensorflow/torch；安装体积大；PrivacyGuard 法律文书场景 jieba 已够 | jieba |
+| HanLP / pkuseg | 拉入 tensorflow/torch；安装体积大；SecureRedact 法律文书场景 jieba 已够 | jieba |
 | PaddleNLP / paddlenlp | 与 rapidocr-onnxruntime 偶发二进制冲突；体积大 | 留作 v2+ 通过 ARCH-03 接口位接入 |
 | docx2python | 与 mammoth + python-docx 能力重叠；引入只增维护面 | python-docx (结构) + mammoth (预览/纯文本) |
 | docx2txt | 仅抽线性文本；丢失结构信息 | mammoth.extract_raw_text |
@@ -206,8 +206,8 @@ for text in _iter_footnotes(doc):
 | 步骤 | 现状 | v39 工作量 |
 |------|------|-----------|
 | 1. 从 .docx 抽嵌入图字节 | 需新增；`zipfile` 解 `word/media/imageN.*` | ~30 行 |
-| 2. 写临时 PNG 文件 | `privacyguard/utils/temp_manager.py` 已具备 | 复用 |
-| 3. OCR 推理 | `privacyguard/ocr/mixed_pdf.py` 已有 `RapidOCR` 调用 | 复用 |
+| 2. 写临时 PNG 文件 | `secureredact/utils/temp_manager.py` 已具备 | 复用 |
+| 3. OCR 推理 | `secureredact/ocr/mixed_pdf.py` 已有 `RapidOCR` 调用 | 复用 |
 | 4. OCR 结果回写到 Word 命中 | 需新增：把 `[(text, bbox)]` 转成 `[{start, end, text, source="ocr", rect=...}]` | ~40 行 |
 | 5. 命中统一过滤 | `HitOverrideStore.instance().filtered_hits()` | 复用 |
 
@@ -312,7 +312,7 @@ def diff_word_documents(before_path: Path, after_path: Path) -> str:
 - 不引入 paddleocr（避免 PaddlePaddle 全家桶）
 
 **若 v39 决定接外部 NER（不应发生，但留口）：**
-- 通过 `ARCH-03` 接口位在 `privacyguard/word/extractor.py` 加 NERExtractor Protocol
+- 通过 `ARCH-03` 接口位在 `secureredact/word/extractor.py` 加 NERExtractor Protocol
 - v2+ 再接 spacy-zh / paddlenlp / LLM
 - 当前 v39 不接
 
@@ -336,7 +336,7 @@ def diff_word_documents(before_path: Path, after_path: Path) -> str:
 
 | Phase | 主要工作 | 依赖新增 |
 |-------|---------|----------|
-| **v39.1 ARCH-01..04** | 把 Word 逻辑从 main.py 抽到 `privacyguard/word/{rules,extractor,preview,hit_builder,redactor}.py` | 无 |
+| **v39.1 ARCH-01..04** | 把 Word 逻辑从 main.py 抽到 `secureredact/word/{rules,extractor,preview,hit_builder,redactor}.py` | 无 |
 | **v39.2 FP-01..04** | 调优 jieba 黑名单 + 行政区划/职务词扩展 + 中英/中数边界正则 | 无 |
 | **v39.3 FN-01..04** | python-docx 全元素扫描 + lxml footnotes/endnotes + 嵌入图 OCR（mixed_pdf 复用） | 无 |
 | **v39.4 TEST-01..03** | fixture 构造器 + 端到端测试 + 162 项基线不退化 | 无 |
@@ -373,5 +373,5 @@ def diff_word_documents(before_path: Path, after_path: Path) -> str:
 
 ---
 
-*Stack research for: PrivacyGuard v39.0.0 — Word 脱敏重做*
+*Stack research for: SecureRedact v39.0.0 — Word 脱敏重做*
 *Researched: 2026-08-19*

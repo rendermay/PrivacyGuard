@@ -39,7 +39,7 @@ Last activity: 2026-08-19 — Milestone v39.0.0 roadmap created
 
 ## Hard Constraints (All Phases)
 
-- CONST-01: PDF 端不动（`privacyguard/ocr/*` + `ocr_worker.py` + signal payload）
+- CONST-01: PDF 端不动（`secureredact/ocr/*` + `ocr_worker.py` + signal payload）
 - CONST-02: 零新 binary 依赖
 - CONST-03: 162 项基线不退化（160 PASS + 2 known fail 保持）
 

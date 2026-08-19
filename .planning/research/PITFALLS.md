@@ -1,6 +1,6 @@
 # Pitfalls Research
 
-**Domain:** PrivacyGuard v39 Word 文档脱敏重构（python-docx + Mammoth + 中文规则/NER）  
+**Domain:** SecureRedact v39 Word 文档脱敏重构（python-docx + Mammoth + 中文规则/NER）  
 **Researched:** 2026-08-19  
 **Confidence:** MEDIUM（python-docx/Mammoth/Python 官方资料与项目源码为主；中文姓名/地址边界策略仍需真实样本验证）
 
@@ -298,9 +298,9 @@
 
 ### 项目内一手证据（HIGH，直接源码）
 
-- `privacyguard/workers/word_worker.py`：当前只遍历顶层 paragraphs/tables，dict hit schema，QThread signals，宽异常与 partial payload。
+- `secureredact/workers/word_worker.py`：当前只遍历顶层 paragraphs/tables，dict hit schema，QThread signals，宽异常与 partial payload。
 - `main.py`：`WordWorker` 兼容层、`_open_word_docx()` 的现有 key 结构、`apply_range_to_runs()` 的 run offset/writeback 路径。
-- `privacyguard/redaction/whitelist_split.py`：纯字符串 interval 语义，可共享但不含 channel geometry policy。
+- `secureredact/redaction/whitelist_split.py`：纯字符串 interval 语义，可共享但不含 channel geometry policy。
 - `tests/unit/test_convergence.py`：已有薄兼容层收敛 guard，可扩展为 v39 strangler gate。
 
 ## 研究缺口 / Phase Research Flags
@@ -308,8 +308,8 @@
 - **Phase 2 需要 deeper research：** footnote/endnote 的只读与安全写回边界、tracked changes 与 content controls 的产品语义、Word/LibreOffice package 差异。
 - **Phase 5 需要样本研究：** 地址层级、职务/机构/产品词 hard negatives 的本项目 corpus 指标；公开资料不足以替代法律文书 fixture。
 - **Phase 6 需要 spike：** floating image、shape/textbox、OLE/chart 的 inventory 与 OCR/fallback UI；Mammoth 对这些对象不能作为完整证据。
-- **Phase 7 需要本机基线：** 不能从 issue tracker 推导 PrivacyGuard 的绝对秒数/内存阈值，必须在目标 Windows/macOS 打包环境实测。
+- **Phase 7 需要本机基线：** 不能从 issue tracker 推导 SecureRedact 的绝对秒数/内存阈值，必须在目标 Windows/macOS 打包环境实测。
 
 ---
-*Pitfalls research for: PrivacyGuard v39 Word 文档脱敏重构*  
+*Pitfalls research for: SecureRedact v39 Word 文档脱敏重构*  
 *Researched: 2026-08-19*

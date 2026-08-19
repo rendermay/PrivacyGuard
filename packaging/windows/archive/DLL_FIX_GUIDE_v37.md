@@ -1,4 +1,4 @@
-# PrivacyGuard v37.0 Windows DLL 问题修复指南
+# SecureRedact v37.0 Windows DLL 问题修复指南
 
 ## 问题概述
 
@@ -30,7 +30,7 @@ ImportError: DLL load failed while importing onnxruntime_pybind11_state:
 
 3. 验证 DLL 已被收集:
    ```cmd
-   dir dist\PrivacyGuard\
+   dir dist\SecureRedact\
    # 应该能看到 vcruntime140_1.dll
    ```
 
@@ -63,9 +63,9 @@ ImportError: DLL load failed while importing onnxruntime_pybind11_state:
 
 2. 复制到打包输出目录:
    ```cmd
-   copy C:\Windows\System32\vcruntime140_1.dll dist\PrivacyGuard\
-   copy C:\Windows\System32\vcruntime140.dll dist\PrivacyGuard\
-   copy C:\Windows\System32\msvcp140.dll dist\PrivacyGuard\
+   copy C:\Windows\System32\vcruntime140_1.dll dist\SecureRedact\
+   copy C:\Windows\System32\vcruntime140.dll dist\SecureRedact\
+   copy C:\Windows\System32\msvcp140.dll dist\SecureRedact\
    ```
 
 ### 方案 4: 降级 onnxruntime
@@ -99,7 +99,7 @@ python packaging\windows\scripts\diagnose_onnxruntime.py
 ### 2. 检查打包输出
 
 ```cmd
-dir dist\PrivacyGuard\*.dll /w
+dir dist\SecureRedact\*.dll /w
 ```
 
 确认以下文件存在:
@@ -112,12 +112,12 @@ dir dist\PrivacyGuard\*.dll /w
 
 使用启动器包装器运行（会检查 DLL）:
 ```cmd
-dist\PrivacyGuard\launcher_wrapper.bat
+dist\SecureRedact\launcher_wrapper.bat
 ```
 
 或直接运行（可以看到错误信息）:
 ```cmd
-dist\PrivacyGuard\PrivacyGuard.exe
+dist\SecureRedact\SecureRedact.exe
 ```
 
 ---
@@ -147,8 +147,8 @@ A: 使用增强版 spec (v2) 构建，它会:
 
 | 文件 | 用途 |
 |------|------|
-| `PrivacyGuard_windows.spec` | 原始 spec 文件 |
-| `PrivacyGuard_windows_v2.spec` | 增强版 spec，更好的 DLL 收集 |
+| `SecureRedact_windows.spec` | 原始 spec 文件 |
+| `SecureRedact_windows_v2.spec` | 增强版 spec，更好的 DLL 收集 |
 | `2_build_exe.bat` | 原始构建脚本 |
 | `2_build_exe_enhanced.bat` | 增强版构建脚本，带诊断选项 |
 | `diagnose_onnxruntime.py` | 诊断工具，检查 DLL 状态 |
@@ -162,7 +162,7 @@ A: 使用增强版 spec (v2) 构建，它会:
 
 ```batch
 @echo off
-:: PrivacyGuard 紧急修复启动器
+:: SecureRedact 紧急修复启动器
 set "APP_DIR=%~dp0"
 
 :: 检查 DLL
@@ -182,7 +182,7 @@ copy "C:\Windows\System32\vcruntime140.dll" "%APP_DIR%" >nul 2>&1
 copy "C:\Windows\System32\msvcp140.dll" "%APP_DIR%" >nul 2>&1
 
 :: 启动应用
-start "" "%APP_DIR%\PrivacyGuard.exe"
+start "" "%APP_DIR%\SecureRedact.exe"
 ```
 
 保存为 `emergency_launcher.bat` 放在应用目录。

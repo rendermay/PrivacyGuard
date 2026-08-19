@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """config.json 加载 blacklist/whitelist 默认值的兜底测试."""
 import unittest
-from privacyguard.utils.config import DEFAULT_CONFIG
+from secureredact.utils.config import DEFAULT_CONFIG
 
 
 class ConfigDefaultsTest(unittest.TestCase):

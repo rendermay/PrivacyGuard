@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 为 PrivacyGuard v37.9.0 增加「黑名单（强制脱敏）」和「白名单（永不脱敏）」功能，黑/白名单同时作用于 PDF 与 Word，支持永久层（config.json）+ 会话层（内存）。
+**Goal:** 为 SecureRedact v37.9.0 增加「黑名单（强制脱敏）」和「白名单（永不脱敏）」功能，黑/白名单同时作用于 PDF 与 Word，支持永久层（config.json）+ 会话层（内存）。
 
 **Architecture:** 新建 `BlackWhiteListStore` 单例（与 `HitOverrideStore` 同款，单例 + `threading.Lock`）。`OCRWorker._process_page` / `WordWorker._run` 在已有规则匹配后追加两段：(a) `_apply_whitelist_filter` 剥掉 manual 之外含白名单子串的 hit；(b) `_collect_blacklist_hits` 在 image/段落 OCR token 中 `str.find` 定位并构造 `source="blacklist"` hit。设置中心新增两个独立 Tab。
 
@@ -11,27 +11,27 @@
 ## Global Constraints
 
 - 单测运行命令：`python3 -m unittest tests.unit.<module> -v`（项目惯例，非 pytest）。
-- 编译检查命令：`python3 -m compileall -q main.py privacyguard tests`。
-- 新增模块须遵循项目既有命名：`privacyguard/redaction/<feature>.py`（参照 `override_store.py` 风格）。
+- 编译检查命令：`python3 -m compileall -q main.py secureredact tests`。
+- 新增模块须遵循项目既有命名：`secureredact/redaction/<feature>.py`（参照 `override_store.py` 风格）。
 - 单例 + `threading.Lock` 模式必须与 `HitOverrideStore` 一致（含 `instance()` / `reset_singleton()`）。
 - config.json 写入走 tmp + rename 原子替换（参照 `SimpleConfig.save` 在 `main.py:131-137`）。
 - `source="manual"` 永不被任何机制覆盖（CLAUDE.md 既定原则）。
 - 不修改 `HitOverrideStore` 既有 `filtered_hits` 语义；whiteList 过滤发生在 worker 出口。
 - 现有回归基线：162 项 / 160 通过（2 项 v37.7.6 既有失败已知）。新功能不得引入新失败。
 - config.json 现有 CRLF 换行规则维持（最近 commit `a8be8cb` 已统一）。
-- 所有新增中文注释遵守 [项目语言偏好：中文](file:///home/rende/.claude/projects/-mnt-g-Project-PrivacyGuard/memory/project-language-zh.md)。
+- 所有新增中文注释遵守 [项目语言偏好：中文](file:///home/rende/.claude/projects/-mnt-g-Project-SecureRedact/memory/project-language-zh.md)。
 - 专有名词（jieba、HitRef、QRectF、override 等）保留英文。
 
 ## File Structure
 
 **新建**：
-- `privacyguard/redaction/black_white_list_store.py` — 单例 + 永久/会话双层 + 原子写
+- `secureredact/redaction/black_white_list_store.py` — 单例 + 永久/会话双层 + 原子写
 - `tests/unit/test_black_white_list_store.py` — 单测
 
 **修改**：
-- `privacyguard/utils/config.py` — `DEFAULT_CONFIG["redaction"]` 增 `blacklist` / `whitelist` 默认值（`[]`）
-- `privacyguard/workers/ocr_worker.py` — `_apply_whitelist_filter` / `_collect_blacklist_hits` / `_process_page` 整合 / `_resolve_text_from_rect` 缓存
-- `privacyguard/workers/word_worker.py` — `_filter_whitelist` / blacklist `str.find` 注入
+- `secureredact/utils/config.py` — `DEFAULT_CONFIG["redaction"]` 增 `blacklist` / `whitelist` 默认值（`[]`）
+- `secureredact/workers/ocr_worker.py` — `_apply_whitelist_filter` / `_collect_blacklist_hits` / `_process_page` 整合 / `_resolve_text_from_rect` 缓存
+- `secureredact/workers/word_worker.py` — `_filter_whitelist` / blacklist `str.find` 注入
 - `main.py` — `SettingsDialog` 新增两个 Tab + `MainWindow` 启动时 `BlackWhiteListStore.bind_config` + 加载/回写
 - `tests/unit/test_ocr_worker_blacklist.py` — 新建
 - `tests/unit/test_ocr_worker_whitelist.py` — 新建
@@ -42,7 +42,7 @@
 ### Task 1: BlackWhiteListStore 单例骨架
 
 **Files:**
-- Create: `privacyguard/redaction/black_white_list_store.py`
+- Create: `secureredact/redaction/black_white_list_store.py`
 - Test: `tests/unit/test_black_white_list_store.py`
 
 **Interfaces:**
@@ -58,7 +58,7 @@
 # -*- coding: utf-8 -*-
 """BlackWhiteListStore 单例逻辑测试."""
 import unittest
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
 
 
 class BlackWhiteListStoreTest(unittest.TestCase):
@@ -97,11 +97,11 @@ class BlackWhiteListStoreTest(unittest.TestCase):
 ```bash
 python3 -m unittest tests.unit.test_black_white_list_store -v
 ```
-期望：`ModuleNotFoundError: No module named 'privacyguard.redaction.black_white_list_store'` 或 `ImportError`。
+期望：`ModuleNotFoundError: No module named 'secureredact.redaction.black_white_list_store'` 或 `ImportError`。
 
 - [ ] **Step 3: 写最小实现**
 
-`privacyguard/redaction/black_white_list_store.py`：
+`secureredact/redaction/black_white_list_store.py`：
 ```python
 # -*- coding: utf-8 -*-
 """BlackWhiteListStore 单例: 黑名单 + 白名单的永久层/会话层管理."""
@@ -213,7 +213,7 @@ python3 -m unittest tests.unit.test_black_white_list_store -v
 - [ ] **Step 5: 提交**
 
 ```bash
-git add privacyguard/redaction/black_white_list_store.py tests/unit/test_black_white_list_store.py
+git add secureredact/redaction/black_white_list_store.py tests/unit/test_black_white_list_store.py
 git commit -m "feat(redaction): BlackWhiteListStore 单例骨架"
 ```
 
@@ -222,7 +222,7 @@ git commit -m "feat(redaction): BlackWhiteListStore 单例骨架"
 ### Task 2: BlackWhiteListStore 加载永久层（含类型校验兜底）
 
 **Files:**
-- Modify: `privacyguard/redaction/black_white_list_store.py:load_permanent`
+- Modify: `secureredact/redaction/black_white_list_store.py:load_permanent`
 - Modify: `tests/unit/test_black_white_list_store.py`
 
 **Interfaces:**
@@ -302,7 +302,7 @@ python3 -m unittest tests.unit.test_black_white_list_store -v
 - [ ] **Step 5: 提交**
 
 ```bash
-git add privacyguard/redaction/black_white_list_store.py tests/unit/test_black_white_list_store.py
+git add secureredact/redaction/black_white_list_store.py tests/unit/test_black_white_list_store.py
 git commit -m "feat(redaction): load_permanent 含类型校验与空值过滤"
 ```
 
@@ -311,7 +311,7 @@ git commit -m "feat(redaction): load_permanent 含类型校验与空值过滤"
 ### Task 3: BlackWhiteListStore 会话层 add/remove
 
 **Files:**
-- Modify: `privacyguard/redaction/black_white_list_store.py:add_session_black` 等
+- Modify: `secureredact/redaction/black_white_list_store.py:add_session_black` 等
 - Modify: `tests/unit/test_black_white_list_store.py`
 
 **Interfaces:**
@@ -408,7 +408,7 @@ python3 -m unittest tests.unit.test_black_white_list_store -v
 - [ ] **Step 5: 提交**
 
 ```bash
-git add privacyguard/redaction/black_white_list_store.py tests/unit/test_black_white_list_store.py
+git add secureredact/redaction/black_white_list_store.py tests/unit/test_black_white_list_store.py
 git commit -m "feat(redaction): BlackWhiteListStore 会话层 add/remove"
 ```
 
@@ -417,7 +417,7 @@ git commit -m "feat(redaction): BlackWhiteListStore 会话层 add/remove"
 ### Task 4: BlackWhiteListStore save_permanent 原子写
 
 **Files:**
-- Modify: `privacyguard/redaction/black_white_list_store.py:save_permanent`
+- Modify: `secureredact/redaction/black_white_list_store.py:save_permanent`
 - Modify: `tests/unit/test_black_white_list_store.py`
 
 **Interfaces:**
@@ -498,7 +498,7 @@ python3 -m unittest tests.unit.test_black_white_list_store -v
 - [ ] **Step 5: 提交**
 
 ```bash
-git add privacyguard/redaction/black_white_list_store.py tests/unit/test_black_white_list_store.py
+git add secureredact/redaction/black_white_list_store.py tests/unit/test_black_white_list_store.py
 git commit -m "feat(redaction): BlackWhiteListStore.save_permanent 原子写"
 ```
 
@@ -507,7 +507,7 @@ git commit -m "feat(redaction): BlackWhiteListStore.save_permanent 原子写"
 ### Task 5: OCRWorker._apply_whitelist_filter
 
 **Files:**
-- Modify: `privacyguard/workers/ocr_worker.py`
+- Modify: `secureredact/workers/ocr_worker.py`
 - Create: `tests/unit/test_ocr_worker_whitelist.py`
 
 **Interfaces:**
@@ -522,8 +522,8 @@ git commit -m "feat(redaction): BlackWhiteListStore.save_permanent 原子写"
 import unittest
 from PyQt6.QtCore import QRectF
 
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
-from privacyguard.workers.ocr_worker import OCRWorker
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.workers.ocr_worker import OCRWorker
 
 
 class _StubOCRWorker(OCRWorker):
@@ -595,7 +595,7 @@ python3 -m unittest tests.unit.test_ocr_worker_whitelist -v
 
 - [ ] **Step 3: 写最小实现**
 
-在 `privacyguard/workers/ocr_worker.py` 的 `OCRWorker` 类内（在 `_calculate_from_line` 之前）追加：
+在 `secureredact/workers/ocr_worker.py` 的 `OCRWorker` 类内（在 `_calculate_from_line` 之前）追加：
 ```python
     def _apply_whitelist_filter(self, rects: list, page_idx: int) -> list:
         """剥掉包含白名单子串的 hit. manual 来源豁免.
@@ -635,9 +635,9 @@ python3 -m unittest tests.unit.test_ocr_worker_whitelist -v
         return cache.get((page_idx, cx, cy), "")
 ```
 
-并在文件顶部 `from privacyguard.redaction.hit_ref` 等导入旁追加：
+并在文件顶部 `from secureredact.redaction.hit_ref` 等导入旁追加：
 ```python
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
 ```
 
 - [ ] **Step 4: 运行测试确认通过**
@@ -650,7 +650,7 @@ python3 -m unittest tests.unit.test_ocr_worker_whitelist -v
 - [ ] **Step 5: 提交**
 
 ```bash
-git add privacyguard/workers/ocr_worker.py tests/unit/test_ocr_worker_whitelist.py
+git add secureredact/workers/ocr_worker.py tests/unit/test_ocr_worker_whitelist.py
 git commit -m "feat(ocr): OCRWorker._apply_whitelist_filter 含 manual 豁免"
 ```
 
@@ -659,7 +659,7 @@ git commit -m "feat(ocr): OCRWorker._apply_whitelist_filter 含 manual 豁免"
 ### Task 6: OCRWorker._collect_blacklist_hits + _dedupe_overlapping
 
 **Files:**
-- Modify: `privacyguard/workers/ocr_worker.py`
+- Modify: `secureredact/workers/ocr_worker.py`
 - Create: `tests/unit/test_ocr_worker_blacklist.py`
 
 **Interfaces:**
@@ -676,8 +676,8 @@ import unittest
 from unittest.mock import patch, MagicMock
 from PyQt6.QtCore import QRectF
 
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
-from privacyguard.workers.ocr_worker import OCRWorker
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.workers.ocr_worker import OCRWorker
 
 
 class _DedupTest(unittest.TestCase):
@@ -726,7 +726,7 @@ class _CollectBlacklistTest(unittest.TestCase):
         out = w._collect_blacklist_hits(page, page_idx=0, blacklist=[], scan_scale=2.0)
         self.assertEqual(out, [])
 
-    @patch("privacyguard.workers.ocr_worker.collect_embedded_image_clip_rects")
+    @patch("secureredact.workers.ocr_worker.collect_embedded_image_clip_rects")
     def test_blacklist_injects_hit_for_matching_token(self, mock_collect):
         mock_collect.return_value = [(0, 0, 100, 100)]
         # 构造 stub OCR: 返回一个含 "盖章" 的 token
@@ -754,7 +754,7 @@ python3 -m unittest tests.unit.test_ocr_worker_blacklist -v
 
 - [ ] **Step 3: 写实现**
 
-在 `privacyguard/workers/ocr_worker.py` 的 `OCRWorker` 类内追加：
+在 `secureredact/workers/ocr_worker.py` 的 `OCRWorker` 类内追加：
 ```python
     @staticmethod
     def _dedupe_overlapping(hits: list) -> list:
@@ -807,7 +807,7 @@ python3 -m unittest tests.unit.test_ocr_worker_blacklist -v
 
     def _collect_blacklist_hits(self, page, page_idx: int, blacklist: list, scan_scale: float) -> list:
         """扫描 image 通道 OCR tokens,命中 blacklist 条目 → 构造 hit."""
-        from privacyguard.ocr.mixed_pdf import collect_embedded_image_clip_rects
+        from secureredact.ocr.mixed_pdf import collect_embedded_image_clip_rects
         from PyQt6.QtCore import QRectF
 
         if not blacklist:
@@ -874,7 +874,7 @@ python3 -m unittest tests.unit.test_ocr_worker_blacklist -v
 - [ ] **Step 5: 提交**
 
 ```bash
-git add privacyguard/workers/ocr_worker.py tests/unit/test_ocr_worker_blacklist.py
+git add secureredact/workers/ocr_worker.py tests/unit/test_ocr_worker_blacklist.py
 git commit -m "feat(ocr): OCRWorker._collect_blacklist_hits + _dedupe_overlapping"
 ```
 
@@ -883,7 +883,7 @@ git commit -m "feat(ocr): OCRWorker._collect_blacklist_hits + _dedupe_overlappin
 ### Task 7: OCRWorker._process_page 整合 whiteList + blackList
 
 **Files:**
-- Modify: `privacyguard/workers/ocr_worker.py:_process_page`
+- Modify: `secureredact/workers/ocr_worker.py:_process_page`
 - Create: `tests/unit/test_ocr_worker_integration.py`
 
 **Interfaces:**
@@ -899,8 +899,8 @@ import unittest
 from unittest.mock import MagicMock, patch
 from PyQt6.QtCore import QRectF
 
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
-from privacyguard.workers.ocr_worker import OCRWorker
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.workers.ocr_worker import OCRWorker
 
 
 class _ProcessPageListTest(unittest.TestCase):
@@ -967,7 +967,7 @@ python3 -m unittest tests.unit.test_ocr_worker_integration -v
 
 - [ ] **Step 3: 写最小集成**
 
-修改 `privacyguard/workers/ocr_worker.py:_process_page`，在 `text_count = len(rects) - image_hit_count` 这行**之前**追加：
+修改 `secureredact/workers/ocr_worker.py:_process_page`，在 `text_count = len(rects) - image_hit_count` 这行**之前**追加：
 ```python
         # v37.9.0: 黑/白名单串联. 先 whitelist 过滤剥掉已有命中, 再 blacklist 注入.
         rects = self._apply_whitelist_filter(rects, page_idx)
@@ -1004,7 +1004,7 @@ python3 -m unittest tests.unit.test_mixed_pdf_ocr -v
 - [ ] **Step 5: 提交**
 
 ```bash
-git add privacyguard/workers/ocr_worker.py tests/unit/test_ocr_worker_integration.py
+git add secureredact/workers/ocr_worker.py tests/unit/test_ocr_worker_integration.py
 git commit -m "feat(ocr): _process_page 串联 whiteList 过滤 + blackList 注入"
 ```
 
@@ -1013,7 +1013,7 @@ git commit -m "feat(ocr): _process_page 串联 whiteList 过滤 + blackList 注�
 ### Task 8: WordWorker 黑/白名单
 
 **Files:**
-- Modify: `privacyguard/workers/word_worker.py`
+- Modify: `secureredact/workers/word_worker.py`
 - Create: `tests/unit/test_word_worker_black_white.py`
 
 **Interfaces:**
@@ -1028,8 +1028,8 @@ git commit -m "feat(ocr): _process_page 串联 whiteList 过滤 + blackList 注�
 """WordWorker 黑/白名单测试."""
 import unittest
 
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
-from privacyguard.workers.word_worker import WordWorker
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.workers.word_worker import WordWorker
 
 
 class _WordFilterTest(unittest.TestCase):
@@ -1102,7 +1102,7 @@ python3 -m unittest tests.unit.test_word_worker_black_white -v
 
 - [ ] **Step 3: 写实现**
 
-在 `privacyguard/workers/word_worker.py` 的 `WordWorker` 类内追加：
+在 `secureredact/workers/word_worker.py` 的 `WordWorker` 类内追加：
 ```python
     def _filter_whitelist(self, hits: list) -> list:
         """剥掉包含白名单子串的 hit. manual 来源豁免."""
@@ -1147,7 +1147,7 @@ python3 -m unittest tests.unit.test_word_worker_black_white -v
 
 并在文件顶部追加：
 ```python
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
 ```
 
 修改 WordWorker 段落处理流程（在每段生成 hits 后、append 到 word_data 之前），追加：
@@ -1172,7 +1172,7 @@ python3 -m unittest tests.unit.test_word_worker_black_white -v
 - [ ] **Step 5: 提交**
 
 ```bash
-git add privacyguard/workers/word_worker.py tests/unit/test_word_worker_black_white.py
+git add secureredact/workers/word_worker.py tests/unit/test_word_worker_black_white.py
 git commit -m "feat(word): WordWorker 黑/白名单串联"
 ```
 
@@ -1181,7 +1181,7 @@ git commit -m "feat(word): WordWorker 黑/白名单串联"
 ### Task 9: SettingsDialog 新增两个 Tab + config 加载/保存
 
 **Files:**
-- Modify: `privacyguard/utils/config.py:DEFAULT_CONFIG`
+- Modify: `secureredact/utils/config.py:DEFAULT_CONFIG`
 - Modify: `main.py:SettingsDialog` (添加 Tab) + `MainWindow.__init__` (bind_config + load_permanent)
 - 不写单测（UI 测试成本高,留作 v37.10 后续）
 
@@ -1196,7 +1196,7 @@ git commit -m "feat(word): WordWorker 黑/白名单串联"
 # -*- coding: utf-8 -*-
 """config.json 加载 blacklist/whitelist 默认值的兜底测试."""
 import unittest
-from privacyguard.utils.config import DEFAULT_CONFIG
+from secureredact.utils.config import DEFAULT_CONFIG
 
 
 class ConfigDefaultsTest(unittest.TestCase):
@@ -1219,7 +1219,7 @@ python3 -m unittest tests.unit.test_black_white_list_config -v
 
 - [ ] **Step 3: 写最小实现**
 
-修改 `privacyguard/utils/config.py:DEFAULT_CONFIG["redaction"]`（在 `custom_keywords` 后追加）：
+修改 `secureredact/utils/config.py:DEFAULT_CONFIG["redaction"]`（在 `custom_keywords` 后追加）：
 ```python
         "custom_keywords": "",
         "blacklist": [],
@@ -1239,7 +1239,7 @@ python3 -m unittest tests.unit.test_black_white_list_config -v
 
 并在文件顶部追加：
 ```python
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
 ```
 
 修改 `main.py:SettingsDialog` 的 Tab 创建逻辑（搜索 `QTabWidget` 或类似），在现有"自定义关键词"Tab 后追加：
@@ -1326,14 +1326,14 @@ def _parse_lines(text: str) -> list:
 
 ```bash
 python3 -m unittest tests.unit.test_black_white_list_config -v
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 ```
 期望：config 测试 PASS；compileall 无错误。
 
 - [ ] **Step 5: 提交**
 
 ```bash
-git add privacyguard/utils/config.py main.py tests/unit/test_black_white_list_config.py
+git add secureredact/utils/config.py main.py tests/unit/test_black_white_list_config.py
 git commit -m "feat(ui): 设置中心新增黑/白名单 Tab"
 ```
 
@@ -1362,7 +1362,7 @@ warnings.filterwarnings("ignore")
 
 from PyQt6.QtCore import QRectF
 
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
 
 
 @unittest.skipUnless(
@@ -1388,8 +1388,8 @@ class RealPDFIntegrationTest(unittest.TestCase):
 
     def _run_ocrworker(self, page_idx, rules=None):
         """跑一遍 OCRWorker._process_page, 返回所有 hits."""
-        from privacyguard.ocr.rapidocr import RapidOCREngine
-        from privacyguard.workers.ocr_worker import OCRWorker
+        from secureredact.ocr.rapidocr import RapidOCREngine
+        from secureredact.workers.ocr_worker import OCRWorker
 
         rules = rules or []
         w = OCRWorker.__new__(OCRWorker)
@@ -1453,7 +1453,7 @@ git commit -m "test(integration): 黑/白名单真实 PDF 端到端"
 - [ ] **Step 1: 跑全量回归**
 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 python3 -m unittest \
   tests.unit.test_hit_ref \
   tests.unit.test_doc_hash \
@@ -1505,7 +1505,7 @@ python3 -m unittest \
 - WordWorker `_filter_whitelist` / `_scan_blacklist_in_text`
 
 ### Changed
-- `privacyguard.utils.config.DEFAULT_CONFIG` 新增 `redaction.blacklist` / `redaction.whitelist` 默认值 `[]`
+- `secureredact.utils.config.DEFAULT_CONFIG` 新增 `redaction.blacklist` / `redaction.whitelist` 默认值 `[]`
 
 ### Fixed
 - 修复 jieba 把「盖章」「吉铁」等非人名词误标为 `nr` 后被脱敏的问题（用户可通过白名单主动豁免）

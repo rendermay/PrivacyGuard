@@ -1,4 +1,4 @@
-# PrivacyGuard Windows 打包指南（目录内索引）
+# SecureRedact Windows 打包指南（目录内索引）
 
 此文档保留在 `packaging/windows/docs/` 仅用于就地导航。
 Windows 打包完整指南统一维护在：
@@ -34,7 +34,7 @@ Windows 打包完整指南统一维护在：
 ### PyInstaller 打包常见问题
 
 1. **模块导入失败**（2026-03-11 修复）
-   - 症状：`ModuleNotFoundError: No module named 'privacyguard.utils.security'`
+   - 症状：`ModuleNotFoundError: No module named 'secureredact.utils.security'`
    - 原因：源代码存在语法错误，导致模块无法被导入
    - 解决：检查打包日志中的 WARNING，修复语法错误
 

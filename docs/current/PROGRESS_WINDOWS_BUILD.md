@@ -7,7 +7,7 @@
 
 ## 问题描述
 
-Windows 打包完成后，运行 `PrivacyGuard.exe` 出现以下错误：
+Windows 打包完成后，运行 `SecureRedact.exe` 出现以下错误：
 
 ```
 ImportError: DLL load failed while importing onnxruntime_pybind11_state:
@@ -23,7 +23,7 @@ ImportError: DLL load failed while importing onnxruntime_pybind11_state:
 
 ## 已完成的修改
 
-### 修改文件: `packaging/windows/config/PrivacyGuard_windows.spec`
+### 修改文件: `packaging/windows/config/SecureRedact_windows.spec`
 
 **1. 添加导入**
 ```python
@@ -60,7 +60,7 @@ datas=[
 
 ### 1. 重新打包
 ```cmd
-cd C:\Users\YourName\Desktop\PrivacyGuardApp
+cd C:\Users\YourName\Desktop\SecureRedactApp
 packaging\windows\scripts\build_complete.bat
 ```
 
@@ -102,9 +102,9 @@ pip install onnxruntime
 
 | 文件 | 路径 |
 |------|------|
-| Spec 文件 | `packaging/windows/config/PrivacyGuard_windows.spec` |
+| Spec 文件 | `packaging/windows/config/SecureRedact_windows.spec` |
 | 构建脚本 | `packaging/windows/scripts/build_complete.bat` |
-| 构建配置 | `packaging/windows/config/PrivacyGuard_windows_v2.spec` |
+| 构建配置 | `packaging/windows/config/SecureRedact_windows_v2.spec` |
 
 ---
 

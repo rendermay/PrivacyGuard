@@ -1,4 +1,4 @@
-# PrivacyGuard 脱敏卫士
+# SecureRedact 信息脱敏助手
 我这个比较懒，不会搞github，多多理解，哪天有空了 再好好研究，先传上去
 可以关注公众号联系：池州汪律的AI进化论 ，或者抖音搜索：池州有个汪律师
 
@@ -46,14 +46,14 @@ https://www.bilibili.com/video/BV1NPDYB4EP1?vd_source=53f4c6f7c7329987c843aa17df
 ## 快速开始
 
 ```bash
-cd /Users/a49144/Desktop/codexhub/PrivacyGuardApp
+cd /Users/a49144/Desktop/codexhub/SecureRedactApp
 python3 main.py
 ```
 
 ### 语法检查
 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 ```
 
 ### 主回归测试
@@ -85,7 +85,7 @@ python3 -m unittest \
 4. 替换后预览融合：规则替换 + 手动脱敏 + 智能脱敏
 5. 运行时整改：
    - 路径校验统一
-   - `privacyguard` OCR 懒导入
+   - `secureredact` OCR 懒导入
    - 文本型 PDF 去重
    - Word 预览局部 DOM 更新
    - 设置持久化与版本来源统一
@@ -93,7 +93,7 @@ python3 -m unittest \
    - 修复首次智能脱敏后右侧“替换后预览”可能整块空白
    - 修复混合型 PDF 中图片 / 扫描区域漏脱敏
    - 修复“高级设置保存后”原文预览异常红色高亮串位
-   - 修复 Windows 打包后 `privacyguard.utils.security` 模块导入失败
+   - 修复 Windows 打包后 `secureredact.utils.security` 模块导入失败
 7. 当前基线同步：
    - 版本号、文档、日志已统一到 `v37.7.4`
    - `packaging/` 与 `docs/packaging/` 当前说明已同步到当前基线
@@ -157,7 +157,7 @@ python3 -m unittest \
 - `restore_checkpoint.sh`
 
 ## releases-打包好的便携包，下载可用
-https://github.com/lizilaywer/PrivacyGuard/releases/tag/v37.7.4
+https://github.com/lizilaywer/SecureRedact/releases/tag/v37.7.4
 
 
 关注与我这边比较不懂又懒的小律师交流吧！

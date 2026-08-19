@@ -16,9 +16,9 @@ class TestOCRWorkerDefaultOff(unittest.TestCase):
     def test_default_off_passes_through(self):
         import time
         # patch QThread.__init__ 为 noop;避免 Qt 实例化副作用
-        with patch("privacyguard.workers.ocr_worker.QThread.__init__",
+        with patch("secureredact.workers.ocr_worker.QThread.__init__",
                    new=lambda self: None):
-            from privacyguard.workers.ocr_worker import OCRWorker
+            from secureredact.workers.ocr_worker import OCRWorker
             start = time.perf_counter()
             OCRWorker(
                 pdf_path=None,
@@ -39,9 +39,9 @@ class TestOCRWorkerDefaultOff(unittest.TestCase):
             f"默认 OFF 初始化耗时 {elapsed*1000:.0f}ms 超过预算 50ms")
 
     def test_default_off_does_not_set_enable_flag(self):
-        with patch("privacyguard.workers.ocr_worker.QThread.__init__",
+        with patch("secureredact.workers.ocr_worker.QThread.__init__",
                    new=lambda self: None):
-            from privacyguard.workers.ocr_worker import OCRWorker
+            from secureredact.workers.ocr_worker import OCRWorker
             worker = OCRWorker(
                 pdf_path=None,
                 rules=[],
@@ -62,9 +62,9 @@ class TestOCRWorkerNameRecognitionOn(unittest.TestCase):
     jieba 调用推迟到每个 page_text 处理时."""
 
     def test_flag_propagates_to_self(self):
-        with patch("privacyguard.workers.ocr_worker.QThread.__init__",
+        with patch("secureredact.workers.ocr_worker.QThread.__init__",
                    new=lambda self: None):
-            from privacyguard.workers.ocr_worker import OCRWorker
+            from secureredact.workers.ocr_worker import OCRWorker
             worker = OCRWorker(
                 pdf_path=None,
                 rules=[],
@@ -86,9 +86,9 @@ class TestWordWorkerDefaultOff(unittest.TestCase):
 
     def test_default_off_passes_through(self):
         import time
-        with patch("privacyguard.workers.word_worker.QThread.__init__",
+        with patch("secureredact.workers.word_worker.QThread.__init__",
                    new=lambda self: None):
-            from privacyguard.workers.word_worker import WordWorker
+            from secureredact.workers.word_worker import WordWorker
             start = time.perf_counter()
             WordWorker(
                 word_doc=None,
@@ -102,9 +102,9 @@ class TestWordWorkerDefaultOff(unittest.TestCase):
             f"WordWorker 默认 OFF 初始化耗时 {elapsed*1000:.0f}ms 超过预算 50ms")
 
     def test_default_off_does_not_set_enable_flag(self):
-        with patch("privacyguard.workers.word_worker.QThread.__init__",
+        with patch("secureredact.workers.word_worker.QThread.__init__",
                    new=lambda self: None):
-            from privacyguard.workers.word_worker import WordWorker
+            from secureredact.workers.word_worker import WordWorker
             worker = WordWorker(
                 word_doc=None,
                 word_data={},
@@ -115,9 +115,9 @@ class TestWordWorkerDefaultOff(unittest.TestCase):
             self.assertFalse(worker.enable_name_recognition)
 
     def test_flag_propagates_to_self(self):
-        with patch("privacyguard.workers.word_worker.QThread.__init__",
+        with patch("secureredact.workers.word_worker.QThread.__init__",
                    new=lambda self: None):
-            from privacyguard.workers.word_worker import WordWorker
+            from secureredact.workers.word_worker import WordWorker
             worker = WordWorker(
                 word_doc=None,
                 word_data={},
@@ -133,7 +133,7 @@ class TestWorkerKeywordDedup(unittest.TestCase):
     """识别的人名与已有 custom_keywords 重复时,识别器内部已去重."""
 
     def test_dedup_in_recognizer(self):
-        from privacyguard.pii.name_recognizer import extract_person_names
+        from secureredact.pii.name_recognizer import extract_person_names
 
         names = extract_person_names("原告：周强，男，汉族。周强已在庭。")
         self.assertEqual(names.count("周强"), 1)

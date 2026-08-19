@@ -16,7 +16,7 @@ class OCRWorkerPayloadTest(unittest.TestCase):
 
     def test_text_pdf_rule_hits_emitted_as_dicts(self):
         """self.rules 命中应以 dict 形式 emit, source='rule'."""
-        from privacyguard.workers.ocr_worker import OCRWorker
+        from secureredact.workers.ocr_worker import OCRWorker
 
         # 模拟 collect_text_pdf_hit_boxes 返回 6-tuple (x, y, w, h, text, rule_name)
         def fake_text_pdf(page, patterns, page_text=None):
@@ -34,11 +34,11 @@ class OCRWorkerPayloadTest(unittest.TestCase):
 
         mock_ocr_engine = MagicMock()
 
-        with patch("privacyguard.workers.ocr_worker.collect_text_pdf_hit_boxes",
+        with patch("secureredact.workers.ocr_worker.collect_text_pdf_hit_boxes",
                   side_effect=fake_text_pdf), \
-            patch("privacyguard.workers.ocr_worker.collect_embedded_image_clip_rects",
+            patch("secureredact.workers.ocr_worker.collect_embedded_image_clip_rects",
                   return_value=[]), \
-            patch("privacyguard.workers.ocr_worker.collect_image_block_ocr_hits",
+            patch("secureredact.workers.ocr_worker.collect_image_block_ocr_hits",
                   return_value=[]):
             worker = OCRWorker(
                 pdf_path="/dev/null",
@@ -79,7 +79,7 @@ class OCRWorkerPayloadTest(unittest.TestCase):
 
     def test_custom_keyword_hits_marked_source_ocr(self):
         """self.custom_keywords 命中应 source='ocr' (与 self.rules 区分)."""
-        from privacyguard.workers.ocr_worker import OCRWorker
+        from secureredact.workers.ocr_worker import OCRWorker
 
         def fake_text_pdf(page, patterns, page_text=None):
             if patterns == ["custom_phone"]:
@@ -95,11 +95,11 @@ class OCRWorkerPayloadTest(unittest.TestCase):
 
         mock_ocr_engine = MagicMock()
 
-        with patch("privacyguard.workers.ocr_worker.collect_text_pdf_hit_boxes",
+        with patch("secureredact.workers.ocr_worker.collect_text_pdf_hit_boxes",
                   side_effect=fake_text_pdf), \
-            patch("privacyguard.workers.ocr_worker.collect_embedded_image_clip_rects",
+            patch("secureredact.workers.ocr_worker.collect_embedded_image_clip_rects",
                   return_value=[]), \
-            patch("privacyguard.workers.ocr_worker.collect_image_block_ocr_hits",
+            patch("secureredact.workers.ocr_worker.collect_image_block_ocr_hits",
                   return_value=[]):
             worker = OCRWorker(
                 pdf_path="/dev/null",
@@ -131,7 +131,7 @@ class OCRWorkerPayloadTest(unittest.TestCase):
 
         这是 Task 3 最重要的 source 标签 — Task 4 用户最常要 ignore 的就是 jieba 误判。
         """
-        from privacyguard.workers.ocr_worker import OCRWorker
+        from secureredact.workers.ocr_worker import OCRWorker
 
         mock_ocr_engine = MagicMock()
         mock_ocr_engine.recognize.return_value = []
@@ -147,13 +147,13 @@ class OCRWorkerPayloadTest(unittest.TestCase):
                 return [(50, 60, 25, 15, "周强", "姓名启发式")]
             return []
 
-        with patch("privacyguard.workers.ocr_worker.collect_text_pdf_hit_boxes",
+        with patch("secureredact.workers.ocr_worker.collect_text_pdf_hit_boxes",
                    side_effect=fake_text_pdf), \
-            patch("privacyguard.workers.ocr_worker.collect_embedded_image_clip_rects",
+            patch("secureredact.workers.ocr_worker.collect_embedded_image_clip_rects",
                   return_value=[]), \
-            patch("privacyguard.workers.ocr_worker.collect_image_block_ocr_hits",
+            patch("secureredact.workers.ocr_worker.collect_image_block_ocr_hits",
                   return_value=[]), \
-            patch("privacyguard.pii.name_recognizer.extract_person_names",
+            patch("secureredact.pii.name_recognizer.extract_person_names",
                   return_value=["周强"]):
             worker = OCRWorker(
                 pdf_path="/dev/null",

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """HitRef 不可变标识与 hit_id 稳定性测试."""
 import unittest
-from privacyguard.redaction.hit_ref import HitRef
+from secureredact.redaction.hit_ref import HitRef
 
 
 class HitRefTest(unittest.TestCase):

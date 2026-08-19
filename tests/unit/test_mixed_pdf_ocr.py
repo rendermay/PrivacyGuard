@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from privacyguard.ocr.mixed_pdf import (
+from secureredact.ocr.mixed_pdf import (
     collect_embedded_image_clip_rects,
     collect_image_block_ocr_hits,
 )

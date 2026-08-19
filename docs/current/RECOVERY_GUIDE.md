@@ -1,4 +1,4 @@
-# PrivacyGuard 项目恢复指南
+# SecureRedact 项目恢复指南
 
 ## 概述
 本指南用于下次打开项目时，快速恢复到当前开发基线，而不是回到历史版本说明。
@@ -10,7 +10,7 @@
 ### 1. 进入项目目录
 
 ```bash
-cd /Users/a49144/Desktop/codexhub/PrivacyGuardApp
+cd /Users/a49144/Desktop/codexhub/SecureRedactApp
 ```
 
 ### 2. 可选：激活虚拟环境
@@ -53,7 +53,7 @@ cat version.txt
 ## 当前项目结构（最小必要）
 
 ```text
-PrivacyGuard/
+SecureRedact/
 ├── main.py
 ├── theme.py
 ├── version.txt
@@ -72,7 +72,7 @@ PrivacyGuard/
 ├── packaging/
 │   ├── windows/
 │   └── macos/
-├── privacyguard/
+├── secureredact/
 ├── tests/
 ├── backups/iteration_checkpoints/
 └── releases/
@@ -104,7 +104,7 @@ PrivacyGuard/
 ## 当前标准验证命令
 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 python3 -m unittest \
   tests.unit.test_mixed_pdf_ocr \
   tests.test_path_validation \

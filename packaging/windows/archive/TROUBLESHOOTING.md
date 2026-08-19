@@ -1,4 +1,4 @@
-# PrivacyGuard Windows 故障排除指南
+# SecureRedact Windows 故障排除指南
 
 ## 常见错误及解决方案
 
@@ -42,7 +42,7 @@ ImportError: DLL load failed while importing onnxruntime_pybind11_state: 动态�
    - 在运行主程序前检查必需的 DLL
    - 如果缺失，显示友好的错误提示
 
-2. **在安装程序中检测 (PrivacyGuard_Setup.iss)**
+2. **在安装程序中检测 (SecureRedact_Setup.iss)**
    - 安装前检查 VC++ Redistributable
    - 如果缺失，提示用户下载
 

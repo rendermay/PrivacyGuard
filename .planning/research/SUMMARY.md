@@ -1,6 +1,6 @@
 # Project Research Summary
 
-**Project:** PrivacyGuard v39.0.0 — Word 脱敏重做
+**Project:** SecureRedact v39.0.0 — Word 脱敏重做
 **Domain:** 桌面端本地 Word 文档隐私信息脱敏（中文法律 / 政务 / 商务场景）；brownfield Python + PyQt6 桌面应用
 **Researched:** 2026-08-19
 **Confidence:** HIGH（基于源码实测 + Context7 官方文档 + 已落地的 162 项回归基线 + v37-v38 Validated 能力）
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-PrivacyGuard v39.0.0 的核心不是「加新 Feature」，而是把 v37-v38 散落在 `main.py` 13k 行单体内的 Word 脱敏能力**结构性重构**：抽出到 `privacyguard/word/*` 子包、补齐结构覆盖（页眉/页脚/批注/脚注/尾注/嵌入图 OCR）、重做姓名/地址词权重的精度与上下文判定、并严格保留 v37.8.0 的人工干预 + v38.0.1 的白名单片段级豁免语义基线。
+SecureRedact v39.0.0 的核心不是「加新 Feature」，而是把 v37-v38 散落在 `main.py` 13k 行单体内的 Word 脱敏能力**结构性重构**：抽出到 `secureredact/word/*` 子包、补齐结构覆盖（页眉/页脚/批注/脚注/尾注/嵌入图 OCR）、重做姓名/地址词权重的精度与上下文判定、并严格保留 v37.8.0 的人工干预 + v38.0.1 的白名单片段级豁免语义基线。
 
 v39 显式**不引入新 binary 依赖**——栈与 v38 完全一致（python-docx 1.2.0 + lxml 6.1.1 + mammoth 1.11.0 + jieba 0.42.1 + rapidocr-onnxruntime 1.4.4 + difflib stdlib）；LLM / 本地大模型 / 云端协同 / AI 自动替换**显式排除**，架构层仅留接口位（`LlmBackend` Protocol）。spaCy-zh / HanLP / PaddleNLP 因模型体积 + torch / paddlepaddle 依赖 + 与 onnxruntime 偶发冲突而拒绝。
 
@@ -27,7 +27,7 @@ v39 走「重构 + 工程调优」路线，依赖矩阵零变化。
 - **python-docx 1.2.0**（2025-06-16）— Word 结构遍历；v1.2.0 新增 `document.comments` 原生 API；覆盖 ~95% 元素
 - **lxml 6.1.1**（实装 / requirements.txt 6.0.2）— 补 python-docx 缺位的 footnotes/endnotes；走 `doc.part.rels`
 - **mammoth 1.11.0**— DOCX→HTML 预览 + `extract_raw_text` 兜底；**仅 view 层，不作结构真值源**
-- **jieba 0.42.1 + 自定义词典**（`privacyguard/pii/name_recognizer.py`）— v39 改为「降级为候选 → 多层打分」
+- **jieba 0.42.1 + 自定义词典**（`secureredact/pii/name_recognizer.py`）— v39 改为「降级为候选 → 多层打分」
 - **rapidocr-onnxruntime 1.4.4**— Word 嵌入图 OCR 复用 PDF 端 `mixed_pdf.py` 路径
 - **difflib（stdlib）**— 段落级脱敏前后 diff
 
@@ -47,9 +47,9 @@ v39 共 **15 个 P1 必达项 + 6 个 P2 增量 + 3 个 P3 拒绝**：
 
 ### Architecture Approach
 
-**Strangler 抽取模式** — 不一次性替换 main.py，按依赖图逐步抽到 `privacyguard/word/*` 子包（10 个模块），main.py 始终可运行；目标：13275 行 → < 10000 行。
+**Strangler 抽取模式** — 不一次性替换 main.py，按依赖图逐步抽到 `secureredact/word/*` 子包（10 个模块），main.py 始终可运行；目标：13275 行 → < 10000 行。
 
-**目标模块边界（`privacyguard/word/*`）：**
+**目标模块边界（`secureredact/word/*`）：**
 1. `contracts.py` — `HitDict` TypedDict / `WordLocation` dataclass / `WordDocSnapshot` dataclass / `HitSource` Literal
 2. `doc_scanner.py` — DOCX 结构读取（paragraph / table / header / footer / comment / footnote / endnote / image_block）
 3. `rule_engine.py` — 规则 + jieba + blacklist 注入 + whitelist trim
@@ -121,7 +121,7 @@ Pitfall 强制约束：Phase 1 冻结 ABI + baseline；Phase 2 先建 source map
 |------|------------|-------|
 | **Stack** | **HIGH** | requirements.txt 已固定版本 + Context7 官方 + 本地 pip list 实测；零新依赖有完整备选对比 |
 | **Features** | **HIGH** | PROJECT.md + 真实样本（`pdf/抵账协议0522.docx----刘骁毅原版.docx` 32 KB 含表格甲方/乙方/身份证/银行账号/地址）+ 162 项回归基线 + v37-v38 决策 |
-| **Architecture** | **HIGH** | main.py 13275 行 + `privacyguard/workers/word_worker.py` 254 行 + 162 项基线 + 已落地 `redaction/`；依赖图清晰 |
+| **Architecture** | **HIGH** | main.py 13275 行 + `secureredact/workers/word_worker.py` 254 行 + 162 项基线 + 已落地 `redaction/`；依赖图清晰 |
 | **Pitfalls** | **MEDIUM** | python-docx / Mammoth / jieba 官方 issue tracker + 项目源码为主；**中文姓名 / 地址边界策略仍需真实样本验证** |
 
 **Overall confidence：** **HIGH**。Phase 5/6/7 的研究 flag 已标。
@@ -149,9 +149,9 @@ Pitfall 强制约束：Phase 1 冻结 ABI + baseline；Phase 2 先建 source map
 - Unicode Blocks 数据（CJK + Extension A/B/supplementary-plane）
 
 ### Project-local（HIGH — 直接源码）
-- `main.py`（13275 行）+ `privacyguard/workers/word_worker.py`（254 行）+ `ocr_worker.py`（1006 行）
-- `privacyguard/redaction/{hit_ref, override_store, black_white_list_store, whitelist_split, doc_hash}.py`
-- `privacyguard/ocr/{text_pdf, mixed_pdf}.py`（PDF-only）+ `pii/name_recognizer.py`
+- `main.py`（13275 行）+ `secureredact/workers/word_worker.py`（254 行）+ `ocr_worker.py`（1006 行）
+- `secureredact/redaction/{hit_ref, override_store, black_white_list_store, whitelist_split, doc_hash}.py`
+- `secureredact/ocr/{text_pdf, mixed_pdf}.py`（PDF-only）+ `pii/name_recognizer.py`
 - `requirements.txt` + 本地 `pip list`（实测：python-docx 1.2.0 / jieba 0.42.1 / lxml 6.1.1 / onnxruntime 1.28.0 / rapidocr-onnxruntime 1.4.4）
 - `tests/unit/{test_word_source_field, test_bridge_override_slots, test_override_store, test_convergence, test_batch_word_replace, test_whitelist_split, test_whitelist_trim_only, test_whitelist_trim_only_config, test_name_recognizer, test_worker_name_recognition}.py`
 

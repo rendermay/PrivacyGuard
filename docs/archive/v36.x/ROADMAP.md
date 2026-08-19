@@ -1,6 +1,6 @@
-# PrivacyGuard 开发路线图
+# SecureRedact 开发路线图
 
-本文档规划 PrivacyGuard 的长期开发路线和版本计划。
+本文档规划 SecureRedact 的长期开发路线和版本计划。
 
 ---
 

@@ -25,13 +25,13 @@ import re
 
 logger = logging.getLogger(__name__)
 
-from privacyguard.ocr.mixed_pdf import (
+from secureredact.ocr.mixed_pdf import (
     collect_embedded_image_clip_rects,
     collect_image_block_ocr_hits,
 )
-from privacyguard.ocr.text_pdf import collect_text_pdf_hit_boxes
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
-from privacyguard.redaction.whitelist_split import _split_text_by_whitelist
+from secureredact.ocr.text_pdf import collect_text_pdf_hit_boxes
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.redaction.whitelist_split import _split_text_by_whitelist
 
 # 常量定义
 PROGRESS_UPDATE_INTERVAL = 0.05
@@ -597,7 +597,7 @@ class OCRWorker(QThread):
         │ blacklist 命中会被白名单先剥掉.                                     │
         └────────────────────────────────────────────────────────────────────┘
         """
-        from privacyguard.ocr.mixed_pdf import collect_embedded_image_clip_rects
+        from secureredact.ocr.mixed_pdf import collect_embedded_image_clip_rects
         from PyQt6.QtCore import QRectF
 
         if not blacklist:
@@ -790,7 +790,7 @@ class OCRWorker(QThread):
 
             if jieba_source_text:
                 try:
-                    from privacyguard.pii.name_recognizer import (
+                    from secureredact.pii.name_recognizer import (
                         extract_person_names,
                     )
                     _names = extract_person_names(jieba_source_text)
@@ -948,7 +948,7 @@ class OCRWorker(QThread):
         doc = None
         try:
             # v37.4.0: 直接使用 RapidOCR
-            from privacyguard.ocr.rapidocr import RapidOCREngine
+            from secureredact.ocr.rapidocr import RapidOCREngine
             ocr_engine = RapidOCREngine()
 
             if not ocr_engine.is_available():

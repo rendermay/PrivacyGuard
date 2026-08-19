@@ -1,4 +1,4 @@
-# PrivacyGuard v37.0 Release Summary
+# SecureRedact v37.0 Release Summary
 
 ## 📦 Release Information
 
@@ -13,7 +13,7 @@
 
 ### Configuration System (Major Feature)
 
-PrivacyGuard now supports a JSON-based configuration system that allows users to customize application behavior without modifying code.
+SecureRedact now supports a JSON-based configuration system that allows users to customize application behavior without modifying code.
 
 #### Key Features:
 - **ConfigManager Singleton**: Thread-safe configuration management with RLock protection
@@ -36,7 +36,7 @@ PrivacyGuard now supports a JSON-based configuration system that allows users to
 
 ### New Files (11)
 ```
-privacyguard/
+secureredact/
 ├── __init__.py                    # Package exports
 ├── core/__init__.py               # Core module (placeholder)
 ├── ui/__init__.py                 # UI module (placeholder)
@@ -62,12 +62,12 @@ main.py                            # Integrated configuration system
 version.txt                        # 37.0
 
 packaging/macos/
-├── config/PrivacyGuard.spec       # Added privacyguard package
+├── config/SecureRedact.spec       # Added secureredact package
 └── scripts/build_macos_app.sh     # Version update
 
 packaging/windows/
-├── config/PrivacyGuard_windows.spec    # Added privacyguard package
-├── config/PrivacyGuard_Setup.iss       # Version 37.0
+├── config/SecureRedact_windows.spec    # Added secureredact package
+├── config/SecureRedact_Setup.iss       # Version 37.0
 ├── config/version_info.txt             # Version 37.0
 └── scripts/README.txt             # Version update
 
@@ -111,7 +111,7 @@ README.md                          # Added configuration system documentation
 
 ### macOS
 ```
-releases/macos/PrivacyGuard-37.0-macOS.dmg (310MB)
+releases/macos/SecureRedact-37.0-macOS.dmg (310MB)
 SHA256: e221f6613756993379d11cfa8514bc1e1d744ce5ceb008443831275b78f0cb8c
 ```
 
@@ -132,7 +132,7 @@ scripts:
 {
   "version": "1.0",
   "app": {
-    "name": "PrivacyGuard 脱敏卫士",
+    "name": "SecureRedact 信息脱敏助手",
     "window": {
       "default_width": 1300,
       "default_height": 900,
@@ -160,7 +160,7 @@ scripts:
 ## 🔧 API Usage
 
 ```python
-from privacyguard.utils import ConfigManager
+from secureredact.utils import ConfigManager
 
 # Get singleton instance
 config = ConfigManager()
@@ -187,7 +187,7 @@ config.reload()
 
 ### For Developers
 - All hardcoded constants still work as fallback
-- Import `ConfigManager` from `privacyguard.utils`
+- Import `ConfigManager` from `secureredact.utils`
 - Use `config.get(path, default)` for safe access
 
 ---
@@ -197,7 +197,7 @@ config.reload()
 ```
 backups/v37.0_config_system_20260217_233617/
 ├── main.py
-├── privacyguard/
+├── secureredact/
 ├── config.json
 └── config.json.template
 ```

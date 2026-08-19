@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from main import SimpleConfig, read_app_version
-from privacyguard.utils.config import ConfigManager, DEFAULT_CONFIG
+from secureredact.utils.config import ConfigManager, DEFAULT_CONFIG
 
 
 class TestAppConfig(unittest.TestCase):

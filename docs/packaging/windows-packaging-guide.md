@@ -1,4 +1,4 @@
-# PrivacyGuard Windows 打包指南
+# SecureRedact Windows 打包指南
 
 > 当前 active Windows 打包流程说明。本文档以 `packaging/windows/` 下现有脚本和配置为准。
 
@@ -17,28 +17,28 @@
 ### 便携包
 
 ```cmd
-cd C:\Users\YourName\Desktop\PrivacyGuardApp
+cd C:\Users\YourName\Desktop\SecureRedactApp
 packaging\windows\scripts\build_complete.bat
 ```
 
 输出：
 
-- `releases\windows\PrivacyGuard-v<version>-Windows-Portable.zip`
-- `releases\windows\PrivacyGuard-v<version>-Windows-Portable.zip.sha256`
+- `releases\windows\SecureRedact-v<version>-Windows-Portable.zip`
+- `releases\windows\SecureRedact-v<version>-Windows-Portable.zip.sha256`
 
 这是当前 **便携版正式发布入口**。
 
 ### 安装包
 
 ```cmd
-cd C:\Users\YourName\Desktop\PrivacyGuardApp
+cd C:\Users\YourName\Desktop\SecureRedactApp
 packaging\windows\scripts\3_build_with_setup.bat
 ```
 
 输出：
 
-- `releases\windows\PrivacyGuard-<version>-Setup.exe`
-- `releases\windows\PrivacyGuard-<version>-Setup.exe.sha256`
+- `releases\windows\SecureRedact-<version>-Setup.exe`
+- `releases\windows\SecureRedact-<version>-Setup.exe.sha256`
 
 这是当前 **安装版正式发布入口**。
 
@@ -78,7 +78,7 @@ packaging\windows\scripts\1_init_environment.bat
 ## 版本来源与版本资源
 
 - `version.txt` 是唯一版本源
-- 安装包版本通过 `/DMyAppVersion=<version>` 注入 `PrivacyGuard_Setup.iss`
+- 安装包版本通过 `/DMyAppVersion=<version>` 注入 `SecureRedact_Setup.iss`
 - EXE 版本资源由 `packaging/windows/scripts/generate_version_info.py` 自动生成到：
 
 ```text
@@ -88,10 +88,10 @@ packaging/windows/config/version_info.txt
 当前 `v37.7.4` 同步内容：
 
 - `version_info.txt` 版本资源：`37.7.4.0`
-- `PrivacyGuard_windows.spec` 补齐 `privacyguard` 相关 hiddenimports
-- 新增 `hook-privacyguard.py` 与 `runtime_hook_privacyguard.py`
+- `SecureRedact_windows.spec` 补齐 `secureredact` 相关 hiddenimports
+- 新增 `hook-secureredact.py` 与 `runtime_hook_secureredact.py`
 - 安装器构建仍通过 `/DMyAppVersion=<version>` 从 `version.txt` 注入版本号
-- `PrivacyGuard_Setup.iss` 默认回退版本已同步到 `37.7.4`
+- `SecureRedact_Setup.iss` 默认回退版本已同步到 `37.7.4`
 
 ## 当前打包执行约定
 
@@ -118,8 +118,8 @@ build\.pyinstaller-cache
 1. 运行 `1_init_environment.bat`
 2. 运行 `build_complete.bat`
 3. 校验以下文件是否存在：
-   - `releases/windows/PrivacyGuard-v<version>-Windows-Portable.zip`
-   - `releases/windows/PrivacyGuard-v<version>-Windows-Portable.zip.sha256`
+   - `releases/windows/SecureRedact-v<version>-Windows-Portable.zip`
+   - `releases/windows/SecureRedact-v<version>-Windows-Portable.zip.sha256`
 4. 解压后优先使用 `launcher_wrapper.bat` 启动一次
 
 ### 发布安装包
@@ -127,8 +127,8 @@ build\.pyinstaller-cache
 1. 安装 Inno Setup 6
 2. 运行 `3_build_with_setup.bat`
 3. 校验以下文件是否存在：
-   - `releases/windows/PrivacyGuard-<version>-Setup.exe`
-   - `releases/windows/PrivacyGuard-<version>-Setup.exe.sha256`
+   - `releases/windows/SecureRedact-<version>-Setup.exe`
+   - `releases/windows/SecureRedact-<version>-Setup.exe.sha256`
 
 ---
 
@@ -136,15 +136,15 @@ build\.pyinstaller-cache
 
 ### PyInstaller spec
 
-- 标准 spec：`packaging/windows/config/PrivacyGuard_windows.spec`
-- 历史增强 spec：`packaging/windows/config/PrivacyGuard_windows_v2.spec`（保留归档，不作为当前正式主链）
+- 标准 spec：`packaging/windows/config/SecureRedact_windows.spec`
+- 历史增强 spec：`packaging/windows/config/SecureRedact_windows_v2.spec`（保留归档，不作为当前正式主链）
 
 ### Inno Setup
 
 配置文件：
 
 ```text
-packaging/windows/config/PrivacyGuard_Setup.iss
+packaging/windows/config/SecureRedact_Setup.iss
 ```
 
 当前安装器策略：
@@ -182,7 +182,7 @@ packaging/windows/config/PrivacyGuard_Setup.iss
 - `generate_version_info.py` 已成功执行
 - `build_complete.bat` 或 `3_build_with_setup.bat` 已成功执行
 - 产物和 `.sha256` 已生成
-- 解压或安装后能成功启动 `PrivacyGuard`
+- 解压或安装后能成功启动 `SecureRedact`
 - PDF / Word / OCR 基本流程至少手测一次
 
 最后更新：2026-03-18

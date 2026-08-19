@@ -1,4 +1,4 @@
-# Requirements: PrivacyGuard v39.0.0 — Word 脱敏重做
+# Requirements: SecureRedact v39.0.0 — Word 脱敏重做
 
 **Defined:** 2026-08-19
 **Core Value:** 用户能在不联网的前提下，对一份 Word 或 PDF 文档**准确、可预览、可追溯**地完成敏感信息脱敏。
@@ -9,7 +9,7 @@ v39.0.0 必达范围。共 5 类 / 17 项 + 1 项硬约束。每项映射到 ROA
 
 ### 架构（ARCH）
 
-- [ ] **ARCH-01**: 把 WordWorker / 规则 / 命中 / 预览从 `main.py` 抽出到 `privacyguard/word/*` 子包（contracts / doc_scanner / rule_engine / hit_collector / preview_bridge / batch_replacer / save_writer / web_bridge 共 8 个模块），`main.py` 仅留胶水 + 兼容层
+- [ ] **ARCH-01**: 把 WordWorker / 规则 / 命中 / 预览从 `main.py` 抽出到 `secureredact/word/*` 子包（contracts / doc_scanner / rule_engine / hit_collector / preview_bridge / batch_replacer / save_writer / web_bridge 共 8 个模块），`main.py` 仅留胶水 + 兼容层
 - [ ] **ARCH-02**: 规则 / 命中 / 预览三层走明确接口契约；预览与保存共用 `merge_priority` 与 `merged_hits_by_key` 单一数据结构；调一处不破另一处
 - [ ] **ARCH-03**: 与 PDF 端共用部分（HitRef / HitOverrideStore / BlackWhiteListStore / whitelist_split / doc_hash / name_recognizer）划清复用边界并产出 `docs/word/REUSE_BOUNDARY.md`（**只读不动**——见 CONST-01）
 - [ ] **ARCH-04**: 统一 `source / start / end / rect / text / replacement / mode / rule_name / pattern / doc_hash / location` 字段命名，产出 `docs/word/FIELD_MAPPING.md` 双签表（OCR / Word / Preview 三视角）
@@ -36,7 +36,7 @@ v39.0.0 必达范围。共 5 类 / 17 项 + 1 项硬约束。每项映射到 ROA
 
 ### 硬约束（CONST）
 
-- [ ] **CONST-01**: v39 期间**不修改** `privacyguard/ocr/*`（PDF-only 模块：text_pdf / mixed_pdf）+ `privacyguard/workers/ocr_worker.py`（PDF OCR worker）+ `OCRWorker.page_result_signal` payload；PDF 端任何代码改动都视为 v39 引入的回归需立即修复。ARCH-03 仅产出"只读"边界文档，**不重构** PDF 侧
+- [ ] **CONST-01**: v39 期间**不修改** `secureredact/ocr/*`（PDF-only 模块：text_pdf / mixed_pdf）+ `secureredact/workers/ocr_worker.py`（PDF OCR worker）+ `OCRWorker.page_result_signal` payload；PDF 端任何代码改动都视为 v39 引入的回归需立即修复。ARCH-03 仅产出"只读"边界文档，**不重构** PDF 侧
 
 ## v2 Requirements
 
@@ -73,7 +73,7 @@ Deferred to future release (v39.0.x / v39.1+)。Tracked but not in current v39.0
 | UI 视觉重做 / 新交互 | 当前 UI 已稳定；v39 不动视觉（结构性 UI 调整允许） |
 | 打包 / Windows / macOS 构建链路改动 | v37-v38 打包链路已稳定；不在 v39 范围 |
 | **PDF 端脱敏代码改动** | **用户硬约束（CONST-01）+ 风险敞口过大**；v39 仅读 PDF 源不修改 |
-| DOC → DOCX 转换逻辑改动 | 已收敛到 `privacyguard/utils/doc_converter.py`，v39 不动 |
+| DOC → DOCX 转换逻辑改动 | 已收敛到 `secureredact/utils/doc_converter.py`，v39 不动 |
 | Word 嵌入图 OCR 之外的图像 OCR（如 floating image / OLE / chart） | 降级策略复杂；Phase 6 spike 后再评估 |
 
 ## Traceability
@@ -82,7 +82,7 @@ Deferred to future release (v39.0.x / v39.1+)。Tracked but not in current v39.0
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ARCH-01（WordWorker/规则/命中/预览抽取到 privacyguard/word/*） | Phase 3, Phase 7（集成收尾） | Pending |
+| ARCH-01（WordWorker/规则/命中/预览抽取到 secureredact/word/*） | Phase 3, Phase 7（集成收尾） | Pending |
 | ARCH-02（规则/命中/预览三层接口契约 + 单一数据结构） | Phase 1（契约初稿）, Phase 2（实现）, Phase 3（落地） | Pending |
 | ARCH-03（PDF/Word 复用边界文档 — 只读不动） | Phase 7（`REUSE_BOUNDARY.md`） | Pending |
 | ARCH-04（字段命名统一 + FIELD_MAPPING.md 双签） | Phase 1（初版）, Phase 2（增量）, Phase 6（Preview）, Phase 7（闭环） | Pending |

@@ -1,6 +1,6 @@
-# PrivacyGuard 脱敏卫士 - 更新日志
+# SecureRedact 信息脱敏助手 - 更新日志
 
-本文档记录了 PrivacyGuard 脱敏卫士的所有重要更新。
+本文档记录了 SecureRedact 信息脱敏助手的所有重要更新。
 
 ---
 
@@ -10,7 +10,7 @@
 - **白名单片段级豁免**：白名单条目仅豁免自身所在片段，同 hit 区间内的其他敏感内容仍然脱敏。
   - 例：「法定代表人：周超」+ 白名单「法定代表人」→ 「法定代表人」不脱敏，「周超」仍然脱敏。
 - 新增开关 `redaction.whitelist_trim_only`（默认 `true`）。设为 `false` 回退到 v37.9.0 「子串命中即整条剥掉」行为。
-- 新增模块 `privacyguard/redaction/whitelist_split.py` 与静态工具 `OCRWorker._sub_rect_for_text_span`（CJK 字符权重比例估算）。
+- 新增模块 `secureredact/redaction/whitelist_split.py` 与静态工具 `OCRWorker._sub_rect_for_text_span`（CJK 字符权重比例估算）。
 
 ### 影响范围
 - Word 段落 / 表格 matches（rule / jieba / blacklist）
@@ -51,7 +51,7 @@
 - WordWorker `_filter_whitelist` / `_scan_blacklist_in_text`
 
 ### Changed
-- `privacyguard.utils.config.DEFAULT_CONFIG` 新增 `redaction.blacklist` / `redaction.whitelist` 默认值 `[]`
+- `secureredact.utils.config.DEFAULT_CONFIG` 新增 `redaction.blacklist` / `redaction.whitelist` 默认值 `[]`
 
 ### Fixed
 - 修复 jieba 把「盖章」「吉铁」等非人名词误标为 `nr` 后被脱敏的问题（用户可通过白名单主动豁免）
@@ -72,8 +72,8 @@
 ### 新增
 
 - 自动脱敏命中的人工干预通道：右键忽略/确认 + 专用 dock 面板
-- `HitOverrideStore` 单例（`privacyguard/redaction/override_store.py`），会话级 + 永久级双层 override
-- `HitRef` 不可变标识（`privacyguard/redaction/hit_ref.py`）与 `compute_doc_hash` 8 位文档标识（`privacyguard/redaction/doc_hash.py`）
+- `HitOverrideStore` 单例（`secureredact/redaction/override_store.py`），会话级 + 永久级双层 override
+- `HitRef` 不可变标识（`secureredact/redaction/hit_ref.py`）与 `compute_doc_hash` 8 位文档标识（`secureredact/redaction/doc_hash.py`）
 - `config.json` 新增 `redaction.enable_hit_override`（默认 `true`）与 `redaction.overrides.permanent`
 - 设置中心「清理失效 overrides」按钮（`clean_stale_permanent`，默认 30 天过期）
 - PDF 画布右键菜单：忽略 / 确认 / 撤销 / 提升为永久
@@ -103,7 +103,7 @@
 
 #### 新增模块
 
-- **`privacyguard/pii/name_recognizer.py`** — `ChineseNameRecognizer` 单例 + 便捷函数 `extract_person_names(text)`
+- **`secureredact/pii/name_recognizer.py`** — `ChineseNameRecognizer` 单例 + 便捷函数 `extract_person_names(text)`
   - jieba 0.42.1 词性标注（`nr`/`nrfg`/...）+ 姓氏表准入 + 黑名单过滤
   - 默认懒加载，jieba 不可用时静默回退到空列表
   - 线程安全，识别结果去重保序
@@ -124,7 +124,7 @@
 
 - SettingsDialog 新增 `cb_name_recognition` checkbox，默认未勾选
 - 持久化键 `redaction.enable_name_recognition`，首次启动默认为 False
-- `PrivacyGuard_verify.spec`：`collect_data_files('jieba')` + hiddenimports `['jieba', 'jieba.posseg', 'jieba._compat']`
+- `SecureRedact_verify.spec`：`collect_data_files('jieba')` + hiddenimports `['jieba', 'jieba.posseg', 'jieba._compat']`
 - `requirements.txt`：`jieba==0.42.1`
 
 #### 测试
@@ -152,16 +152,16 @@
 
 #### Worker 层收敛
 
-- **OCRWorker**：将 main.py 中 ~500 行内联实现替换为继承自 `privacyguard.workers.ocr_worker.OCRWorker` 的 14 行兼容层
+- **OCRWorker**：将 main.py 中 ~500 行内联实现替换为继承自 `secureredact.workers.ocr_worker.OCRWorker` 的 14 行兼容层
   - 模块版已全面上行高级特性：印章检测、像素级文本边界检测、CJK 智能字符权重、检测框收缩、error_signal、box_adjust_ratio
   - 坐标转换逻辑统一（在 calculate_sub_rect 内除以 scan_scale，clip_to_page_rect_fn 直接加偏移）
-- **WordWorker**：将 main.py 中 ~118 行内联实现替换为继承自 `privacyguard.workers.word_worker.WordWorker` 的 7 行兼容层
+- **WordWorker**：将 main.py 中 ~118 行内联实现替换为继承自 `secureredact.workers.word_worker.WordWorker` 的 7 行兼容层
   - 自动注入 `DEFAULT_RULES` 到 `default_rules` 参数
-- **ImageMergeWorker**：将 main.py 中 ~50 行完全相同的内联实现替换为从 `privacyguard.workers.image_merge` 导入
+- **ImageMergeWorker**：将 main.py 中 ~50 行完全相同的内联实现替换为从 `secureredact.workers.image_merge` 导入
 
 #### DOC 转换逻辑提取
 
-- 新增 `privacyguard/utils/doc_converter.py`：共享 DOC→DOCX 转换模块
+- 新增 `secureredact/utils/doc_converter.py`：共享 DOC→DOCX 转换模块
   - `convert_doc_to_docx()`: 自动尝试 LibreOffice → antiword
   - `convert_with_libreoffice()`: 跨平台 LibreOffice 调用（含安全验证、重试）
   - `convert_with_antiword()`: antiword 回退路径
@@ -172,7 +172,7 @@
 #### 版本回退值对齐
 
 - 修复 `main.py` 的 `read_app_version()` 回退值：`"37.7.4"` → `"37.7.5"`
-- 修复 `privacyguard/__init__.py` 的 `_read_version()` 回退值：`"37.7.0"` → `"37.7.5"`
+- 修复 `secureredact/__init__.py` 的 `_read_version()` 回退值：`"37.7.0"` → `"37.7.5"`
 - 两处回退值现已统一
 
 #### 代码量变化
@@ -191,7 +191,7 @@
 
 ### ✅ 验证
 
-- `python3 -m compileall -q main.py privacyguard tests`
+- `python3 -m compileall -q main.py secureredact tests`
 - 全量回归：`69/69` 通过
 
 ---
@@ -209,10 +209,10 @@
 
 #### 代码去重
 
-- 删除 main.py 中与 `privacyguard/utils/` 重复的 3 个实现
-  - `PrivacyAppError` + 子类（5 个异常类）→ 改为从 `privacyguard.utils.exceptions` 导入
-  - `TempFileManager` → 改为从 `privacyguard.utils.temp_manager` 导入
-  - `resource_path()` → 改为从 `privacyguard.utils.security` 导入
+- 删除 main.py 中与 `secureredact/utils/` 重复的 3 个实现
+  - `PrivacyAppError` + 子类（5 个异常类）→ 改为从 `secureredact.utils.exceptions` 导入
+  - `TempFileManager` → 改为从 `secureredact.utils.temp_manager` 导入
+  - `resource_path()` → 改为从 `secureredact.utils.security` 导入
 - main.py 净减少约 156 行重复代码
 - `SecurityError` 异常类随模块化导入自动补全
 
@@ -226,7 +226,7 @@
 
 ### ✅ 验证
 
-- `python3 -m compileall -q main.py privacyguard tests`
+- `python3 -m compileall -q main.py secureredact tests`
 - 全量回归：`59/59` 通过
 
 ---
@@ -262,7 +262,7 @@
 
 ### ✅ 验证
 
-- `python3 -m compileall -q main.py privacyguard tests packaging`
+- `python3 -m compileall -q main.py secureredact tests packaging`
 - 主回归：`52/52` 通过
 - `python3 packaging/windows/scripts/generate_version_info.py`
 
@@ -275,20 +275,20 @@
 #### PyInstaller 打包模块导入失败修复
 
 **问题现象**：
-- Windows 打包完成后，打开应用出现错误弹窗：`ModuleNotFoundError: No module named 'privacyguard.utils.security'`
+- Windows 打包完成后，打开应用出现错误弹窗：`ModuleNotFoundError: No module named 'secureredact.utils.security'`
 
 **根因**：
-- `privacyguard/utils/security.py` 第 56 行存在 f-string 语法错误
+- `secureredact/utils/security.py` 第 56 行存在 f-string 语法错误
 - Python 3.11 不允许在 f-string 的 `{}` 表达式中直接使用反斜杠
 - 语法错误导致模块无法被导入，PyInstaller 的 `collect_submodules()` 返回空列表
 
 **修复内容**：
-- 修复 `privacyguard/utils/security.py` 中的 f-string 语法错误
+- 修复 `secureredact/utils/security.py` 中的 f-string 语法错误
 - 将反斜杠先赋值给变量，再在 f-string 中使用
-- 将 `privacyguard/__init__.py`、`privacyguard/utils/__init__.py`、`privacyguard/ocr/__init__.py` 中的相对导入改为绝对导入
-- 优化 `packaging/windows/config/PrivacyGuard_windows.spec` 中的 hiddenimports 配置
-- 添加 `packaging/windows/config/hook-privacyguard.py` hook 文件
-- 添加 `packaging/windows/config/runtime_hook_privacyguard.py` 运行时 hook
+- 将 `secureredact/__init__.py`、`secureredact/utils/__init__.py`、`secureredact/ocr/__init__.py` 中的相对导入改为绝对导入
+- 优化 `packaging/windows/config/SecureRedact_windows.spec` 中的 hiddenimports 配置
+- 添加 `packaging/windows/config/hook-secureredact.py` hook 文件
+- 添加 `packaging/windows/config/runtime_hook_secureredact.py` 运行时 hook
 
 **经验教训**：
 - 仔细阅读打包日志，不要忽略任何 WARNING
@@ -314,7 +314,7 @@
 
 ### ✅ 测试
 - `python3 packaging/windows/scripts/generate_version_info.py`：通过
-- `python3 -m compileall -q main.py privacyguard tests`：通过
+- `python3 -m compileall -q main.py secureredact tests`：通过
 - 主回归：`28/28` 通过
 
 ---
@@ -335,17 +335,17 @@
   - 文本层命中
   - 图片块 OCR 命中
   - 无文本层时回退整页 OCR
-- **共享图片块逻辑**：新增 `privacyguard/ocr/mixed_pdf.py`，统一图片块提取、裁剪渲染、OCR 命中与坐标偏移。
-- **双实现同步**：`main.py` 与 `privacyguard/workers/ocr_worker.py` 同步接入，避免主链和模块化 worker 再次漂移。
+- **共享图片块逻辑**：新增 `secureredact/ocr/mixed_pdf.py`，统一图片块提取、裁剪渲染、OCR 命中与坐标偏移。
+- **双实现同步**：`main.py` 与 `secureredact/workers/ocr_worker.py` 同步接入，避免主链和模块化 worker 再次漂移。
 
 ### 🔒 运行时安全与导入稳定性整改
 - **路径校验统一**：`main.py` 不再保留旧版前缀判断，统一使用共享安全实现。
-- **包级懒导入**：`privacyguard` 与 `privacyguard.workers` 改为懒导入，避免 `import privacyguard` 时因 OCR 依赖缺失直接崩溃。
+- **包级懒导入**：`secureredact` 与 `secureredact.workers` 改为懒导入，避免 `import secureredact` 时因 OCR 依赖缺失直接崩溃。
 - **OCR worker 延迟初始化**：RapidOCR 改为在真正执行 OCR 时初始化。
 
 ### ⚡ 文本型 PDF 与 Word 预览性能整改
 - **文本 PDF 去重**：重复命中的同一字符串只搜索一次，避免重复追加相同矩形。
-- **共享文本页实现**：新增 `privacyguard/ocr/text_pdf.py`，主程序与模块化 worker 共用。
+- **共享文本页实现**：新增 `secureredact/ocr/text_pdf.py`，主程序与模块化 worker 共用。
 - **Word 预览局部更新**：左右预览改为按 `data-key` 局部刷新，不再依赖整页重绘作为活动路径。
 - **原文高亮改造**：左侧高亮改为分块构建，降低重复文本串位风险。
 - **compare 空白热修复**：修复右侧“替换后预览”从空白页首次切入 compare 模式时不加载文档、导致整块空白的问题。
@@ -359,7 +359,7 @@
 - 新增并通过：
   - 混合型 PDF 图片块 OCR 测试
   - 路径前缀绕过测试
-  - `privacyguard` 安全导入测试
+  - `secureredact` 安全导入测试
   - 文本型 PDF 去重测试
   - 配置保存测试
   - 原文高亮分段测试
@@ -422,7 +422,7 @@
 ```
 1. 打开文件管理器（Finder/资源管理器）
 2. 选中要打开的文件
-3. 拖拽文件到 PrivacyGuard 预览区域
+3. 拖拽文件到 SecureRedact 预览区域
 4. 看到绿色边框时释放鼠标即可打开
 ```
 
@@ -519,16 +519,16 @@ QWebEngineView（Word预览控件）默认会拦截拖拽事件，阻止事件�
 
 **代码文件修改**:
 - `main.py`: 移除 OCR 引擎选择逻辑，只保留 RapidOCR
-- `privacyguard/ocr/paddleocr.py`: 删除整个文件
-- `privacyguard/ocr/manager.py`: 简化为只管理 RapidOCR
-- `privacyguard/ocr/__init__.py`: 移除 PaddleOCR 导出
+- `secureredact/ocr/paddleocr.py`: 删除整个文件
+- `secureredact/ocr/manager.py`: 简化为只管理 RapidOCR
+- `secureredact/ocr/__init__.py`: 移除 PaddleOCR 导出
 
 **UI 修改**:
 - `SettingsDialog`: 移除"OCR 引擎设置"分组中的引擎选择部分
 - 保留检测框调节、偏移设置等功能
 
 **模型文件删除**:
-- `privacyguard/ocr/models/paddleocr/`: 删除整个目录
+- `secureredact/ocr/models/paddleocr/`: 删除整个目录
 
 **依赖移除**:
 - `requirements.txt`: 移除 `paddleocr` 和 `paddlepaddle` 依赖
@@ -611,8 +611,8 @@ QWebEngineView（Word预览控件）默认会拦截拖拽事件，阻止事件�
 - 创建 `PACKAGING_GUIDE.md` 完整打包指南
 
 #### 更新所有 PyInstaller Spec
-- Windows: `PrivacyGuard_windows.spec`, `PrivacyGuard_windows_v2.spec`
-- macOS: `PrivacyGuard.spec`
+- Windows: `SecureRedact_windows.spec`, `SecureRedact_windows_v2.spec`
+- macOS: `SecureRedact.spec`
 - 全部包含 `assets` 目录打包
 
 #### 验证结果
@@ -628,7 +628,7 @@ QWebEngineView（Word预览控件）默认会拦截拖拽事件，阻止事件�
 ### ⚙️ 配置系统
 
 #### 新增内容
-- **JSON 配置文件系统** (`privacyguard/utils/config.py`)
+- **JSON 配置文件系统** (`secureredact/utils/config.py`)
   - `ConfigManager` 单例类，支持线程安全（RLock 保护）
   - 点分隔路径访问配置 (`get("app.window.default_width")`)
   - 默认配置 + 用户配置合并机制
@@ -650,17 +650,17 @@ QWebEngineView（Word预览控件）默认会拦截拖拽事件，阻止事件�
   - 版本更新为 `37.0 - Config System`
 
 - **打包配置更新**
-  - macOS spec 文件添加 privacyguard 包和 config 文件
-  - Windows spec 文件添加 privacyguard 包和 config 文件
+  - macOS spec 文件添加 secureredact 包和 config 文件
+  - Windows spec 文件添加 secureredact 包和 config 文件
   - 更新 hiddenimports 包含所有隐私保护模块
 
 #### 向后兼容
 ```python
 # 配置加载失败时的降级处理
 if config:
-    APP_NAME = config.get("app.name", "PrivacyGuard 脱敏卫士")
+    APP_NAME = config.get("app.name", "SecureRedact 信息脱敏助手")
 else:
-    APP_NAME = "PrivacyGuard 脱敏卫士"  # 硬编码后备
+    APP_NAME = "SecureRedact 信息脱敏助手"  # 硬编码后备
 ```
 
 #### 验证清单
@@ -678,8 +678,8 @@ else:
 
 #### 新增内容
 - **macOS 应用打包** (`packaging/macos/`)
-  - 成功打包 `PrivacyGuard.app` (708MB)
-  - 创建 DMG 安装包 `PrivacyGuard-36.4-macOS.dmg` (308MB)
+  - 成功打包 `SecureRedact.app` (708MB)
+  - 创建 DMG 安装包 `SecureRedact-36.4-macOS.dmg` (308MB)
   - 生成 SHA256 校验和
   - 支持拖拽安装到 Applications
 
@@ -809,7 +809,7 @@ else:
 
 - **错误处理** (v37)
   - OCR异常现在会显示用户友好的错误对话框
-  - 添加结构化日志记录到 `logs/privacyguard.log`
+  - 添加结构化日志记录到 `logs/secureredact.log`
   - 添加 `error_signal` 信号用于异常传播
 
 - **线程安全** (v37)
@@ -826,7 +826,7 @@ else:
 #### 新增
 - **日志系统** (v37)
   - 添加 `setup_logging()` 函数
-  - 日志文件位置：`logs/privacyguard.log`
+  - 日志文件位置：`logs/secureredact.log`
   - 支持 DEBUG 和 INFO 级别
 
 #### 依赖更新

@@ -1,4 +1,4 @@
-# PrivacyGuard 修复进度追踪
+# SecureRedact 修复进度追踪
 
 **最后更新**: 2026-02-16 23:45
 

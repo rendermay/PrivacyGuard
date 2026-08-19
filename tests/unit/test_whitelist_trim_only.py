@@ -4,9 +4,9 @@ import unittest
 
 from PyQt6.QtCore import QRectF
 
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
-from privacyguard.workers.ocr_worker import OCRWorker
-from privacyguard.workers.word_worker import WordWorker
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.workers.ocr_worker import OCRWorker
+from secureredact.workers.word_worker import WordWorker
 
 
 def _match(text, source="rule", start=0, end=None, pattern="x"):

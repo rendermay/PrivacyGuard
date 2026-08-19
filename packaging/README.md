@@ -1,4 +1,4 @@
-# PrivacyGuard 打包目录说明（索引）
+# SecureRedact 打包目录说明（索引）
 
 本目录只保留打包脚本、spec、安装程序配置和轻量索引。完整说明统一维护在：
 
@@ -23,12 +23,12 @@
   - Windows：`build\.pyinstaller-cache`
   - macOS：`build/.pyinstaller-cache`
 - Windows 主要产物：
-  - `releases/windows/PrivacyGuard-v<version>-Windows-Portable.zip`
-  - `releases/windows/PrivacyGuard-<version>-Setup.exe`
+  - `releases/windows/SecureRedact-v<version>-Windows-Portable.zip`
+  - `releases/windows/SecureRedact-<version>-Setup.exe`
 - macOS 主要产物：
-  - `releases/macos/PrivacyGuard-<version>-macOS.dmg`
-  - `releases/macos/PrivacyGuard-<version>-macOS.dmg.sha256`
-  - 若当前环境无法完成 DMG 创建，脚本会保底复制 `releases/macos/PrivacyGuard.app`
+  - `releases/macos/SecureRedact-<version>-macOS.dmg`
+  - `releases/macos/SecureRedact-<version>-macOS.dmg.sha256`
+  - 若当前环境无法完成 DMG 创建，脚本会保底复制 `releases/macos/SecureRedact.app`
 
 ---
 
@@ -92,7 +92,7 @@ bash packaging/macos/scripts/build_complete.sh
   - macOS 打包脚本语法检查
   - `packaging/macos/scripts/build_complete.sh` 完整执行到 `.app` 产物生成与发布目录回退
 - 当前机器上的真实结果：
-  - macOS：已实际生成 `releases/macos/PrivacyGuard.app`
+  - macOS：已实际生成 `releases/macos/SecureRedact.app`
   - macOS：当前环境缺少 `create-dmg`，且 `hdiutil` 本次未成功生成 DMG
   - Windows：已完成静态复核，但未在当前 macOS 机器上实际执行 `.bat` / Inno Setup
 

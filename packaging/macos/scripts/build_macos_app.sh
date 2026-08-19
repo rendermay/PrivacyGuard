@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# PrivacyGuard macOS 应用打包脚本
+# SecureRedact macOS 应用打包脚本
 # 版本: from version.txt
 # 说明: 自动化打包 macOS .app 和 DMG 安装包
 #
@@ -15,7 +15,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # 项目信息
-APP_NAME="PrivacyGuard"
+APP_NAME="SecureRedact"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 从 scripts -> macos -> packaging -> project_root
 PROJECT_ROOT="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
@@ -27,7 +27,7 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
-BUNDLE_ID="com.privacyguard.app"
+BUNDLE_ID="com.secureredact.app"
 MACOS_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="${PROJECT_ROOT}/build"
 DIST_DIR="${PROJECT_ROOT}/dist"
@@ -35,7 +35,7 @@ RELEASE_DIR="${PROJECT_ROOT}/releases/macos"
 PYINSTALLER_CONFIG_DIR="${BUILD_DIR}/.pyinstaller-cache"
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  PrivacyGuard macOS 打包脚本${NC}"
+echo -e "${BLUE}  SecureRedact macOS 打包脚本${NC}"
 echo -e "${BLUE}  版本: ${VERSION}${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
@@ -89,14 +89,14 @@ if ! python3 -c "import PyInstaller" 2>/dev/null; then
 fi
 
 # 检查图标文件
-if [ ! -f "${MACOS_DIR}/assets/PrivacyGuard.icns" ]; then
-    print_error "未找到图标文件: PrivacyGuard.icns"
+if [ ! -f "${MACOS_DIR}/assets/SecureRedact.icns" ]; then
+    print_error "未找到图标文件: SecureRedact.icns"
     exit 1
 fi
 
 # 检查 spec 文件
-if [ ! -f "${MACOS_DIR}/config/PrivacyGuard.spec" ]; then
-    print_error "未找到打包配置文件: PrivacyGuard.spec"
+if [ ! -f "${MACOS_DIR}/config/SecureRedact.spec" ]; then
+    print_error "未找到打包配置文件: SecureRedact.spec"
     exit 1
 fi
 
@@ -125,7 +125,7 @@ print_info "使用本地 PyInstaller 缓存: ${PYINSTALLER_CONFIG_DIR}"
 
 python3 -m PyInstaller --clean \
     --noconfirm \
-    "${MACOS_DIR}/config/PrivacyGuard.spec"
+    "${MACOS_DIR}/config/SecureRedact.spec"
 
 print_info "PyInstaller 打包完成"
 

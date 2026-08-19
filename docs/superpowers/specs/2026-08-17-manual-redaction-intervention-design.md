@@ -10,7 +10,7 @@
 
 ## 1. 目标与范围
 
-为 PrivacyGuard 增加针对「自动脱敏命中结果」的人工干预能力,使最终用户在 jieba / OCR / 规则任一来源出现过脱或漏脱时,可以:
+为 SecureRedact 增加针对「自动脱敏命中结果」的人工干预能力,使最终用户在 jieba / OCR / 规则任一来源出现过脱或漏脱时,可以:
 
 - **删除过度脱敏的遮挡**:对自动命中但不该脱的 hit 做「忽略」(本次会话或永久)
 - **对未脱敏的位置进行人工遮挡**:复用现有手动画框(PDF) + 选词菜单(Word)
@@ -52,8 +52,8 @@
 
 ### 模块边界
 
-- `privacyguard/redaction/override_store.py`(新):`HitOverrideStore` 单例
-- `privacyguard/redaction/hit_ref.py`(新):`HitRef` 不可变标识 + `hit_id()` 工具
+- `secureredact/redaction/override_store.py`(新):`HitOverrideStore` 单例
+- `secureredact/redaction/hit_ref.py`(新):`HitRef` 不可变标识 + `hit_id()` 工具
 - `main.py`:
   - `MainWindow` 增加专用面板 dock
   - PDF `PDFCanvas` 增加右键菜单 + override 读取
@@ -327,7 +327,7 @@ def revert_override(self, hit_id): ...
 ### 8.2 回归测试(向后兼容保证)
 
 - 现有 12 个 test_*.py 全保持绿色
-- `compileall main.py privacyguard tests` 无误
+- `compileall main.py secureredact tests` 无误
 
 ### 8.3 集成 / E2E(可选,后续 Wave)
 
@@ -355,10 +355,10 @@ def revert_override(self, hit_id): ...
 
 ## 10. 不修改清单(边界守护)
 
-- `privacyguard/__init__.py`(保持现有懒加载)
-- `privacyguard/workers/__init__.py`
-- `privacyguard/pii/validators/*`
-- `privacyguard/ocr/manager.py`、`rapidocr.py`
+- `secureredact/__init__.py`(保持现有懒加载)
+- `secureredact/workers/__init__.py`
+- `secureredact/pii/validators/*`
+- `secureredact/ocr/manager.py`、`rapidocr.py`
 - `theme.py`、`version.txt`、`packaging/**`(直到本阶段通过真机 smoke)
 
 ---

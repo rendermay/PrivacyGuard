@@ -39,13 +39,13 @@ VSVersionInfo(
       StringTable(
         u'080404B0',
         [
-          StringStruct(u'CompanyName', u'PrivacyGuard Team'),
-          StringStruct(u'FileDescription', u'PrivacyGuard 脱敏卫士'),
+          StringStruct(u'CompanyName', u'SecureRedact Team'),
+          StringStruct(u'FileDescription', u'SecureRedact 信息脱敏助手'),
           StringStruct(u'FileVersion', u'{version_string}'),
-          StringStruct(u'InternalName', u'PrivacyGuard'),
-          StringStruct(u'LegalCopyright', u'Copyright (C) 2026 PrivacyGuard Team'),
-          StringStruct(u'OriginalFilename', u'PrivacyGuard.exe'),
-          StringStruct(u'ProductName', u'PrivacyGuard 脱敏卫士'),
+          StringStruct(u'InternalName', u'SecureRedact'),
+          StringStruct(u'LegalCopyright', u'Copyright (C) 2026 SecureRedact Team'),
+          StringStruct(u'OriginalFilename', u'SecureRedact.exe'),
+          StringStruct(u'ProductName', u'SecureRedact 信息脱敏助手'),
           StringStruct(u'ProductVersion', u'{version_string}')
         ]
       )

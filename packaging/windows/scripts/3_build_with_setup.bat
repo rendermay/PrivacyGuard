@@ -1,10 +1,10 @@
 @echo off
-:: PrivacyGuard Full Build (with Installer)
+:: SecureRedact Full Build (with Installer)
 chcp 65001 > nul 2>&1
-title PrivacyGuard Full Build
+title SecureRedact Full Build
 echo.
 echo ========================================
-echo   PrivacyGuard Full Build
+echo   SecureRedact Full Build
 echo   (exe + Installer)
 echo ========================================
 echo.
@@ -19,7 +19,7 @@ if errorlevel 1 (
 )
 
 :: Configuration
-set "APP_NAME=PrivacyGuard"
+set "APP_NAME=SecureRedact"
 set "CONFIG_DIR=%~dp0\..\config"
 
 :: Read version
@@ -78,7 +78,7 @@ echo [Step 2/5] Building application...
 echo    This may take 5-10 minutes...
 echo.
 
-python -m PyInstaller --clean --noconfirm "%CONFIG_DIR%\PrivacyGuard_windows.spec"
+python -m PyInstaller --clean --noconfirm "%CONFIG_DIR%\SecureRedact_windows.spec"
 
 if errorlevel 1 (
     echo.
@@ -135,7 +135,7 @@ if not defined INNO_PATH (
 )
 
 echo    Compiling installer...
-"%INNO_PATH%" "%CONFIG_DIR%\PrivacyGuard_Setup.iss" /DMyAppVersion=%VERSION% /Q
+"%INNO_PATH%" "%CONFIG_DIR%\SecureRedact_Setup.iss" /DMyAppVersion=%VERSION% /Q
 
 if errorlevel 1 (
     echo [ERROR] Failed to create installer

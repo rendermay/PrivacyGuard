@@ -6,7 +6,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
 
 
 @unittest.skipUnless(
@@ -32,8 +32,8 @@ class RealPDFIntegrationTest(unittest.TestCase):
 
     def _run_ocrworker(self, page_idx, rules=None):
         """跑一遍 OCRWorker._process_page, 返回所有 hits."""
-        from privacyguard.ocr.rapidocr import RapidOCREngine
-        from privacyguard.workers.ocr_worker import OCRWorker
+        from secureredact.ocr.rapidocr import RapidOCREngine
+        from secureredact.workers.ocr_worker import OCRWorker
 
         rules = rules or []
         # NOTE: 原 brief 用 OCRWorker.__new__(OCRWorker) 跳过 __init__,但 pyqtSignal

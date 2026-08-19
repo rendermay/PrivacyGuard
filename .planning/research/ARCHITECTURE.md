@@ -1,18 +1,18 @@
 # Architecture Research — v39 Word 文档脱敏重构
 
-**Domain:** PrivacyGuard Word 文档脱敏架构（main.py 散落 → `privacyguard/word/*` 子包）
+**Domain:** SecureRedact Word 文档脱敏架构（main.py 散落 → `secureredact/word/*` 子包）
 **Researched:** 2026-08-19
-**Confidence:** HIGH（基于完整源码 + 162 项回归基线 + v37-v38 已落地的 `privacyguard/redaction/` 公共包）
+**Confidence:** HIGH（基于完整源码 + 162 项回归基线 + v37-v38 已落地的 `secureredact/redaction/` 公共包）
 
 ---
 
 ## 1. Executive Summary
 
-v39 的核心问题是 **main.py 单体内聚度**——Word 文档脱敏的整条链路（扫描 / 命中 / 预览 / 替换 / 写出 / 干预消费）有超过 40 个函数、2 个 QThread、1 个 WebViewBridge、3 个 Dialog 散落在 `main.py` 的 13k 行里，仅 `WordWorker` 一个 QThread 被抽到了 `privacyguard/workers/word_worker.py`（254 行）。其他一切（包括 `_save_word` / `merge_word_matches_with_priority` / `build_word_rule_matches` / `replace_matches_in_paragraph` / `_build_word_html_from_docx` / `_build_word_replaced_preview_html` / `WordBatchReplaceWorker` 等）都还在 `main.py` 中。
+v39 的核心问题是 **main.py 单体内聚度**——Word 文档脱敏的整条链路（扫描 / 命中 / 预览 / 替换 / 写出 / 干预消费）有超过 40 个函数、2 个 QThread、1 个 WebViewBridge、3 个 Dialog 散落在 `main.py` 的 13k 行里，仅 `WordWorker` 一个 QThread 被抽到了 `secureredact/workers/word_worker.py`（254 行）。其他一切（包括 `_save_word` / `merge_word_matches_with_priority` / `build_word_rule_matches` / `replace_matches_in_paragraph` / `_build_word_html_from_docx` / `_build_word_replaced_preview_html` / `WordBatchReplaceWorker` 等）都还在 `main.py` 中。
 
 v39 架构目标是：
 
-1. **抽取** Word 端所有业务逻辑到 `privacyguard/word/*` 子包，main.py 仅留 UI 装配 + 信号连接（**ARCH-01**）
+1. **抽取** Word 端所有业务逻辑到 `secureredact/word/*` 子包，main.py 仅留 UI 装配 + 信号连接（**ARCH-01**）
 2. **分层契约** 规则 / 命中 / 预览三层走明确接口，调一处不破另一处（**ARCH-02**）
 3. **复用边界文档化** 与 PDF 端共用部分（OCRWorker / HitOverrideStore / BlackWhiteListStore / whitelist_split / doc_hash）划清（**ARCH-03**）
 4. **字段命名统一** `source / start / end / rect / text` 字段映射表（**ARCH-04**）
@@ -97,10 +97,10 @@ v39 架构目标是：
 
 ## 3. Recommended Architecture
 
-### 3.1 总览：`privacyguard/word/*` 子包
+### 3.1 总览：`secureredact/word/*` 子包
 
 ```
-privacyguard/word/
+secureredact/word/
 ├── __init__.py                  # 公共 API（延迟导入）
 ├── contracts.py                 # 数据契约（HitDict / PreviewSegment / WordDocSnapshot）
 ├── doc_scanner.py               # DOCX 文档结构读取（paragraph/table/header/footer/comment/footnote/endnote）
@@ -113,12 +113,12 @@ privacyguard/word/
 └── fixtures.py                  # 真实样本 fixture loader（抵账协议0522.docx----刘骁毅原版.docx）
 ```
 
-**保留在 `privacyguard/` 公共层（不挪进 `word/`）**：
+**保留在 `secureredact/` 公共层（不挪进 `word/`）**：
 
-- `privacyguard/redaction/` 全部（`HitRef / Override / HitOverrideStore / BlackWhiteListStore / whitelist_split / doc_hash`）
-- `privacyguard/ocr/` PDF 端共享逻辑（与 Word 不共用，但同名 `OCRWorker` 仍属 PDF）
-- `privacyguard/pii/name_recognizer.py` 中文姓名识别（PDF + Word 共用）
-- `privacyguard/utils/` doc_converter / temp_manager / security / exceptions
+- `secureredact/redaction/` 全部（`HitRef / Override / HitOverrideStore / BlackWhiteListStore / whitelist_split / doc_hash`）
+- `secureredact/ocr/` PDF 端共享逻辑（与 Word 不共用，但同名 `OCRWorker` 仍属 PDF）
+- `secureredact/pii/name_recognizer.py` 中文姓名识别（PDF + Word 共用）
+- `secureredact/utils/` doc_converter / temp_manager / security / exceptions
 
 ### 3.2 模块契约表
 
@@ -137,7 +137,7 @@ privacyguard/word/
 
 ```mermaid
 graph TD
-  MainWindow[main.py MainWindow] -->|glue only| SubInit[privacyguard.word.__init__]
+  MainWindow[main.py MainWindow] -->|glue only| SubInit[secureredact.word.__init__]
   SubInit --> DocScanner[doc_scanner]
   SubInit --> RuleEngine[rule_engine]
   SubInit --> HitCollector[hit_collector]
@@ -331,7 +331,7 @@ render_word_preview() ─► HitOverrideStore.filtered_hits 重新过滤
 ### 5.1 contracts.py（公共 TypedDict / dataclass）
 
 ```python
-# privacyguard/word/contracts.py
+# secureredact/word/contracts.py
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, List, Literal, Optional, TypedDict, Union
@@ -432,7 +432,7 @@ class TableEntry:
 ### 5.2 rule_engine.scan() 契约
 
 ```python
-# privacyguard/word/rule_engine.py
+# secureredact/word/rule_engine.py
 def scan(
     text: str,
     *,
@@ -462,7 +462,7 @@ def scan(
 ### 5.3 hit_collector.aggregate() 契约
 
 ```python
-# privacyguard/word/hit_collector.py
+# secureredact/word/hit_collector.py
 def aggregate(
     raw_hits_by_key: Dict[str, List[HitDict]],
     *,
@@ -495,7 +495,7 @@ def merge_priority(
 ### 5.4 preview_bridge 契约
 
 ```python
-# privacyguard/word/preview_bridge.py
+# secureredact/word/preview_bridge.py
 def build_base_html(snapshot: WordDocSnapshot, asset_dir: Path) -> str:
     """DOCX → mammoth HTML + data-key 注入 + 交互 JS 注入.
     
@@ -534,7 +534,7 @@ def build_replaced_document_html(
 ### 5.5 save_writer.apply_redactions() 契约
 
 ```python
-# privacyguard/word/save_writer.py
+# secureredact/word/save_writer.py
 def apply_redactions(
     doc: Document,
     snapshot: WordDocSnapshot,
@@ -553,7 +553,7 @@ def apply_redactions(
 ### 5.6 web_bridge 契约
 
 ```python
-# privacyguard/word/web_bridge.py
+# secureredact/word/web_bridge.py
 class WebViewBridge(QObject):
     """JS ↔ Python 桥 (Word 端).
     
@@ -578,7 +578,7 @@ class WebViewBridge(QObject):
 ### 5.7 batch_replacer.BatchReplacer 契约
 
 ```python
-# privacyguard/word/batch_replacer.py
+# secureredact/word/batch_replacer.py
 class BatchReplacer(QThread):
     """Word 批量替换线程 (从 main.py WordBatchReplaceWorker 重构).
     
@@ -660,8 +660,8 @@ main.py 集成        (Phase 4 — 替换所有内联实现为新模块)
 **不要做**：
 
 1. **继续在 main.py 加新功能** —— 把任何 Word 相关新代码直接塞进 main.py（v37-v38 已数次发生）
-2. **main.py 内重复实现 `merge_word_matches_with_priority`** —— 任何新页面 / 新对话框都要复用 `privacyguard/word/hit_collector.merge_priority`，禁止 inline
-3. **`WebViewBridge` 留在 main.py 内** —— 必须挪到 `privacyguard/word/web_bridge.py`，否则 PyQt 信号绑定到 main_window 强耦合无法测试
+2. **main.py 内重复实现 `merge_word_matches_with_priority`** —— 任何新页面 / 新对话框都要复用 `secureredact/word/hit_collector.merge_priority`，禁止 inline
+3. **`WebViewBridge` 留在 main.py 内** —— 必须挪到 `secureredact/word/web_bridge.py`，否则 PyQt 信号绑定到 main_window 强耦合无法测试
 
 ### 7.2 字段漂移
 
@@ -685,8 +685,8 @@ main.py 集成        (Phase 4 — 替换所有内联实现为新模块)
 **症状**：`.doc`→`.docx` 转换走 LibreOffice / antiword，温度目录管理散落。
 **不要做**：
 
-1. **批量替换 + 单文档打开各自实现 `.doc` 转换** —— 必须复用 `privacyguard/utils/doc_converter.py` 的 `_shared_convert_doc_to_docx`，临时目录由 `TempFileManager` 统一管理
-2. **在 `privacyguard/word/` 内重新实现 DOCX→PDF 或 DOCX→图像** —— 这超出 v39 范围；任何 OCR 通道复用走 PDF 端 `OCRWorker`，不在 Word 子包内置
+1. **批量替换 + 单文档打开各自实现 `.doc` 转换** —— 必须复用 `secureredact/utils/doc_converter.py` 的 `_shared_convert_doc_to_docx`，临时目录由 `TempFileManager` 统一管理
+2. **在 `secureredact/word/` 内重新实现 DOCX→PDF 或 DOCX→图像** —— 这超出 v39 范围；任何 OCR 通道复用走 PDF 端 `OCRWorker`，不在 Word 子包内置
 
 ---
 
@@ -709,39 +709,39 @@ main.py 集成        (Phase 4 — 替换所有内联实现为新模块)
 
 **架构原则**：
 
-- **共享层**：`privacyguard/redaction/` + `privacyguard/pii/name_recognizer.py` + `privacyguard/utils/temp_manager.py` + `privacyguard/utils/doc_converter.py`
-- **PDF 端独占**：`privacyguard/ocr/*` + `privacyguard/workers/ocr_worker.py` + `OCRCanvas` 相关
-- **Word 端独占**：`privacyguard/word/*`（v39 引入）+ `privacyguard/workers/word_worker.py`（v36.5 抽出的 thin layer，可进一步合并进 `word/`）
+- **共享层**：`secureredact/redaction/` + `secureredact/pii/name_recognizer.py` + `secureredact/utils/temp_manager.py` + `secureredact/utils/doc_converter.py`
+- **PDF 端独占**：`secureredact/ocr/*` + `secureredact/workers/ocr_worker.py` + `OCRCanvas` 相关
+- **Word 端独占**：`secureredact/word/*`（v39 引入）+ `secureredact/workers/word_worker.py`（v36.5 抽出的 thin layer，可进一步合并进 `word/`）
 - **互不交叉**：PDF 端不引入 mammoth / python-docx；Word 端不引入 fitz / RapidOCR（FN-02 嵌入图 OCR 通道走 `OCRWorker` 复用，不在 Word 子包内置 OCR）
 
 ---
 
-## 9. Migration Plan（main.py → privacyguard/word/*）
+## 9. Migration Plan（main.py → secureredact/word/*）
 
 ### 9.1 阶段式迁移（保持 main.py 每步可运行）
 
 ```
-Step 1: privacyguard/word/__init__.py + contracts.py + doc_scanner.py 落地
-        main.py: from privacyguard.word.doc_scanner import scan
+Step 1: secureredact/word/__init__.py + contracts.py + doc_scanner.py 落地
+        main.py: from secureredact.word.doc_scanner import scan
         _open_word_docx 内部用 scan(file_path) 替代直接 Document(fname) + 字典构造
         行为不变（word_data 仍然填充）
 
-Step 2: privacyguard/word/rule_engine.py 落地
-        main.py: from privacyguard.word.rule_engine import scan as rule_scan
+Step 2: secureredact/word/rule_engine.py 落地
+        main.py: from secureredact.word.rule_engine import scan as rule_scan
         WordWorker.run 内部用 rule_scan 替代 _find_matches + _filter_whitelist + _scan_blacklist_in_text
         行为不变（_source_for_pattern / _get_rule_name 逻辑下沉）
 
-Step 3: privacyguard/word/hit_collector.py + save_writer.py 落地
+Step 3: secureredact/word/hit_collector.py + save_writer.py 落地
         main.py: _save_word 内部用 aggregate + apply_redactions
         行为不变（merge_word_matches_with_priority + replace_matches_in_paragraph 逻辑下沉）
 
-Step 4: privacyguard/word/preview_bridge.py + web_bridge.py 落地
-        main.py: WebViewBridge 替换为 from privacyguard.word.web_bridge import WebViewBridge
+Step 4: secureredact/word/preview_bridge.py + web_bridge.py 落地
+        main.py: WebViewBridge 替换为 from secureredact.word.web_bridge import WebViewBridge
         _build_word_html_from_docx / _build_word_replaced_preview_html / _build_word_text_blocks 内部用 preview_bridge
         行为不变（mammoth + BeautifulSoup 逻辑下沉）
 
-Step 5: privacyguard/word/batch_replacer.py 落地
-        main.py: WordBatchReplaceWorker 替换为 from privacyguard.word.batch_replacer import BatchReplacer
+Step 5: secureredact/word/batch_replacer.py 落地
+        main.py: WordBatchReplaceWorker 替换为 from secureredact.word.batch_replacer import BatchReplacer
         行为不变（start_batch_replace 接口不变）
 
 Step 6: 字段映射文档落 docs/word/FIELD_MAPPING.md
@@ -755,7 +755,7 @@ Step 7: main.py 内 Word 相关代码全部替换为新模块调用后，删除�
 
 | Step | 验收命令 | 期望 |
 |------|----------|------|
-| 1 | `python3 -m compileall -q privacyguard/word/` | 无 ImportError |
+| 1 | `python3 -m compileall -q secureredact/word/` | 无 ImportError |
 | 1 | `python3 -m unittest tests.unit.test_doc_scanner` | 新增测试全 PASS |
 | 2 | 全量回归 162 项 | 不退 |
 | 3 | 全量回归 162 项 + `test_save_writer` | 不退 |
@@ -768,24 +768,24 @@ Step 7: main.py 内 Word 相关代码全部替换为新模块调用后，删除�
 
 ## 10. Sources
 
-- `/mnt/g/Project/PrivacyGuard/main.py` (13275 行) — 全部 Word 相关代码定位在 §2.1
-- `/mnt/g/Project/PrivacyGuard/privacyguard/workers/word_worker.py` (254 行) — v36.5 抽出的 thin worker
-- `/mnt/g/Project/PrivacyGuard/privacyguard/workers/ocr_worker.py` (1006 行) — PDF OCR 通道 + hit dict 形状参考
-- `/mnt/g/Project/PrivacyGuard/privacyguard/redaction/hit_ref.py` — `HitRef` 数据类 + `VALID_SOURCES = (rule, ocr, jieba, seal, blacklist, manual)`
-- `/mnt/g/Project/PrivacyGuard/privacyguard/redaction/override_store.py` — `HitOverrideStore` 单例 + `filtered_hits` 唯一消费入口
-- `/mnt/g/Project/PrivacyGuard/privacyguard/redaction/black_white_list_store.py` — `BlackWhiteListStore` 单例 + `is_trim_only` 开关
-- `/mnt/g/Project/PrivacyGuard/privacyguard/redaction/whitelist_split.py` — `_split_text_by_whitelist` 纯函数（PDF + Word 共用）
-- `/mnt/g/Project/PrivacyGuard/privacyguard/redaction/doc_hash.py` — `compute_doc_hash` sha1(path+size+mtime_ns)[:8]
-- `/mnt/g/Project/PrivacyGuard/privacyguard/ocr/text_pdf.py` — PDF 文本通道共享逻辑（**PDF-only**）
-- `/mnt/g/Project/PrivacyGuard/privacyguard/ocr/mixed_pdf.py` — PDF 嵌入图 OCR 共享逻辑（**PDF-only**）
-- `/mnt/g/Project/PrivacyGuard/privacyguard/pii/name_recognizer.py` — jieba 姓名启发式（PDF + Word 共用）
-- `/mnt/g/Project/PrivacyGuard/tests/unit/test_word_source_field.py` — WordWorker source 字段契约测试
-- `/mnt/g/Project/PrivacyGuard/tests/unit/test_bridge_override_slots.py` — WebViewBridge 4 槽契约测试
-- `/mnt/g/Project/PrivacyGuard/tests/unit/test_override_store.py` — `HitOverrideStore.filtered_hits` 契约测试
-- `/mnt/g/Project/PrivacyGuard/tests/unit/test_batch_word_replace.py` — `WordBatchReplaceWorker` 契约测试
-- `/mnt/g/Project/PrivacyGuard/CLAUDE.md` — `HitRef` 字段命名约定、`filtered_hits` 唯一消费入口、`whitelist_trim_only` 行为
-- `/mnt/g/Project/PrivacyGuard/CHANGELOG.md` v38.0.0 / v38.0.1 — `whitelist_trim_only` hotfix 与 OCR channel text="" 已知限制
-- `/mnt/g/Project/PrivacyGuard/.planning/PROJECT.md` — ARCH-01 ~ ARCH-04 / FP-01~04 / FN-01~04 / TEST-01~03 需求
+- `/mnt/g/Project/SecureRedact/main.py` (13275 行) — 全部 Word 相关代码定位在 §2.1
+- `/mnt/g/Project/SecureRedact/secureredact/workers/word_worker.py` (254 行) — v36.5 抽出的 thin worker
+- `/mnt/g/Project/SecureRedact/secureredact/workers/ocr_worker.py` (1006 行) — PDF OCR 通道 + hit dict 形状参考
+- `/mnt/g/Project/SecureRedact/secureredact/redaction/hit_ref.py` — `HitRef` 数据类 + `VALID_SOURCES = (rule, ocr, jieba, seal, blacklist, manual)`
+- `/mnt/g/Project/SecureRedact/secureredact/redaction/override_store.py` — `HitOverrideStore` 单例 + `filtered_hits` 唯一消费入口
+- `/mnt/g/Project/SecureRedact/secureredact/redaction/black_white_list_store.py` — `BlackWhiteListStore` 单例 + `is_trim_only` 开关
+- `/mnt/g/Project/SecureRedact/secureredact/redaction/whitelist_split.py` — `_split_text_by_whitelist` 纯函数（PDF + Word 共用）
+- `/mnt/g/Project/SecureRedact/secureredact/redaction/doc_hash.py` — `compute_doc_hash` sha1(path+size+mtime_ns)[:8]
+- `/mnt/g/Project/SecureRedact/secureredact/ocr/text_pdf.py` — PDF 文本通道共享逻辑（**PDF-only**）
+- `/mnt/g/Project/SecureRedact/secureredact/ocr/mixed_pdf.py` — PDF 嵌入图 OCR 共享逻辑（**PDF-only**）
+- `/mnt/g/Project/SecureRedact/secureredact/pii/name_recognizer.py` — jieba 姓名启发式（PDF + Word 共用）
+- `/mnt/g/Project/SecureRedact/tests/unit/test_word_source_field.py` — WordWorker source 字段契约测试
+- `/mnt/g/Project/SecureRedact/tests/unit/test_bridge_override_slots.py` — WebViewBridge 4 槽契约测试
+- `/mnt/g/Project/SecureRedact/tests/unit/test_override_store.py` — `HitOverrideStore.filtered_hits` 契约测试
+- `/mnt/g/Project/SecureRedact/tests/unit/test_batch_word_replace.py` — `WordBatchReplaceWorker` 契约测试
+- `/mnt/g/Project/SecureRedact/CLAUDE.md` — `HitRef` 字段命名约定、`filtered_hits` 唯一消费入口、`whitelist_trim_only` 行为
+- `/mnt/g/Project/SecureRedact/CHANGELOG.md` v38.0.0 / v38.0.1 — `whitelist_trim_only` hotfix 与 OCR channel text="" 已知限制
+- `/mnt/g/Project/SecureRedact/.planning/PROJECT.md` — ARCH-01 ~ ARCH-04 / FP-01~04 / FN-01~04 / TEST-01~03 需求
 
 ---
 

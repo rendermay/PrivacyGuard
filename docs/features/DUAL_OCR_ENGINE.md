@@ -1,4 +1,4 @@
-# PrivacyGuard 双 OCR 引擎技术文档
+# SecureRedact 双 OCR 引擎技术文档
 
 **版本**: v37.2.0 (Dual OCR Engine)
 **状态**: ⚠️ **已废弃** - v37.4.0 起完全移除 PaddleOCR，统一使用 RapidOCR
@@ -10,7 +10,7 @@
 
 ### 问题背景
 
-扫描型 PDF 子字符串脱敏时涂抹区域偏移（如 "Privacy" 在 "PrivacyGuard" 中定位不准）
+扫描型 PDF 子字符串脱敏时涂抹区域偏移（如 "Privacy" 在 "SecureRedact" 中定位不准）
 
 ### 解决方案
 
@@ -29,7 +29,7 @@
 ### 目录结构
 
 ```
-privacyguard/ocr/
+secureredact/ocr/
 ├── __init__.py       # 模块导出
 ├── base.py           # OCRResult, CharInfo 数据结构
 ├── rapidocr.py       # RapidOCR 引擎封装
@@ -139,7 +139,7 @@ class OCRResult:
 ## 实施阶段
 
 ### Phase 1: OCR 引擎模块 ✅
-- 创建 `privacyguard/ocr/` 目录
+- 创建 `secureredact/ocr/` 目录
 - 实现统一的 `OCRResult` 数据结构
 - 封装 RapidOCR 和 PaddleOCR 引擎
 
@@ -172,11 +172,11 @@ class OCRResult:
 ## 文件变更清单
 
 **新增文件**:
-- `privacyguard/ocr/__init__.py`
-- `privacyguard/ocr/base.py`
-- `privacyguard/ocr/rapidocr.py`
-- `privacyguard/ocr/paddleocr.py`
-- `privacyguard/ocr/manager.py`
+- `secureredact/ocr/__init__.py`
+- `secureredact/ocr/base.py`
+- `secureredact/ocr/rapidocr.py`
+- `secureredact/ocr/paddleocr.py`
+- `secureredact/ocr/manager.py`
 
 **修改文件**:
 - `main.py` - OCRWorker, SettingsDialog, MainWindow

@@ -1,12 +1,12 @@
 @echo off
-:: PrivacyGuard 项目清理脚本 (Windows)
+:: SecureRedact 项目清理脚本 (Windows)
 :: 清理临时文件，但保留旧备份
 chcp 65001 > nul 2>&1
-title PrivacyGuard 项目清理
+title SecureRedact 项目清理
 
 echo.
 echo ======================================
-echo   PrivacyGuard 项目清理 (Windows)
+echo   SecureRedact 项目清理 (Windows)
 echo ======================================
 echo.
 

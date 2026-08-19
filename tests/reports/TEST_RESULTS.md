@@ -62,7 +62,7 @@ Python 版本: 3.11.14
 ### 6. ✅ 已打包应用检查
 ```
 状态: 通过
-应用: PrivacyGuard.app
+应用: SecureRedact.app
 路径: /Users/a49144/Desktop/临时coding/PrivacyApp/dist/
 ```
 
@@ -72,7 +72,7 @@ Python 版本: 3.11.14
 OCR 引擎: RapidOCR
 测试结果: 成功识别文本
 识别内容:
-- PrivacyGuard (置信度: 0.997)
+- SecureRedact (置信度: 0.997)
 - 身份证号: 340102199001011234 (置信度: 0.989)
 - 手机号: 13812345678 (置信度: 0.983)
 - 邮箱: test@example.com (置信度: 0.991)
@@ -109,11 +109,11 @@ Unknown property filter (Qt 警告,不影响功能)
 
 ### 打包应用启动
 ```bash
-open "/Users/a49144/Desktop/临时coding/PrivacyApp/dist/PrivacyGuard.app"
+open "/Users/a49144/Desktop/临时coding/PrivacyApp/dist/SecureRedact.app"
 ```
 
 **结果:** ✅ 应用可用
-**包路径:** /Users/a49144/Desktop/临时coding/PrivacyApp/dist/PrivacyGuard.app
+**包路径:** /Users/a49144/Desktop/临时coding/PrivacyApp/dist/SecureRedact.app
 
 ---
 
@@ -346,7 +346,7 @@ python main.py
 
 ### 启动应用 (打包)
 ```bash
-open "/Users/a49144/Desktop/临时coding/PrivacyApp/dist/PrivacyGuard.app"
+open "/Users/a49144/Desktop/临时coding/PrivacyApp/dist/SecureRedact.app"
 ```
 
 ### 重新生成测试 PDF

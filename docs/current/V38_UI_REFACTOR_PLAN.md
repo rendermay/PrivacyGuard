@@ -1,4 +1,4 @@
-# PrivacyGuard v38 UI 重构执行方案
+# SecureRedact v38 UI 重构执行方案
 
 - 日期：2026-03-13（2026-03-18 已补执行状态）
 - 基线版本：`v37.7.4`
@@ -66,7 +66,7 @@
 
 - `theme.py`
   - 负责 Windows-first 设计基线
-- `privacyguard/ui/`
+- `secureredact/ui/`
   - 新增 UI 设计辅助模块、样式工具、模式定义
 - `main.py`
   - 保留行为逻辑，但逐步减少散落在各处的样式和显隐判断
@@ -75,10 +75,10 @@
 
 逐步形成以下结构：
 
-- `privacyguard/ui/styles/`
-- `privacyguard/ui/components/`
-- `privacyguard/ui/panels/`
-- `privacyguard/ui/views/`
+- `secureredact/ui/styles/`
+- `secureredact/ui/components/`
+- `secureredact/ui/panels/`
+- `secureredact/ui/views/`
 
 说明：
 - 第一阶段不强求完全迁移
@@ -200,7 +200,7 @@
 每轮至少执行：
 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 python3 -m unittest \
   tests.unit.test_mixed_pdf_ocr \
   tests.test_path_validation \

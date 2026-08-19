@@ -1,4 +1,4 @@
-# PrivacyGuard PDF 脱敏安全特性文档
+# SecureRedact PDF 脱敏安全特性文档
 
 **版本**: v37.5.0 (Seal Detection)
 **严重程度**: 高（历史漏洞已修复）
@@ -110,7 +110,7 @@ doc_save.save(fname, garbage=4, deflate=True, clean=True, linear=True)
 ## 升级建议
 
 ### 必须升级
-所有使用 PrivacyGuard 进行敏感信息脱敏的用户都应立即升级到 v37.3.0 或更高版本。
+所有使用 SecureRedact 进行敏感信息脱敏的用户都应立即升级到 v37.3.0 或更高版本。
 
 ### 历史文件处理
 使用旧版本脱敏的 PDF 文件可能存在安全隐患，建议：

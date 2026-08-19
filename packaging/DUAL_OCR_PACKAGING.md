@@ -1,4 +1,4 @@
-# PrivacyGuard OCR 打包说明（RapidOCR 单引擎）
+# SecureRedact OCR 打包说明（RapidOCR 单引擎）
 
 ## 概述
 
@@ -13,7 +13,7 @@ Windows 与 macOS 的 active 打包配置都按单 OCR 路径维护，不再包�
 ## 当前 OCR 架构
 
 ```text
-privacyguard/ocr/
+secureredact/ocr/
 ├── __init__.py
 ├── base.py
 ├── manager.py
@@ -33,23 +33,23 @@ privacyguard/ocr/
 
 ### Windows
 
-- spec: `packaging/windows/config/PrivacyGuard_windows.spec`
-- 历史增强 spec: `packaging/windows/config/PrivacyGuard_windows_v2.spec`（保留归档，不作为当前正式主链）
+- spec: `packaging/windows/config/SecureRedact_windows.spec`
+- 历史增强 spec: `packaging/windows/config/SecureRedact_windows_v2.spec`（保留归档，不作为当前正式主链）
 - 版本资源生成：`packaging/windows/scripts/generate_version_info.py`
 - 推荐脚本：
   - 便携版：`packaging/windows/scripts/build_complete.bat`
   - 安装版：`packaging/windows/scripts/3_build_with_setup.bat`
 - 产物：
-  - `releases/windows/PrivacyGuard-v<version>-Windows-Portable.zip`
-  - `releases/windows/PrivacyGuard-<version>-Setup.exe`
+  - `releases/windows/SecureRedact-v<version>-Windows-Portable.zip`
+  - `releases/windows/SecureRedact-<version>-Setup.exe`
 
 ### macOS
 
-- spec: `packaging/macos/config/PrivacyGuard.spec`
+- spec: `packaging/macos/config/SecureRedact.spec`
 - 推荐脚本：`packaging/macos/scripts/build_complete.sh`
 - 产物：
-  - `releases/macos/PrivacyGuard-<version>-macOS.dmg`
-  - `releases/macos/PrivacyGuard-<version>-macOS.dmg.sha256`
+  - `releases/macos/SecureRedact-<version>-macOS.dmg`
+  - `releases/macos/SecureRedact-<version>-macOS.dmg.sha256`
 
 ---
 

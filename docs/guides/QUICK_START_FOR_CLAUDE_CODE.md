@@ -1,4 +1,4 @@
-# PrivacyGuard Claude Code 快速上手指南
+# SecureRedact Claude Code 快速上手指南
 
 > 用于下次继续开发时，最快速接上当前进度。
 
@@ -36,9 +36,9 @@
 ## 当前最重要的事实
 
 1. `main.py` 仍然是活动运行时主入口。
-2. `privacyguard/` 有共享模块，但不要假设所有逻辑都已完全模块化。
+2. `secureredact/` 有共享模块，但不要假设所有逻辑都已完全模块化。
 3. 版本唯一来源是 `version.txt`。
-4. `privacyguard` 包导入必须保持 OCR 懒加载，不要恢复 eager import。
+4. `secureredact` 包导入必须保持 OCR 懒加载，不要恢复 eager import。
 5. PDF 混合页当前依赖：
    - 文本层命中
    - `page.get_text("dict")` 图片块提取
@@ -55,13 +55,13 @@
 ## 快速命令
 
 ```bash
-cd /Users/a49144/Desktop/codexhub/PrivacyGuardApp
+cd /Users/a49144/Desktop/codexhub/SecureRedactApp
 
 # 运行应用
 python3 main.py
 
 # 语法检查
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 
 # 主回归测试
 python3 -m unittest \
@@ -103,7 +103,7 @@ python3 -m unittest \
 
 ## 当前验证基线
 
-- `python3 -m compileall -q main.py privacyguard tests`：通过
+- `python3 -m compileall -q main.py secureredact tests`：通过
 - 主回归测试：`52/52` 通过
 
 ---

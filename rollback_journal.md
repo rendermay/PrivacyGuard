@@ -70,7 +70,7 @@
     - `bash -n packaging/macos/scripts/notarize_macos_app.sh`
     - `python3 -m py_compile packaging/windows/scripts/generate_version_info.py`
     - `python3 packaging/windows/scripts/generate_version_info.py`
-    - `rg -n '37\.6\.1|36\.4|3_完整打包带安装程序|1_初始化环境|2_一键打包|PrivacyGuard-36\.4|build/PrivacyGuard\.spec|修改 main\.py 中的 VERSION|create-dmg 不可用，复制 \.app|version_info 参考文档' packaging docs/packaging`
+    - `rg -n '37\.6\.1|36\.4|3_完整打包带安装程序|1_初始化环境|2_一键打包|SecureRedact-36\.4|build/SecureRedact\.spec|修改 main\.py 中的 VERSION|create-dmg 不可用，复制 \.app|version_info 参考文档' packaging docs/packaging`
 - [x] cp14 运行时整改启动前备份（安全/导入/预览/配置一致性）
   - checkpoint: `20260309_runtime_remediation_cp14_start`
   - snapshot: `backups/iteration_checkpoints/20260309_runtime_remediation_cp14_start/snapshot_src.tar.gz`
@@ -80,7 +80,7 @@
   - checkpoint: `20260309_runtime_remediation_cp18_verified`
   - snapshot: `backups/iteration_checkpoints/20260309_runtime_remediation_cp18_verified/snapshot_src.tar.gz`
   - verification:
-    - `python3 -m compileall -q main.py privacyguard tests`
+    - `python3 -m compileall -q main.py secureredact tests`
     - `python3 -m unittest tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v`
 - [x] cp19 Word 对比预览空白 bugfix 前备份
   - checkpoint: `20260309_word_compare_bugfix_cp19_pre`
@@ -108,7 +108,7 @@
     - `docs/current/PRIORITY_REMEDIATION_PLAN.md`
     - `docs/guides/QUICK_START_FOR_CLAUDE_CODE.md`
   - verification:
-    - `python3 -m compileall -q main.py privacyguard tests`
+    - `python3 -m compileall -q main.py secureredact tests`
     - `python3 -m unittest tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v`
 - [x] cp22 混合型 PDF OCR 修复前备份
   - checkpoint: `20260309_mixed_pdf_ocr_cp22_pre`
@@ -121,7 +121,7 @@
   - manifest: `backups/iteration_checkpoints/20260309_mixed_pdf_ocr_cp23_verified/key_files_manifest.txt`
   - preflight meta: `backups/iteration_checkpoints/20260309_mixed_pdf_ocr_cp23_verified/preflight_meta.json`
   - verification:
-    - `python3 -m compileall -q main.py privacyguard tests`
+    - `python3 -m compileall -q main.py secureredact tests`
     - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.unit.test_pdf_text_hit_dedup tests.unit.test_package_imports tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace tests.unit.test_app_config tests.test_path_validation tests.unit.test_ocr_api -v`
 - [x] cp24 版本/文档/打包方案同步前备份
   - checkpoint: `20260309_release_sync_cp24_pre`
@@ -135,7 +135,7 @@
   - preflight meta: `backups/iteration_checkpoints/20260309_release_sync_cp25_verified/preflight_meta.json`
   - verification:
     - `python3 packaging/windows/scripts/generate_version_info.py`
-    - `python3 -m compileall -q main.py privacyguard tests`
+    - `python3 -m compileall -q main.py secureredact tests`
     - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v`
     - `bash -n packaging/macos/scripts/build_complete.sh`
     - `bash -n packaging/macos/scripts/build_macos_app.sh`
@@ -162,7 +162,7 @@
   - snapshot: `backups/iteration_checkpoints/20260310_release_sync_cp29_verified/snapshot_src.tar.gz`
   - verification:
     - `python3 packaging/windows/scripts/generate_version_info.py`
-    - `python3 -m compileall -q main.py privacyguard tests`
+    - `python3 -m compileall -q main.py secureredact tests`
     - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v`
     - `bash -n packaging/macos/scripts/build_complete.sh`
     - `bash -n packaging/macos/scripts/build_macos_app.sh`
@@ -173,7 +173,7 @@
   - verification:
     - Windows 打包成功
     - 打包应用正常启动
-    - `ModuleNotFoundError: No module named 'privacyguard.utils.security'` 不再出现
+    - `ModuleNotFoundError: No module named 'secureredact.utils.security'` 不再出现
 - [x] cp31 v38 UI 重构启动前检查点（Windows-first UI refactor preflight）
   - checkpoint: `v38_ui_refactor_cp31_20260313_140645`
   - snapshot dir: `backups/v38_ui_refactor_cp31_20260313_140645/`
@@ -183,7 +183,7 @@
     - `rollback_journal.md`
     - `docs/current/STATUS.md`
     - `docs/current/DEV_LOG.md`
-    - `docs/features/privacyguard_ui_concept_v38_logic_preserved_cn.html`
+    - `docs/features/secureredact_ui_concept_v38_logic_preserved_cn.html`
   - purpose:
     - 启动 Windows-first UI 全面改造前保留主运行链与文档基线
     - 避免在 dirty worktree 中依赖 `git revert` 回退
@@ -200,9 +200,9 @@
     - `docs/current/STATUS.md`
     - `docs/current/DEV_LOG.md`
     - `docs/current/PHASE_HIT_OVERRIDE.md`
-    - `snapshot_redaction.tar.gz`（`privacyguard/redaction/` 全量）
+    - `snapshot_redaction.tar.gz`（`secureredact/redaction/` 全量）
   - verification:
-    - `python3 -m compileall -q main.py privacyguard tests`
+    - `python3 -m compileall -q main.py secureredact tests`
     - 全量回归 `Ran 162 tests` / `160 PASS`
     - 既有失败 2 项：`tests.unit.test_config_alignment` 的 `scan.default_level`（2.0 vs 1.5），自 v37.7.6 起存在
   - purpose:

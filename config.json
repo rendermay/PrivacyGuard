@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "app": {
-    "name": "PrivacyGuard 脱敏卫士",
+    "name": "SecureRedact 信息脱敏助手",
     "window": {
       "default_width": 1300,
       "default_height": 900,

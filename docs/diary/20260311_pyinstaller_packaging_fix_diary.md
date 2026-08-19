@@ -15,10 +15,10 @@
 Traceback (most recent call last):
   File "main.py", line 17, in <module>
   File "pyimod02_importers.py", line 457, in exec_module
-  File "privacyguard\__init__.py", line 23, in <module>
+  File "secureredact\__init__.py", line 23, in <module>
   File "pyimod02_importers.py", line 457, in exec_module
-  File "privacyguard\utils\__init__.py", line 19, in <module>
-ModuleNotFoundError: No module named 'privacyguard.utils.security'
+  File "secureredact\utils\__init__.py", line 19, in <module>
+ModuleNotFoundError: No module named 'secureredact.utils.security'
 ```
 
 **内心OS**: "什么？security.py 明明存在啊！我亲眼看到它躺在 dist 目录里的！"
@@ -27,19 +27,19 @@ ModuleNotFoundError: No module named 'privacyguard.utils.security'
 
 ## 第一轮尝试：怀疑 PyInstaller 的 hiddenimports
 
-我的第一反应是 PyInstaller 没有正确检测到 `privacyguard` 包的子模块。毕竟这是一个本地包，不是通过 pip 安装的。
+我的第一反应是 PyInstaller 没有正确检测到 `secureredact` 包的子模块。毕竟这是一个本地包，不是通过 pip 安装的。
 
 于是我开始修改 spec 文件：
 
 ```python
 # 添加了 collect_submodules
-privacyguard_hiddenimports = collect_submodules('privacyguard')
+secureredact_hiddenimports = collect_submodules('secureredact')
 
 # 手动添加所有子模块
-privacyguard_hiddenimports.extend([
-    'privacyguard',
-    'privacyguard.utils',
-    'privacyguard.utils.security',
+secureredact_hiddenimports.extend([
+    'secureredact',
+    'secureredact.utils',
+    'secureredact.utils.security',
     # ... 更多模块
 ])
 ```
@@ -59,7 +59,7 @@ privacyguard_hiddenimports.extend([
 from .security import validate_safe_path, resource_path
 
 # 修改后
-from privacyguard.utils.security import validate_safe_path, resource_path
+from secureredact.utils.security import validate_safe_path, resource_path
 ```
 
 重新打包，结果：**还是同样的错误**。
@@ -68,9 +68,9 @@ from privacyguard.utils.security import validate_safe_path, resource_path
 
 ## 第三轮尝试：怀疑数据文件冲突
 
-我在网上看到有人说，如果同一个模块既作为 hiddenimports 又作为 datas 被包含，会导致问题。于是我检查了 spec 文件，发现我确实用了 `collect_all('privacyguard')` 把 .py 文件作为数据文件复制了。
+我在网上看到有人说，如果同一个模块既作为 hiddenimports 又作为 datas 被包含，会导致问题。于是我检查了 spec 文件，发现我确实用了 `collect_all('secureredact')` 把 .py 文件作为数据文件复制了。
 
-我移除了 `privacyguard_datas_all`，只保留 hiddenimports。
+我移除了 `secureredact_datas_all`，只保留 hiddenimports。
 
 重新打包，结果：**还是同样的错误**。
 
@@ -78,15 +78,15 @@ from privacyguard.utils.security import validate_safe_path, resource_path
 
 ## 第四轮尝试：创建 Hook 文件
 
-我创建了一个 PyInstaller hook 文件 `hook-privacyguard.py`，试图强制包含所有子模块：
+我创建了一个 PyInstaller hook 文件 `hook-secureredact.py`，试图强制包含所有子模块：
 
 ```python
-hiddenimports = collect_submodules('privacyguard')
+hiddenimports = collect_submodules('secureredact')
 if not hiddenimports:
     hiddenimports = [
-        'privacyguard',
-        'privacyguard.utils',
-        'privacyguard.utils.security',
+        'secureredact',
+        'secureredact.utils',
+        'secureredact.utils.security',
         # ...
     ]
 ```
@@ -97,10 +97,10 @@ if not hiddenimports:
 
 ## 第五轮尝试：创建 Runtime Hook
 
-我又创建了一个 runtime hook，试图在运行时把 privacyguard 目录添加到 sys.path：
+我又创建了一个 runtime hook，试图在运行时把 secureredact 目录添加到 sys.path：
 
 ```python
-# runtime_hook_privacyguard.py
+# runtime_hook_secureredact.py
 import sys
 import os
 
@@ -118,8 +118,8 @@ if getattr(sys, 'frozen', False):
 就在我快要放弃的时候，我仔细查看了打包日志，发现了一行之前忽略的警告：
 
 ```
-78 WARNING: Failed to collect submodules for 'privacyguard' because importing 'privacyguard' raised:
-File "C:\...\privacyguard\utils\security.py", line 56
+78 WARNING: Failed to collect submodules for 'secureredact' because importing 'secureredact' raised:
+File "C:\...\secureredact\utils\security.py", line 56
     return False, f"路径包含危险字符: {repr('\\')}"
                                              ^
 SyntaxError: f-string expression part cannot include a backslash
@@ -142,13 +142,13 @@ backslash_repr = repr('\\')  # 先在 f-string 外部处理
 f"路径包含危险字符: {backslash_repr}"
 ```
 
-这个语法错误导致 `privacyguard` 包无法被导入，进而导致 `collect_submodules('privacyguard')` 返回空列表，最终导致打包后的应用找不到这个模块。
+这个语法错误导致 `secureredact` 包无法被导入，进而导致 `collect_submodules('secureredact')` 返回空列表，最终导致打包后的应用找不到这个模块。
 
 ---
 
 ## 最终修复
 
-修改 `privacyguard/utils/security.py`：
+修改 `secureredact/utils/security.py`：
 
 ```python
 # 非 Windows 下拒绝反斜杠（可疑转义）
@@ -198,13 +198,13 @@ for char in shell_metacharacters:
 
 ### 本次修改的文件清单
 
-1. `privacyguard/__init__.py` - 相对导入改为绝对导入
-2. `privacyguard/utils/__init__.py` - 相对导入改为绝对导入
-3. `privacyguard/ocr/__init__.py` - 相对导入改为绝对导入
-4. `privacyguard/utils/security.py` - **关键修复**：f-string 反斜杠语法错误
-5. `packaging/windows/config/PrivacyGuard_windows.spec` - 多次调整 hiddenimports 配置
-6. `packaging/windows/config/hook-privacyguard.py` - 新增 hook 文件
-7. `packaging/windows/config/runtime_hook_privacyguard.py` - 新增 runtime hook
+1. `secureredact/__init__.py` - 相对导入改为绝对导入
+2. `secureredact/utils/__init__.py` - 相对导入改为绝对导入
+3. `secureredact/ocr/__init__.py` - 相对导入改为绝对导入
+4. `secureredact/utils/security.py` - **关键修复**：f-string 反斜杠语法错误
+5. `packaging/windows/config/SecureRedact_windows.spec` - 多次调整 hiddenimports 配置
+6. `packaging/windows/config/hook-secureredact.py` - 新增 hook 文件
+7. `packaging/windows/config/runtime_hook_secureredact.py` - 新增 runtime hook
 
 ---
 

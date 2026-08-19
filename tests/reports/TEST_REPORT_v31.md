@@ -1,4 +1,4 @@
-# PrivacyGuard v31.0 测试验证报告
+# SecureRedact v31.0 测试验证报告
 
 **测试日期**: 2026-02-11
 **版本**: 31.0 - Dual Mode Manual Redaction

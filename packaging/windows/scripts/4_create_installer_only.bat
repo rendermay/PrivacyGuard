@@ -1,7 +1,7 @@
 @echo off
-:: PrivacyGuard Create Installer Only
+:: SecureRedact Create Installer Only
 chcp 65001 > nul 2>&1
-title PrivacyGuard Create Installer
+title SecureRedact Create Installer
 echo.
 echo ========================================
 echo   Create Installer from Existing exe
@@ -18,7 +18,7 @@ if errorlevel 1 (
 )
 
 :: Configuration
-set "APP_NAME=PrivacyGuard"
+set "APP_NAME=SecureRedact"
 set "CONFIG_DIR=%~dp0\..\config"
 
 :: Read version
@@ -86,7 +86,7 @@ echo [Step 1/2] Creating installer...
 if not exist "%RELEASE_DIR%" mkdir "%RELEASE_DIR%"
 
 echo    Compiling...
-"%INNO_PATH%" "%CONFIG_DIR%\PrivacyGuard_Setup.iss" /DMyAppVersion=%VERSION% /Q
+"%INNO_PATH%" "%CONFIG_DIR%\SecureRedact_Setup.iss" /DMyAppVersion=%VERSION% /Q
 
 if errorlevel 1 (
     echo [ERROR] Failed to create installer

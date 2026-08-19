@@ -1,10 +1,10 @@
 @echo off
-:: PrivacyGuard Environment Setup
+:: SecureRedact Environment Setup
 chcp 65001 > nul 2>&1
-title PrivacyGuard Environment Setup
+title SecureRedact Environment Setup
 echo.
 echo ========================================
-echo   PrivacyGuard Environment Setup
+echo   SecureRedact Environment Setup
 echo ========================================
 echo.
 

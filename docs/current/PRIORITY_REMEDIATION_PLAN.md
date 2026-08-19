@@ -2,7 +2,7 @@
 
 最后更新：2026-03-11
 当前基线版本：v37.7.4
-适用范围：PrivacyGuard 当前主分支代码
+适用范围：SecureRedact 当前主分支代码
 
 ## 执行状态
 
@@ -25,14 +25,14 @@
 1. 先做“实施前准备”
 2. 按 `P1 -> P2 -> P3 -> P4` 顺序执行
 3. 每完成一个优先级，先跑回归，再进入下一项
-4. 不要并行改 `main.py` 和 `privacyguard/*` 的同类逻辑后不做统一，否则会继续漂移
+4. 不要并行改 `main.py` 和 `secureredact/*` 的同类逻辑后不做统一，否则会继续漂移
 
 ## 本次审查结论摘要
 
 当前项目不是“整体不可用”，但存在 2 个需要尽快处理的高优先级问题：
 
 1. 运行时路径校验仍在使用不安全的前缀判断
-2. `import privacyguard` 对 OCR 依赖耦合过重，环境不完整时会直接崩溃
+2. `import secureredact` 对 OCR 依赖耦合过重，环境不完整时会直接崩溃
 
 除此之外，还有 2 类高价值优化：
 
@@ -60,16 +60,16 @@
 ```bash
 git status --short
 python3 -m unittest tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v
-python3 -m compileall -q main.py privacyguard
+python3 -m compileall -q main.py secureredact
 ```
 
 ### 3. 本轮修复涉及的核心文件
 
 - `main.py`
-- `privacyguard/__init__.py`
-- `privacyguard/workers/ocr_worker.py`
-- `privacyguard/utils/security.py`
-- `privacyguard/utils/config.py`
+- `secureredact/__init__.py`
+- `secureredact/workers/ocr_worker.py`
+- `secureredact/utils/security.py`
+- `secureredact/utils/config.py`
 - `tests/test_path_validation.py`
 - `tests/unit/test_ocr_api.py`
 - `tests/unit/test_word_replace_rules.py`
@@ -85,12 +85,12 @@ python3 -m compileall -q main.py privacyguard
 
 - `main.py` 仍然保留一份旧版 `validate_safe_path()`
 - 旧实现使用 `startswith()` 判断允许目录
-- `privacyguard/utils/security.py` 已有更安全的 `commonpath()` 版本，但主流程未接入
+- `secureredact/utils/security.py` 已有更安全的 `commonpath()` 版本，但主流程未接入
 
 要做的事：
 
 1. 删除或停用 `main.py` 中重复实现的旧 `validate_safe_path()`
-2. 统一改为导入并使用 `privacyguard.utils.security.validate_safe_path`
+2. 统一改为导入并使用 `secureredact.utils.security.validate_safe_path`
 3. 全项目搜索同名实现，确保只保留一份活动实现
 4. 补测试，覆盖目录前缀绕过场景
 
@@ -108,35 +108,35 @@ python3 -m compileall -q main.py privacyguard
 2. 所有调用点都走共享实现
 3. 新增路径前缀绕过测试并通过
 
-### P1-2 修复 `import privacyguard` 的 OCR 依赖崩溃
+### P1-2 修复 `import secureredact` 的 OCR 依赖崩溃
 
 问题：
 
-- `privacyguard/__init__.py` 会在导入时立即导入 `.workers`
-- `privacyguard/workers/ocr_worker.py` 又在模块导入时直接导入 `RapidOCR`
-- 导致未安装完整 OCR 依赖时，单纯 `import privacyguard` 就会失败
+- `secureredact/__init__.py` 会在导入时立即导入 `.workers`
+- `secureredact/workers/ocr_worker.py` 又在模块导入时直接导入 `RapidOCR`
+- 导致未安装完整 OCR 依赖时，单纯 `import secureredact` 就会失败
 
 要做的事：
 
-1. 把 `privacyguard/__init__.py` 改为轻量导出，不在包导入阶段强拉起 OCR worker
+1. 把 `secureredact/__init__.py` 改为轻量导出，不在包导入阶段强拉起 OCR worker
 2. 把 `RapidOCR` 改成懒加载
 3. 只有真正执行 OCR 时才初始化 OCR 引擎
 4. 缺依赖时给出明确错误，不允许在 import 阶段直接崩
 
 推荐实现：
 
-1. `privacyguard/__init__.py` 只导出纯工具和元数据
+1. `secureredact/__init__.py` 只导出纯工具和元数据
 2. 如确实需要导出 worker，使用懒导入方案，例如 `__getattr__`
 3. `RapidOCR` 放到 `OCRWorker.__init__()` 或实际运行分支内导入
 
 最少要覆盖的测试用例：
 
-1. 在 mock 掉 `rapidocr_onnxruntime` 不可用的情况下，`import privacyguard` 仍可成功
+1. 在 mock 掉 `rapidocr_onnxruntime` 不可用的情况下，`import secureredact` 仍可成功
 2. 真正调用 OCR 时，缺依赖能够返回可读错误
 
 完成标准：
 
-1. `import privacyguard` 不再依赖 OCR 运行环境
+1. `import secureredact` 不再依赖 OCR 运行环境
 2. OCR 失败只在 OCR 真正被调用时暴露
 
 ## P2: 修正确性问题，并顺手拿到第一波性能收益
@@ -161,7 +161,7 @@ python3 -m compileall -q main.py privacyguard
 
 1. 改为“每页每个唯一 `found_str` 只 search 和 append 一次”
 2. 如果后续需要按出现次数精确映射位置，单独设计位置匹配逻辑，不要重复追加整批 hits
-3. 同步修正 `main.py` 和 `privacyguard/workers/ocr_worker.py`，不要只修一处
+3. 同步修正 `main.py` 和 `secureredact/workers/ocr_worker.py`，不要只修一处
 
 最少要覆盖的测试用例：
 
@@ -179,7 +179,7 @@ python3 -m compileall -q main.py privacyguard
 问题：
 
 - 当前 `main.py` 里仍保留大量活动逻辑
-- `privacyguard/*` 下也有同类实现
+- `secureredact/*` 下也有同类实现
 - 已经发生安全修复不同步、OCR 逻辑不同步
 
 要做的事：
@@ -262,7 +262,7 @@ python3 -m compileall -q main.py privacyguard
 1. 明确哪些设置应该跨重启持久化
 2. 将这些设置统一 `persist=True`
 3. 如果某些值只应该会话内生效，UI 文案必须明确说明
-4. 检查是否应该切换到 `privacyguard/utils/config.py` 的统一配置入口
+4. 检查是否应该切换到 `secureredact/utils/config.py` 的统一配置入口
 
 建议至少确认以下项：
 
@@ -311,7 +311,7 @@ python3 -m compileall -q main.py privacyguard
 
 ```bash
 python3 -m unittest tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v
-python3 -m compileall -q main.py privacyguard
+python3 -m compileall -q main.py secureredact
 ```
 
 ## 需要补充的测试

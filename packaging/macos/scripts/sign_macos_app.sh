@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# PrivacyGuard macOS 应用签名脚本
+# SecureRedact macOS 应用签名脚本
 # 说明: 使用开发者证书对应用进行签名
 #
 
@@ -13,7 +13,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-APP_NAME="PrivacyGuard"
+APP_NAME="SecureRedact"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
 APP_PATH="${PROJECT_ROOT}/dist/${APP_NAME}.app"

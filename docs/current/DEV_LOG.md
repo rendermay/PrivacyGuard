@@ -1,7 +1,7 @@
-# PrivacyGuard 脱敏卫士 - 开发日志
+# SecureRedact 信息脱敏助手 - 开发日志
 
 ## 项目信息
-- **项目名称**: PrivacyGuard 脱敏卫士
+- **项目名称**: SecureRedact 信息脱敏助手
 - **当前版本**: v37.8.0 (Manual Redaction Intervention)
 - **开发日期**: 2026-08-17
 - **状态**: ✅ 自动脱敏人工干预机制完成，全量回归 162 项 / 160 PASS（2 项既有失败）
@@ -14,13 +14,13 @@
 - `docs/current/PHASE_HIT_OVERRIDE.md` 已落盘
 
 ### Wave 1 — 核心层：HitRef + doc_hash + HitOverrideStore ✅
-- 新增 `privacyguard/redaction/hit_ref.py`
+- 新增 `secureredact/redaction/hit_ref.py`
   - `HitRef` frozen dataclass：`doc_hash` / `location` / `start` / `end` / `source` / `text`
   - `hit_id` 属性 = `f"{doc_hash}|{location}|{start}|{end}|{source}"`
   - `Override` dataclass：`hit_id` / `action`(`ignore`/`confirm`) / `scope`(`session`/`permanent`) / `created_at` / `ref`
-- 新增 `privacyguard/redaction/doc_hash.py`
+- 新增 `secureredact/redaction/doc_hash.py`
   - `compute_doc_hash(file_path)`：路径 + size + mtime → 8 位十六进制
-- 新增 `privacyguard/redaction/override_store.py`
+- 新增 `secureredact/redaction/override_store.py`
   - `HitOverrideStore.instance()` 单例 + `reset_singleton()`（测试用）
   - `ignore` / `confirm` / `revert` / `promote` / `is_ignored` / `is_confirmed` / `iter_overrides`
   - `filtered_hits(hits, *, location, doc_hash)`：唯一消费入口，保留 `manual` 来源命中不被过滤
@@ -34,7 +34,7 @@
 - 新增测试：`test_override_config_defaults`(2) — **2/2**
 
 ### Wave 3 — PDF 通道 ✅
-- `privacyguard/workers/ocr_worker.py`
+- `secureredact/workers/ocr_worker.py`
   - `page_result_signal` payload 由 `list[QRectF]` 改为 `list[dict]`，携带 `rect` / `source` / `text` / `start` / `end`
   - source 标签覆盖 `regex` / `jieba` / `keyword` / `image_ocr`
 - `main.py:MainWindow`
@@ -43,7 +43,7 @@
 - 新增测试：`test_ocr_worker_source_field`(3) + `test_pdf_source_field`(3) — **6/6**
 
 ### Wave 4 — Word 通道 ✅
-- `privacyguard/workers/word_worker.py`：命中 dict 补 `source` / `start` / `end`
+- `secureredact/workers/word_worker.py`：命中 dict 补 `source` / `start` / `end`
 - `main.py:WebViewBridge` 新增 4 个槽：`ignore_ocr_hit` / `confirm_ocr_hit` / `revert_ocr_hit` / `promote_ocr_hit`，签名统一 `(key, source, text, hit_id)`
 - 预览 JS：右键菜单 + `confirmed` / `ignored` 视觉样式；replaced panel 接 `filtered_hits()`
 - 新增测试：`test_word_source_field`(1) + `test_bridge_override_slots`(6) — **7/7**
@@ -56,7 +56,7 @@
 - 文档同步：`version.txt` 37.7.6 → 37.8.0、`CHANGELOG.md`、`STATUS.md`、`DEV_LOG.md`、`PHASE_HIT_OVERRIDE.md`、`CLAUDE.md`
 
 ### 最终回归
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - 全量回归 `162` 项：`160 PASS`
 - 既有失败 2 项：`test_config_alignment.test_scan_default_level_matches` / `test_simple_config_reads_config_json_values`（`config.json` 为 2.0，测试期望 1.5），自 v37.7.6 起存在，与本阶段无关
 
@@ -68,7 +68,7 @@
 - **默认空 override 等价现状**：向后兼容 v37.7.6
 
 ### 已知边界
-- `test_convergence` 强制要求 `main.py` 与 `privacyguard/__init__.py` 的 `read_app_version()` OSError 回退值与 `version.txt` 一致，故两处回退值同步升为 `"37.8.0"`（`tests/unit/test_app_config.py` 的对应断言同步更新）
+- `test_convergence` 强制要求 `main.py` 与 `secureredact/__init__.py` 的 `read_app_version()` OSError 回退值与 `version.txt` 一致，故两处回退值同步升为 `"37.8.0"`（`tests/unit/test_app_config.py` 的对应断言同步更新）
 - `packaging/**` 的版本资源待真机 smoke 后再同步
 
 ---
@@ -79,7 +79,7 @@
 - `docs/current/PHASE_NAME_RECOGNITION.md` 已落盘
 
 ### Wave 1 — 核心识别器 + 单元测试 ✅
-- 新增 `privacyguard/pii/name_recognizer.py`
+- 新增 `secureredact/pii/name_recognizer.py`
   - `ChineseNameRecognizer` 单例 + 便捷函数 `extract_person_names(text)`
   - 词性判定放宽到 `flag.startswith("nr")`，覆盖 jieba 的 `nr`/`nrfg` 等细分
   - 姓氏表准入（百家姓 + 复姓）+ 黑名单过滤（法律程序词、角色、机构、方向词）+ 长度 2-4 校验
@@ -91,10 +91,10 @@
 - **测试通过：17/17**
 
 ### Wave 2 — Worker 接入 ✅
-- `privacyguard/workers/ocr_worker.py`
+- `secureredact/workers/ocr_worker.py`
   - `__init__` 新增 `enable_name_recognition: bool = False` 参数
   - `run()` 在每页 `all_patterns` 注入点追加 `extract_person_names(page_text)` 输出
-- `privacyguard/workers/word_worker.py`
+- `secureredact/workers/word_worker.py`
   - `__init__` 新增 `enable_name_recognition: bool = False`
   - `_find_matches()` 注入点
 - `main.py:OCRWorker` / `WordWorker` 兼容层透传
@@ -109,7 +109,7 @@
 - `main.py:MainWindow`
   - 启动读取 `enable_name_recognition`（默认 False）
   - SettingsDialog / OCRWorker / WordWorker 调用处全部透传
-- `PrivacyGuard_verify.spec`
+- `SecureRedact_verify.spec`
   - `datas += collect_data_files('jieba')`
   - hiddenimports `['jieba', 'jieba.posseg', 'jieba._compat']`
 - `requirements.txt`：新增 `jieba==0.42.1`
@@ -142,7 +142,7 @@
 3. 被告法定代表人姓名
 
 ### 改动
-- `privacyguard/utils/config.py` `DEFAULT_CONFIG["redaction"]["default_rules"]` 添加 3 条新规则
+- `secureredact/utils/config.py` `DEFAULT_CONFIG["redaction"]["default_rules"]` 添加 3 条新规则
 - `config.json` 同步
 - `main.py:212` 硬编码后备字典同步
 - `main.py:4953` `active_rules` 默认列表扩展
@@ -162,7 +162,7 @@
 1. **已完成版本升级**
    - `version.txt` 已更新到 `37.7.4`
    - `main.py` 版本回退与版本标识已同步为 `Release Audit and Final Polish`
-   - `packaging/windows/config/PrivacyGuard_Setup.iss` 默认回退版本已同步
+   - `packaging/windows/config/SecureRedact_Setup.iss` 默认回退版本已同步
 
 2. **active 文档已统一到当前发布准备口径**
    - `README.md`、`AGENTS.md`、`CLAUDE.md`、`PROJECT_INDEX.md`
@@ -190,7 +190,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests packaging` ✅
+- `python3 -m compileall -q main.py secureredact tests packaging` ✅
 - `python3 packaging/windows/scripts/generate_version_info.py` ✅
 - 主回归 `52/52` ✅
 
@@ -201,7 +201,7 @@
 ### 本轮收口
 
 1. **已修复 Windows active spec 的 numpy 收集不完整问题**
-   - `packaging/windows/config/PrivacyGuard_windows.spec`
+   - `packaging/windows/config/SecureRedact_windows.spec`
    - 已补充 `collect_all('numpy')`
    - 已补充 `collect_submodules('numpy')`
    - 已显式加入 `numpy.core / numpy._core` 兼容层目录
@@ -220,7 +220,7 @@
 ### 验证结果
 
 - `python3 -m compileall -q packaging` ✅
-- `python3 - <<'PY' ... py_compile.compile('packaging/windows/config/PrivacyGuard_windows.spec', doraise=True) ... PY` ✅
+- `python3 - <<'PY' ... py_compile.compile('packaging/windows/config/SecureRedact_windows.spec', doraise=True) ... PY` ✅
 - 当前机器为 macOS，未实际执行 Windows `.bat` 打包
 - 需要在 Windows 真机重新执行一次：
   - `packaging\\windows\\scripts\\build_complete.bat`
@@ -255,7 +255,7 @@
 ### 本轮收口
 
 1. **Windows 安装器版本回退已修正**
-   - `packaging/windows/config/PrivacyGuard_Setup.iss`
+   - `packaging/windows/config/SecureRedact_Setup.iss`
    - 默认回退版本已从 `37.7.2` 同步到 `37.7.3`
 
 2. **Windows / macOS 打包脚本已统一绑定当前环境**
@@ -297,7 +297,7 @@
 - `bash packaging/macos/scripts/build_complete.sh` ✅
   - 已使用项目内 PyInstaller 缓存完成 `.app` 构建
   - 当前环境缺少 `create-dmg`
-  - `hdiutil` 当前环境下未成功创建 DMG，脚本已按预期复制 `releases/macos/PrivacyGuard.app`
+  - `hdiutil` 当前环境下未成功创建 DMG，脚本已按预期复制 `releases/macos/SecureRedact.app`
 - Windows 链路说明：
   - 已完成脚本、spec、版本资源、安装器配置和文档一致性复核
   - 当前在 macOS 机器上未实际运行 `.bat` / Inno Setup
@@ -334,7 +334,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（48/48）
 
 ---
@@ -355,7 +355,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（48/48）
 
 ---
@@ -427,7 +427,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（48/48）
 
 ---
@@ -476,7 +476,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -499,7 +499,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -522,7 +522,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -547,7 +547,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -566,7 +566,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -589,7 +589,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -613,7 +613,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -638,7 +638,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -661,7 +661,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -685,7 +685,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -708,7 +708,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -731,7 +731,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -755,7 +755,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -780,7 +780,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -808,7 +808,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（45/45）
 
 ---
@@ -839,7 +839,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（44/44）
 
 ---
@@ -863,7 +863,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -886,7 +886,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -909,7 +909,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -932,7 +932,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -955,7 +955,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -978,7 +978,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1001,7 +1001,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1024,7 +1024,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1047,7 +1047,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1070,7 +1070,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1093,7 +1093,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1120,7 +1120,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1143,7 +1143,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1166,7 +1166,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1189,7 +1189,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1213,7 +1213,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1236,7 +1236,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1260,7 +1260,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1286,7 +1286,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ---
@@ -1309,7 +1309,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-15 - 空状态壳层做了一轮整组减法
@@ -1330,7 +1330,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 首页下方补上轻量工作区过渡壳
@@ -1347,7 +1347,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页改成顶部锚定舞台
@@ -1364,7 +1364,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 常用入口区也收进统一视觉轴线
@@ -1381,7 +1381,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 流程带与欢迎区收进同一视觉轴线
@@ -1398,7 +1398,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 首页上半区收成完整欢迎区
@@ -1415,7 +1415,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页入口卡接入真正响应式排布
@@ -1432,7 +1432,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 首页主按钮切到欢迎页专用样式
@@ -1453,7 +1453,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 首页欢迎卡进入成品感分色阶段
@@ -1474,7 +1474,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 首页入口卡继续拉稳
@@ -1494,7 +1494,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页流程带继续减重
@@ -1516,7 +1516,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 入口卡文案与对齐精修
@@ -1537,7 +1537,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页标题区继续减法
@@ -1558,7 +1558,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页标题区补充信任标识
@@ -1575,7 +1575,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页顶部默认更干净
@@ -1592,7 +1592,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 常用入口分区头收口
@@ -1613,7 +1613,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页主动作条继续收口
@@ -1630,7 +1630,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页流程带收口
@@ -1647,7 +1647,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页顶部去重
@@ -1655,7 +1655,7 @@
 ### 本轮改进
 
 1. **顶部工作台条改成欢迎语**
-   - `idle` 模式下顶部标题已改为 `欢迎使用 PrivacyGuard`
+   - `idle` 模式下顶部标题已改为 `欢迎使用 SecureRedact`
    - 说明文案也压缩成更简洁的一句话
 
 2. **欢迎页顶部 badge 在 idle 模式隐藏**
@@ -1668,7 +1668,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页入口卡更易扫描
@@ -1685,7 +1685,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页居中限宽
@@ -1706,7 +1706,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页主动作前置
@@ -1727,7 +1727,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页首页继续精简
@@ -1749,7 +1749,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 欢迎页细边框回归修复
@@ -1766,7 +1766,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 文档舞台感继续收口
@@ -1784,7 +1784,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 预览舞台继续收口
@@ -1803,7 +1803,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 主工具栏去外壳感
@@ -1821,7 +1821,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-14 - 顶部密度继续收口
@@ -1840,7 +1840,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-13 - 主工作台与 PDF 文案简化回退
@@ -1866,7 +1866,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_word_replace_rules -v` ✅（23/23）
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
@@ -1887,7 +1887,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（42/42）
 
 ## 2026-03-13 - 主工具栏结果态继续细化
@@ -1947,7 +1947,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_word_replace_rules -v` ✅（22/22）
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（41/41）
 
@@ -1997,7 +1997,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_word_replace_rules -v` ✅（20/20）
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（39/39）
 
@@ -2033,7 +2033,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_word_replace_rules -v` ✅（19/19）
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（38/38）
 
@@ -2067,7 +2067,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_word_replace_rules -v` ✅（17/17）
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（36/36）
 
@@ -2103,7 +2103,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_word_replace_rules -v` ✅（14/14）
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（33/33）
 
@@ -2145,7 +2145,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests` ✅
+- `python3 -m compileall -q main.py secureredact tests` ✅
 - `python3 -m unittest tests.unit.test_word_replace_rules -v` ✅（12/12）
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v` ✅（31/31）
 
@@ -2415,7 +2415,7 @@
 
 ### 本轮验证
 
-- `python3 -m compileall -q main.py privacyguard tests`：通过
+- `python3 -m compileall -q main.py secureredact tests`：通过
 - `python3 -m unittest tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace tests.unit.test_app_config tests.unit.test_mixed_pdf_ocr tests.unit.test_pdf_text_hit_dedup -v`：17/17 通过
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v`：28/28 通过
 
@@ -2433,13 +2433,13 @@
 
 - Windows 打包完成后，打开应用出现弹窗错误：
   ```
-  ModuleNotFoundError: No module named 'privacyguard.utils.security'
+  ModuleNotFoundError: No module named 'secureredact.utils.security'
   ```
 - 文件 `security.py` 存在于 dist 目录中，但无法被导入
 
 ### 根因分析
 
-1. **语法错误**：`privacyguard/utils/security.py` 第 56 行存在 Python 3.11 不兼容的语法：
+1. **语法错误**：`secureredact/utils/security.py` 第 56 行存在 Python 3.11 不兼容的语法：
    ```python
    return False, f"路径包含危险字符: {repr('\\')}"
    ```
@@ -2447,25 +2447,25 @@
 
 2. **连锁反应**：
    - 语法错误导致模块无法被导入
-   - `collect_submodules('privacyguard')` 返回空列表
-   - PyInstaller 无法检测到任何 privacyguard 子模块
+   - `collect_submodules('secureredact')` 返回空列表
+   - PyInstaller 无法检测到任何 secureredact 子模块
    - 打包后的应用缺少必要的模块
 
 ### 修复内容
 
-1. **修复 f-string 语法错误**（`privacyguard/utils/security.py`）：
+1. **修复 f-string 语法错误**（`secureredact/utils/security.py`）：
    - 将反斜杠先赋值给变量，再在 f-string 中使用
    - 同时修复了 `shell_metacharacters` 循环中的类似问题
 
 2. **将相对导入改为绝对导入**：
-   - `privacyguard/__init__.py`
-   - `privacyguard/utils/__init__.py`
-   - `privacyguard/ocr/__init__.py`
+   - `secureredact/__init__.py`
+   - `secureredact/utils/__init__.py`
+   - `secureredact/ocr/__init__.py`
 
 3. **优化 PyInstaller 配置**：
-   - 添加 `hook-privacyguard.py` hook 文件
-   - 添加 `runtime_hook_privacyguard.py` 运行时 hook
-   - 在 spec 文件中手动添加所有 privacyguard 子模块到 hiddenimports
+   - 添加 `hook-secureredact.py` hook 文件
+   - 添加 `runtime_hook_secureredact.py` 运行时 hook
+   - 在 spec 文件中手动添加所有 secureredact 子模块到 hiddenimports
 
 ### 经验教训
 
@@ -2475,13 +2475,13 @@
 
 ### 相关文件
 
-- `privacyguard/utils/security.py` - 关键修复
-- `privacyguard/__init__.py` - 相对导入改绝对导入
-- `privacyguard/utils/__init__.py` - 相对导入改绝对导入
-- `privacyguard/ocr/__init__.py` - 相对导入改绝对导入
-- `packaging/windows/config/PrivacyGuard_windows.spec` - hiddenimports 配置
-- `packaging/windows/config/hook-privacyguard.py` - 新增 hook 文件
-- `packaging/windows/config/runtime_hook_privacyguard.py` - 新增 runtime hook
+- `secureredact/utils/security.py` - 关键修复
+- `secureredact/__init__.py` - 相对导入改绝对导入
+- `secureredact/utils/__init__.py` - 相对导入改绝对导入
+- `secureredact/ocr/__init__.py` - 相对导入改绝对导入
+- `packaging/windows/config/SecureRedact_windows.spec` - hiddenimports 配置
+- `packaging/windows/config/hook-secureredact.py` - 新增 hook 文件
+- `packaging/windows/config/runtime_hook_secureredact.py` - 新增 runtime hook
 - `docs/diary/20260311_pyinstaller_packaging_fix_diary.md` - 详细排查日记
 
 ### 待验证
@@ -2513,7 +2513,7 @@
 - packaging 同步：
   - `packaging/README.md`
   - `packaging/DUAL_OCR_PACKAGING.md`
-  - `packaging/windows/config/PrivacyGuard_Setup.iss`
+  - `packaging/windows/config/SecureRedact_Setup.iss`
   - `packaging/windows/config/version_info.txt`
   - `packaging/windows/docs/*`
   - `packaging/windows/scripts/README*.txt`
@@ -2523,7 +2523,7 @@
 ### 验证结果
 
 - `python3 packaging/windows/scripts/generate_version_info.py`：通过
-- `python3 -m compileall -q main.py privacyguard tests`：通过
+- `python3 -m compileall -q main.py secureredact tests`：通过
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v`：28/28 通过
 
 ### 回滚与检查点
@@ -2592,7 +2592,7 @@
 - packaging 同步：
   - `packaging/README.md`
   - `packaging/DUAL_OCR_PACKAGING.md`
-  - `packaging/windows/config/PrivacyGuard_Setup.iss`
+  - `packaging/windows/config/SecureRedact_Setup.iss`
   - `packaging/windows/config/version_info.txt`
   - `packaging/windows/docs/*`
   - `packaging/windows/scripts/README*.txt`
@@ -2604,7 +2604,7 @@
 ### 验证结果
 
 - `python3 packaging/windows/scripts/generate_version_info.py`：通过
-- `python3 -m compileall -q main.py privacyguard tests`：通过
+- `python3 -m compileall -q main.py secureredact tests`：通过
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v`：26/26 通过
 
 ### 回滚与检查点
@@ -2631,7 +2631,7 @@
 ### 修复内容
 
 - 新增共享模块：
-  - `privacyguard/ocr/mixed_pdf.py`
+  - `secureredact/ocr/mixed_pdf.py`
 - 新增共享能力：
   - 提取 `page.get_text("dict")` 中的图片块区域
   - 对图片块裁剪渲染后执行 OCR
@@ -2642,7 +2642,7 @@
     - 嵌入图片块 OCR 命中
     - 无文本层时回退整页 OCR
   - 高级设置提示文案从“仅对纯图片PDF生效”改为“对扫描区域 / 嵌入图片区域生效”
-- `privacyguard/workers/ocr_worker.py`
+- `secureredact/workers/ocr_worker.py`
   - 同步接入共享混合扫描逻辑，避免两套实现继续漂移
 
 ### 新增测试
@@ -2653,7 +2653,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests`：通过
+- `python3 -m compileall -q main.py secureredact tests`：通过
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.unit.test_pdf_text_hit_dedup tests.unit.test_package_imports tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace tests.unit.test_app_config tests.test_path_validation tests.unit.test_ocr_api -v`：26/26 通过
 
 ### 回滚与检查点
@@ -2695,7 +2695,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests`：通过
+- `python3 -m compileall -q main.py secureredact tests`：通过
 - `python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.unit.test_pdf_text_hit_dedup tests.unit.test_package_imports tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace tests.unit.test_app_config tests.test_path_validation tests.unit.test_ocr_api -v`：26/26 通过
 
 ### 回滚与检查点
@@ -2711,7 +2711,7 @@
 ### 本次目标
 
 1. 修复代码审查中确认的运行时安全问题
-2. 修复 `privacyguard` 导入时对 OCR 依赖的强耦合
+2. 修复 `secureredact` 导入时对 OCR 依赖的强耦合
 3. 修复文本型 PDF 重复命中带来的错误结果和性能浪费
 4. 将 Word 预览切换为局部 DOM 更新，降低整页重绘
 5. 修复设置“看似保存成功、实际未完全持久化”的问题
@@ -2720,15 +2720,15 @@
 
 - 路径校验统一：
   - `main.py` 删除重复 `validate_safe_path()` 实现
-  - 统一调用 `privacyguard.utils.security.validate_safe_path`
+  - 统一调用 `secureredact.utils.security.validate_safe_path`
 
 - 包级导入稳定性：
-  - `privacyguard/__init__.py` 改为懒导入 worker / OCR 对象
-  - `privacyguard/workers/__init__.py` 同步改为懒导入
-  - `privacyguard/workers/ocr_worker.py` 使用延迟 `RapidOCR` 初始化
+  - `secureredact/__init__.py` 改为懒导入 worker / OCR 对象
+  - `secureredact/workers/__init__.py` 同步改为懒导入
+  - `secureredact/workers/ocr_worker.py` 使用延迟 `RapidOCR` 初始化
 
 - 文本型 PDF 去重：
-  - 新增 `privacyguard/ocr/text_pdf.py`
+  - 新增 `secureredact/ocr/text_pdf.py`
   - 文本页重复字符串只 search 一次并复用结果
   - `main.py` 与模块化 worker 统一复用共享实现
 
@@ -2741,7 +2741,7 @@
   - `SimpleConfig` 新增 `save()`
   - 设置窗口保存时改为批量写入后统一落盘
   - 新增 `redaction.custom_keywords` 持久化
-  - `main.py` / `privacyguard.__version__` 统一从 `version.txt` 读取
+  - `main.py` / `secureredact.__version__` 统一从 `version.txt` 读取
 
 ### 新增测试
 
@@ -2753,7 +2753,7 @@
 
 ### 验证结果
 
-- `python3 -m compileall -q main.py privacyguard tests`：通过
+- `python3 -m compileall -q main.py secureredact tests`：通过
 - `python3 -m unittest tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v`：24/24 通过
 
 ### 回滚与检查点
@@ -2862,7 +2862,7 @@
 ### 验证结果
 
 - 编译检查：
-  - `python3 -m compileall -q main.py privacyguard tests/unit/test_word_replace_rules.py tests/unit/test_batch_word_replace.py`
+  - `python3 -m compileall -q main.py secureredact tests/unit/test_word_replace_rules.py tests/unit/test_batch_word_replace.py`
   - 结果：通过
 - 测试：
   - `python3 -m unittest tests.test_path_validation -v`（7 项通过）
@@ -2906,14 +2906,14 @@
   - 拖拽预览命中坐标修复：统一到 `self.scroll` 坐标系，修正边界判断误差。
   - 扫描完成状态修复：引入 `self._ocr_processed_pages`，避免以命中数误判“已完成”。
   - Word 预览 HTML 缓存机制：新增 `self._word_base_html` / `self._word_html_source_path`，并在文档切换时失效清理。
-- `privacyguard/workers/word_worker.py`
+- `secureredact/workers/word_worker.py`
   - 完成信号中新增 `__scan_meta__`（`processed_pages`、`total_pages`、`cancelled`）。
-- `privacyguard/workers/ocr_worker.py`
+- `secureredact/workers/ocr_worker.py`
   - 同步增加 OCR 文本检索缓存优化，与主流程保持一致。
 
 #### P3 修复
 
-- `privacyguard/utils/security.py`
+- `secureredact/utils/security.py`
   - 路径校验改为平台感知（Windows / 非 Windows 差异化处理）。
   - 新增 URL 编码危险序列检查与 `commonpath` 白名单校验。
   - 扩展名白名单比较改为大小写无关。
@@ -2941,7 +2941,7 @@
 #### 脚本一致性修复
 
 - Windows:
-  - `packaging/windows/config/PrivacyGuard_Setup.iss` 改为支持命令行注入版本：
+  - `packaging/windows/config/SecureRedact_Setup.iss` 改为支持命令行注入版本：
     - 使用 `#ifndef MyAppVersion` 默认值
     - `3_build_with_setup.bat` / `4_create_installer_only.bat` 编译时传入 `/DMyAppVersion=%VERSION%`
   - 修复虚拟环境路径不一致问题（`venv_win` vs `venv`）：
@@ -2967,8 +2967,8 @@
 ### 验证结果
 
 - 语法检查：
-  - `python3 -m compileall -q main.py privacyguard/workers/word_worker.py privacyguard/workers/ocr_worker.py`
-  - `python3 -m compileall -q privacyguard/utils/security.py tests/test_path_validation.py tests/unit/test_ocr_api.py`
+  - `python3 -m compileall -q main.py secureredact/workers/word_worker.py secureredact/workers/ocr_worker.py`
+  - `python3 -m compileall -q secureredact/utils/security.py tests/test_path_validation.py tests/unit/test_ocr_api.py`
   - 结果：通过
 - 测试：
   - `python3 -m unittest tests.test_path_validation -v`（7 项通过）
@@ -3329,16 +3329,16 @@ if is_text_pdf:
 
 **1. 代码文件修改**:
 - `main.py`: 移除 OCR 引擎选择逻辑，只保留 RapidOCR
-- `privacyguard/ocr/paddleocr.py`: 删除整个文件
-- `privacyguard/ocr/manager.py`: 简化，移除 PaddleOCR 相关逻辑
-- `privacyguard/ocr/__init__.py`: 移除 PaddleOCR 导出
+- `secureredact/ocr/paddleocr.py`: 删除整个文件
+- `secureredact/ocr/manager.py`: 简化，移除 PaddleOCR 相关逻辑
+- `secureredact/ocr/__init__.py`: 移除 PaddleOCR 导出
 
 **2. UI 修改**:
 - `SettingsDialog`: 移除"OCR 引擎设置"分组中的引擎选择部分
 - 保留检测框调节、偏移设置等功能
 
 **3. 模型文件删除**:
-- `privacyguard/ocr/models/paddleocr/`: 删除整个目录
+- `secureredact/ocr/models/paddleocr/`: 删除整个目录
 
 **4. 依赖移除**:
 - `requirements.txt`: 移除 `paddleocr` 和 `paddlepaddle` 依赖
@@ -3351,7 +3351,7 @@ if is_text_pdf:
 **OCRWorker 简化**:
 ```python
 # v37.4.0: 直接使用 RapidOCR，移除引擎管理器
-from privacyguard.ocr.rapidocr import RapidOCREngine
+from secureredact.ocr.rapidocr import RapidOCREngine
 ocr_engine = RapidOCREngine()
 ```
 
@@ -3452,7 +3452,7 @@ self._engine = PaddleOCR(
 ```
 
 **文件修改**:
-- `privacyguard/ocr/paddleocr.py`:
+- `secureredact/ocr/paddleocr.py`:
   - 版本号: v37.3.16 → v37.3.17
   - 移除 `use_doc_orientation_classify=False`
   - 移除 `use_doc_unwarp=False`
@@ -3525,7 +3525,7 @@ if i == 0 and len(box) >= 4:
 ```
 
 **文件修改**:
-- `privacyguard/ocr/paddleocr.py`:
+- `secureredact/ocr/paddleocr.py`:
   - 版本号: v37.3.15 → v37.3.16
   - PaddleOCR 初始化添加 `use_doc_orientation_classify=False` 和 `use_doc_unwarp=False`
   - 添加调试输出
@@ -3608,7 +3608,7 @@ def _polygon_to_rect(self, polygon):
 4. 结果转换为 Python float - 确保序列化兼容
 
 **文件修改**:
-- `privacyguard/ocr/paddleocr.py`:
+- `secureredact/ocr/paddleocr.py`:
   - 版本号: v37.3.14 → v37.3.15
   - 修改 `_polygon_to_rect()` 方法
 
@@ -3672,7 +3672,7 @@ def _polygon_to_rect(self, polygon):
 ```
 
 **文件修改**:
-- `privacyguard/ocr/paddleocr.py`:
+- `secureredact/ocr/paddleocr.py`:
   - 版本号: v37.3.13 → v37.3.14
   - 新增 `_polygon_to_rect()` 方法
   - 修改 `recognize()` 方法，转换多边形为矩形
@@ -3722,7 +3722,7 @@ def _polygon_to_rect(self, polygon):
    ```
 
 **文件修改**:
-- `privacyguard/ocr/paddleocr.py`:
+- `secureredact/ocr/paddleocr.py`:
   - 版本号更新: v37.3.12 → v37.3.13
   - 修改 `recognize()` 方法的格式检测逻辑
   - 使用字典访问替代属性访问
@@ -4165,7 +4165,7 @@ WPS 无法编辑脱敏框              ✅ 通过
 ### 🔒 安全漏洞修复（严重）
 
 **问题描述**:
-用户报告：使用 PrivacyGuard 对 PDF 脱敏后，用 WPS 等工具可以删除涂黑/涂白区域，看到原始敏感信息。
+用户报告：使用 SecureRedact 对 PDF 脱敏后，用 WPS 等工具可以删除涂黑/涂白区域，看到原始敏感信息。
 
 **安全影响**: 🔴 **严重** - 脱敏操作可被撤销，违背软件安全目标
 
@@ -4227,9 +4227,9 @@ doc_save.save(fname, garbage=4, deflate=True, clean=True, linear=True)
 
 **技术实现**:
 
-1. **新增 OCR 模块** (`privacyguard/ocr/`):
+1. **新增 OCR 模块** (`secureredact/ocr/`):
    ```
-   privacyguard/ocr/
+   secureredact/ocr/
    ├── __init__.py       # 模块导出
    ├── base.py           # 基类和数据结构
    ├── rapidocr.py       # RapidOCR 封装
@@ -4268,7 +4268,7 @@ doc_save.save(fname, garbage=4, deflate=True, clean=True, linear=True)
 **文件修改**:
 - `main.py`: OCRWorker 改造, SettingsDialog 更新, MainWindow 集成
 - `config.json.template`: 添加 ocr.engine 配置
-- `privacyguard/ocr/*.py`: 新增引擎模块
+- `secureredact/ocr/*.py`: 新增引擎模块
 
 ### ✅ 测试验证 (2026-02-22)
 
@@ -4371,12 +4371,12 @@ LibreOffice 转换出错: [Errno 2] No such file or directory: 'soffice'
 | `config.json.template` | 修改 | 扫描模式配置模板 |
 | `version.txt` | 修改 | 37.0.9 → 37.0.10 |
 | `packaging/windows/config/version_info.txt` | 修改 | 37.0.4 → 37.0.10 |
-| `packaging/windows/config/PrivacyGuard_Setup.iss` | 修改 | 37.0.9 → 37.0.10 |
+| `packaging/windows/config/SecureRedact_Setup.iss` | 修改 | 37.0.9 → 37.0.10 |
 | `CHANGELOG.md` | 新增 | v37.0.10 条目 |
 | `docs/current/STATUS.md` | 更新 | 版本状态 |
 | `docs/current/DEV_LOG.md` | 新增 | 开发日志 |
 | `CLAUDE.md` | 更新 | 版本号 |
-| `packaging/macos/config/PrivacyGuard.spec` | 修改 | CFBundleVersion |
+| `packaging/macos/config/SecureRedact.spec` | 修改 | CFBundleVersion |
 
 ### ✅ 验证清单
 
@@ -4524,8 +4524,8 @@ def _cleanup_before_open(self):
 - 让系统原生处理文件对话框渲染
 
 #### 3. 禁用控制台窗口
-- `PrivacyGuard_windows.spec`: `console=True` → `console=False`
-- `PrivacyGuard_windows_v2.spec`: `console=True` → `console=False`
+- `SecureRedact_windows.spec`: `console=True` → `console=False`
+- `SecureRedact_windows_v2.spec`: `console=True` → `console=False`
 
 ### 📁 修改文件
 
@@ -4534,10 +4534,10 @@ def _cleanup_before_open(self):
 | `main.py` | 新增 | `_cleanup_before_open()` 方法 |
 | `main.py` | 修改 | `open_pdf()` 使用原生文件对话框 |
 | `main.py` | 修改 | `VERSION = "37.0.7 - Stability Fix"` |
-| `packaging/windows/config/PrivacyGuard_windows.spec` | 修改 | `console=False` |
-| `packaging/windows/config/PrivacyGuard_windows_v2.spec` | 修改 | `console=False` |
+| `packaging/windows/config/SecureRedact_windows.spec` | 修改 | `console=False` |
+| `packaging/windows/config/SecureRedact_windows_v2.spec` | 修改 | `console=False` |
 | `version.txt` | 修改 | 37.0.6 → 37.0.7 |
-| `PrivacyGuard_Setup.iss` | 修改 | 版本号更新 |
+| `SecureRedact_Setup.iss` | 修改 | 版本号更新 |
 
 ### ✅ 验证清单
 
@@ -4662,7 +4662,7 @@ threading.excepthook = thread_exception_hook
 | `main.py` | 修改 | 增强异常处理、添加全局异常钩子 |
 | `requirements.txt` | 修改 | onnxruntime 1.24.1 → 1.16.3 |
 | `version.txt` | 修改 | 37.0.4 → 37.0.5 |
-| `packaging/windows/config/PrivacyGuard_windows.spec` | 修改 | console=True (调试用) |
+| `packaging/windows/config/SecureRedact_windows.spec` | 修改 | console=True (调试用) |
 | `packaging/windows/scripts/verify_dependencies.py` | 新增 | 依赖验证脚本 |
 | `packaging/windows/scripts/build_complete.bat` | 修改 | 添加依赖验证步骤 |
 | `packaging/windows/scripts/1_init_environment.bat` | 修改 | 支持 venv_win |
@@ -4744,9 +4744,9 @@ threading.excepthook = thread_exception_hook
 3. `clean_project.bat` / `clean_project.sh` - 项目清理（保留备份）
 
 **更新所有 PyInstaller Spec 文件**:
-- `packaging/windows/config/PrivacyGuard_windows.spec` ✅
-- `packaging/windows/config/PrivacyGuard_windows_v2.spec` ✅
-- `packaging/macos/config/PrivacyGuard.spec` ✅
+- `packaging/windows/config/SecureRedact_windows.spec` ✅
+- `packaging/windows/config/SecureRedact_windows_v2.spec` ✅
+- `packaging/macos/config/SecureRedact.spec` ✅
 
 **新增文档**:
 - `PACKAGING_GUIDE.md` - 完整打包指南（双平台）
@@ -4778,7 +4778,7 @@ threading.excepthook = thread_exception_hook
 
 **新增修复方案**:
 
-### 1. 增强版 Spec 文件 (`PrivacyGuard_windows_v2.spec`)
+### 1. 增强版 Spec 文件 (`SecureRedact_windows_v2.spec`)
 - 递归遍历收集 onnxruntime 所有文件（包括 capi 子目录）
 - 精确控制 DLL 目标路径（保持原始目录结构）
 - 从多个位置搜索 VC++ DLL（System32, Python DLLs, Conda Library）
@@ -4810,7 +4810,7 @@ threading.excepthook = thread_exception_hook
 
 **文件变更**:
 ```
-A  packaging/windows/config/PrivacyGuard_windows_v2.spec
+A  packaging/windows/config/SecureRedact_windows_v2.spec
 A  packaging/windows/scripts/diagnose_onnxruntime.py
 A  packaging/windows/scripts/2_build_exe_enhanced.bat
 A  packaging/windows/DLL_FIX_GUIDE_v37.md
@@ -4854,7 +4854,7 @@ ImportError: DLL load failed while importing onnxruntime_pybind11_state:
 
 **修复措施**:
 
-1. **更新 PyInstaller Spec** (`packaging/windows/config/PrivacyGuard_windows.spec`)
+1. **更新 PyInstaller Spec** (`packaging/windows/config/SecureRedact_windows.spec`)
    - 增加从系统目录收集 VC++ DLL
    - 增加从 Python 安装目录收集 VC++ DLL
    - 新增 DLL: `vcruntime140_1.dll`, `msvcp140_1.dll`, `msvcp140_2.dll`
@@ -4868,7 +4868,7 @@ ImportError: DLL load failed while importing onnxruntime_pybind11_state:
    - 将 `vcruntime140_1.dll` 标记为必需（而非可选）
    - 增加 `msvcp140_1.dll` 和 `msvcp140_2.dll` 检查
 
-4. **更新 Inno Setup 脚本** (`PrivacyGuard_Setup.iss`)
+4. **更新 Inno Setup 脚本** (`SecureRedact_Setup.iss`)
    - 安装前检查 `vcruntime140_1.dll`
    - 显示具体的缺失 DLL 列表
    - 使用启动器包装器创建快捷方式
@@ -4883,8 +4883,8 @@ ImportError: DLL load failed while importing onnxruntime_pybind11_state:
 
 **文件变更**:
 ```
-M  packaging/windows/config/PrivacyGuard_windows.spec
-M  packaging/windows/config/PrivacyGuard_Setup.iss
+M  packaging/windows/config/SecureRedact_windows.spec
+M  packaging/windows/config/SecureRedact_Setup.iss
 M  packaging/windows/scripts/2_build_exe.bat
 M  packaging/windows/scripts/4_create_installer_only.bat
 M  packaging/windows/scripts/check_vcredist.bat
@@ -4898,7 +4898,7 @@ A  packaging/windows/archive/TROUBLESHOOTING.md
 
 ### ⚙️ 配置系统实现
 
-#### 1. 核心配置模块 (`privacyguard/utils/config.py`)
+#### 1. 核心配置模块 (`secureredact/utils/config.py`)
 **功能**: JSON 配置文件系统，支持热重载和向后兼容
 
 **特性**:
@@ -4912,7 +4912,7 @@ A  packaging/windows/archive/TROUBLESHOOTING.md
 **默认配置项**:
 ```python
 DEFAULT_CONFIG = {
-    "app.name": "PrivacyGuard 脱敏卫士",
+    "app.name": "SecureRedact 信息脱敏助手",
     "app.window.default_width": 1300,
     "app.window.default_height": 900,
     "redaction.default_rules": {...},
@@ -4939,7 +4939,7 @@ if CONFIG_AVAILABLE:
         print(f"[配置系统] 初始化失败: {e}")
 
 # 使用配置或硬编码后备
-APP_NAME = config.get("app.name", "PrivacyGuard 脱敏卫士") if config else "PrivacyGuard 脱敏卫士"
+APP_NAME = config.get("app.name", "SecureRedact 信息脱敏助手") if config else "SecureRedact 信息脱敏助手"
 ```
 
 #### 3. 配置文件模板 (`config.json.template`)
@@ -4957,8 +4957,8 @@ APP_NAME = config.get("app.name", "PrivacyGuard 脱敏卫士") if config else "P
 ### 📦 文件变更
 
 ```
-privacyguard/utils/config.py          [新增] 配置管理器核心模块
-privacyguard/utils/__init__.py        [修改] 导出配置类
+secureredact/utils/config.py          [新增] 配置管理器核心模块
+secureredact/utils/__init__.py        [修改] 导出配置类
 config.json.template                  [新增] 配置模板
 config.json                           [生成] 用户配置文件
 main.py                               [修改] 集成配置系统
@@ -5022,7 +5022,7 @@ except (IOError, OSError, RuntimeError, ValueError,
 ### 📦 发布包
 
 ```
-releases/macos/PrivacyGuard-36.4-macOS.dmg (309MB) ✅
+releases/macos/SecureRedact-36.4-macOS.dmg (309MB) ✅
 SHA256: 9a77ec5bbd0d3b26db604427465d03e55ae73e559c5c2ee7126110cb89a2336d
 ```
 
@@ -5039,16 +5039,16 @@ backups/v36.5_security_fix_20260217_205211/
 ### 🍎 macOS 应用打包
 
 **完成内容**:
-- ✅ 成功打包 macOS 应用 `PrivacyGuard.app` (708MB)
-- ✅ 创建 DMG 安装包 `PrivacyGuard-36.4-macOS.dmg` (308MB)
+- ✅ 成功打包 macOS 应用 `SecureRedact.app` (708MB)
+- ✅ 创建 DMG 安装包 `SecureRedact-36.4-macOS.dmg` (308MB)
 - ✅ 生成 SHA256 校验和
 - ✅ 修复打包脚本路径计算错误 (`build_macos_app.sh:20`)
 
 **打包输出**:
 ```
-dist/PrivacyGuard.app
-releases/macos/PrivacyGuard-36.4-macOS.dmg (308MB)
-releases/macos/PrivacyGuard-36.4-macOS.dmg.sha256
+dist/SecureRedact.app
+releases/macos/SecureRedact-36.4-macOS.dmg (308MB)
+releases/macos/SecureRedact-36.4-macOS.dmg.sha256
 ```
 
 ### 🐛 .doc 格式转换修复 (macOS)
@@ -5344,8 +5344,8 @@ PrivacyApp v24 稳定性测试
 - **支持平台**: macOS 11.0+ / Windows 10/11
 
 ### 发布包
-- `PrivacyGuard-36.0-macOS.dmg`
-- `PrivacyGuard-36.0-Windows.zip`
+- `SecureRedact-36.0-macOS.dmg`
+- `SecureRedact-36.0-Windows.zip`
 
 ### 文档完善
 - 用户安装指南（macOS + Windows）
@@ -5392,7 +5392,7 @@ PrivacyApp v24 稳定性测试
 ### 里程碑：首次 Windows 打包成功
 
 **重大成就**:
-- 实现了 PrivacyGuard 在 Windows 平台的首次成功打包
+- 实现了 SecureRedact 在 Windows 平台的首次成功打包
 - 应用现在支持 macOS 和 Windows 双平台运行
 - 完整保留了所有核心功能
 
@@ -5418,8 +5418,8 @@ PrivacyApp v24 稳定性测试
 
 | 平台 | 状态 | 版本 | 构建产物 |
 |------|------|------|----------|
-| macOS | ✅ 已发布 | v35.0 | PrivacyGuard-35.0-macOS.dmg |
-| Windows | ✅ 已发布 | v35.0 | PrivacyGuard-35.0-Windows.zip |
+| macOS | ✅ 已发布 | v35.0 | SecureRedact-35.0-macOS.dmg |
+| Windows | ✅ 已发布 | v35.0 | SecureRedact-35.0-Windows.zip |
 
 #### 功能验证
 

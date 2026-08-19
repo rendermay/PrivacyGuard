@@ -19,7 +19,7 @@
 
 ### 1. macOS 打包配置
 
-**文件**: `packaging/macos/config/PrivacyGuard.spec`
+**文件**: `packaging/macos/config/SecureRedact.spec`
 
 **更新内容**:
 ```diff
@@ -31,8 +31,8 @@
 
 ### 2. Windows 打包配置
 
-**文件**: `packaging/windows/config/PrivacyGuard_windows.spec`
-**文件**: `packaging/windows/config/PrivacyGuard_windows_v2.spec`
+**文件**: `packaging/windows/config/SecureRedact_windows.spec`
+**文件**: `packaging/windows/config/SecureRedact_windows_v2.spec`
 
 **更新内容**: 无需修改
 

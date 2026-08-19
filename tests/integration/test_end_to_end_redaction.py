@@ -121,10 +121,10 @@ class TestEndToEndRedaction(unittest.TestCase):
         hit_texts_before = [h[1] for h in hits]
 
         # 模拟开启姓名识别后追加到 all_patterns
-        with patch("privacyguard.workers.ocr_worker.QThread.__init__",
+        with patch("secureredact.workers.ocr_worker.QThread.__init__",
                    new=lambda self: None):
             # 调用识别器 (跳过 jieba 冷启动)
-            from privacyguard.pii.name_recognizer import extract_person_names
+            from secureredact.pii.name_recognizer import extract_person_names
             names = extract_person_names(PDF_PAGE_TEXTS[1])
 
         self.assertIn("周强", names,
@@ -132,7 +132,7 @@ class TestEndToEndRedaction(unittest.TestCase):
 
     def test_page3_plaintiff_signature_with_heuristic(self):
         """Page 3 启用姓名识别后,应命中签名'周强'."""
-        from privacyguard.pii.name_recognizer import extract_person_names
+        from secureredact.pii.name_recognizer import extract_person_names
         names = extract_person_names(PDF_PAGE_TEXTS[2])
         self.assertIn("周强", names,
             f"姓名识别应命中签名'周强', 实得 {names}")

@@ -7,7 +7,7 @@ import threading
 from datetime import datetime, timedelta
 from typing import Dict, Iterator, List, Optional
 
-from privacyguard.redaction.hit_ref import HitRef, Override, VALID_ACTIONS, VALID_SCOPES
+from secureredact.redaction.hit_ref import HitRef, Override, VALID_ACTIONS, VALID_SCOPES
 
 logger = logging.getLogger(__name__)
 

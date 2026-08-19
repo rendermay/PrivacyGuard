@@ -1,4 +1,4 @@
-# PrivacyGuard v37.0.4 版本发布说明
+# SecureRedact v37.0.4 版本发布说明
 
 **发布日期**: 2026-02-19
 **版本号**: v37.0.4
@@ -58,9 +58,9 @@ v37.0.4 是 v37.0 配置系统版本的功能增强更新，主要包含：
 - 方案: 构建后自动复制系统 DLL 到输出目录
 - 关键代码:
   ```batch
-  copy "C:\Windows\System32\vcruntime140_1.dll" "dist\PrivacyGuard\"
-  copy "C:\Windows\System32\vcruntime140.dll" "dist\PrivacyGuard\"
-  copy "C:\Windows\System32\msvcp140.dll" "dist\PrivacyGuard\"
+  copy "C:\Windows\System32\vcruntime140_1.dll" "dist\SecureRedact\"
+  copy "C:\Windows\System32\vcruntime140.dll" "dist\SecureRedact\"
+  copy "C:\Windows\System32\msvcp140.dll" "dist\SecureRedact\"
   ```
 
 #### 资源文件打包
@@ -75,8 +75,8 @@ v37.0.4 是 v37.0 配置系统版本的功能增强更新，主要包含：
 ### Windows 版本
 ```
 releases/windows/
-├── PrivacyGuard-v37.0.4-Windows-Portable.zip      (便携版)
-└── PrivacyGuard-v37.0.4-Windows-Portable.zip.sha256 (校验和)
+├── SecureRedact-v37.0.4-Windows-Portable.zip      (便携版)
+└── SecureRedact-v37.0.4-Windows-Portable.zip.sha256 (校验和)
 ```
 
 **特性:**
@@ -87,9 +87,9 @@ releases/windows/
 ### macOS 版本
 ```
 releases/macos/
-├── PrivacyGuard-v37.0.4-macOS.dmg                 (安装包)
-├── PrivacyGuard-v37.0.4-macOS.dmg.sha256          (校验和)
-└── PrivacyGuard.app/                              (应用包)
+├── SecureRedact-v37.0.4-macOS.dmg                 (安装包)
+├── SecureRedact-v37.0.4-macOS.dmg.sha256          (校验和)
+└── SecureRedact.app/                              (应用包)
 ```
 
 **特性:**
@@ -129,7 +129,7 @@ releases/macos/
 
 ## 🙏 致谢
 
-感谢使用 PrivacyGuard 脱敏卫士！
+感谢使用 SecureRedact 信息脱敏助手！
 
 如有问题或建议，欢迎通过以下方式联系：
 - **微信公众号**: 池州汪律的Ai进化论
@@ -138,5 +138,5 @@ releases/macos/
 
 ---
 
-**PrivacyGuard 团队**
+**SecureRedact 团队**
 2026-02-19

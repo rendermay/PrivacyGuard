@@ -1,5 +1,5 @@
 """
-PrivacyGuard 配置管理模块
+SecureRedact 配置管理模块
 
 v37.0: 配置系统实现 - 支持 JSON 配置文件、热重载、向后兼容
 """
@@ -30,7 +30,7 @@ class ConfigNotFoundError(ConfigError):
 DEFAULT_CONFIG = {
     "version": "1.0",
     "app": {
-        "name": "PrivacyGuard 脱敏卫士",
+        "name": "SecureRedact 信息脱敏助手",
         "window": {
             "default_width": 1300,
             "default_height": 900,
@@ -204,7 +204,7 @@ class ConfigManager:
             if not os.access(app_dir, os.W_OK):
                 raise PermissionError
         except (OSError, PermissionError):
-            user_dir = Path.home() / ".privacyguard"
+            user_dir = Path.home() / ".secureredact"
             user_dir.mkdir(exist_ok=True)
             config_path = user_dir / "config.json"
 

@@ -1,10 +1,10 @@
 @echo off
-:: PrivacyGuard Build Script
+:: SecureRedact Build Script
 chcp 65001 > nul 2>&1
-title PrivacyGuard Build
+title SecureRedact Build
 echo.
 echo ========================================
-echo   PrivacyGuard Build Script
+echo   SecureRedact Build Script
 echo ========================================
 echo.
 
@@ -18,7 +18,7 @@ if errorlevel 1 (
 )
 
 :: Configuration
-set "APP_NAME=PrivacyGuard"
+set "APP_NAME=SecureRedact"
 set "CONFIG_DIR=%~dp0\..\config"
 
 :: Read version
@@ -46,7 +46,7 @@ if not defined VENV_PATH (
     exit /b 1
 )
 
-if not exist "%CONFIG_DIR%\PrivacyGuard_windows.spec" (
+if not exist "%CONFIG_DIR%\SecureRedact_windows.spec" (
     echo [ERROR] Build configuration not found
     pause
     exit /b 1
@@ -127,7 +127,7 @@ echo [2/4] Building executable (5-10 minutes)...
 echo    Please wait...
 echo.
 
-python -m PyInstaller --clean --noconfirm "%CONFIG_DIR%\PrivacyGuard_windows.spec"
+python -m PyInstaller --clean --noconfirm "%CONFIG_DIR%\SecureRedact_windows.spec"
 
 if errorlevel 1 (
     echo.
@@ -185,7 +185,7 @@ echo.
 set /p TEST_NOW="Run test now? (y/n): "
 if /i "%TEST_NOW%"=="y" (
     echo.
-    echo Starting PrivacyGuard...
+    echo Starting SecureRedact...
     :: Use launcher wrapper for DLL checking
     if exist "%DIST_DIR%\%APP_NAME%\launcher_wrapper.bat" (
         start "" "%DIST_DIR%\%APP_NAME%\launcher_wrapper.bat"

@@ -1,4 +1,4 @@
-# PrivacyGuard 项目文档索引
+# SecureRedact 项目文档索引
 
 **当前基线版本**: v37.7.6
 **最后更新**: 2026-05-16
@@ -68,7 +68,7 @@
 4. 右侧替换后预览融合：规则替换 + 手动脱敏 + 智能脱敏
 5. 运行时整改：
    - 安全路径校验统一
-   - `privacyguard` OCR 懒导入
+   - `secureredact` OCR 懒导入
    - 文本型 PDF 去重
    - Word 预览改为按 `data-key` 局部更新
    - 设置持久化与版本来源统一
@@ -82,8 +82,8 @@
    - packaging 脚本链、版本资源与说明文档已再次复核
    - 当前主回归基线已统一到 `52/52`
 9. PyInstaller 打包修复：
-   - 修复 `privacyguard.utils.security` 语法错误导致的模块导入失败
-   - 补齐 `privacyguard` 相关 hiddenimports、hook 与 runtime hook
+   - 修复 `secureredact.utils.security` 语法错误导致的模块导入失败
+   - 补齐 `secureredact` 相关 hiddenimports、hook 与 runtime hook
    - 当前 active 文档入口与工作目录路径已同步到 `v37.7.4`
 10. v38 UI 改造代码层收口：
    - 首页、PDF、Word、批量 Word、图片合并、高级设置已统一到同一套桌面级壳层语言
@@ -114,8 +114,8 @@
 ## 5. 当前标准验证命令
 
 ```bash
-cd /Users/a49144/Desktop/codexhub/PrivacyGuardApp
-python3 -m compileall -q main.py privacyguard tests
+cd /Users/a49144/Desktop/codexhub/SecureRedactApp
+python3 -m compileall -q main.py secureredact tests
 python3 -m unittest tests.unit.test_mixed_pdf_ocr tests.test_path_validation tests.unit.test_ocr_api tests.unit.test_package_imports tests.unit.test_pdf_text_hit_dedup tests.unit.test_app_config tests.unit.test_word_replace_rules tests.unit.test_batch_word_replace -v
 python3 main.py
 ```

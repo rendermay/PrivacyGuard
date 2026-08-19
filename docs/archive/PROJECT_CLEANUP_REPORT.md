@@ -1,4 +1,4 @@
-# PrivacyGuard 项目整理报告
+# SecureRedact 项目整理报告
 
 > 2026-02-17 项目深度整理完成报告
 

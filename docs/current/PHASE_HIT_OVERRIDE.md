@@ -30,10 +30,10 @@ v37.7.6 之前，自动命中（正则 / jieba 姓名 / 关键词 / 图片 OCR�
 
 | Wave | 目标 | 文件清单 | 完成判据 |
 |------|------|---------|---------|
-| **1** | 核心层：HitRef + doc_hash + HitOverrideStore | 新增 `privacyguard/redaction/{hit_ref,doc_hash,override_store}.py` + 3 个测试模块 | 20/20 测试通过 ✅ |
+| **1** | 核心层：HitRef + doc_hash + HitOverrideStore | 新增 `secureredact/redaction/{hit_ref,doc_hash,override_store}.py` + 3 个测试模块 | 20/20 测试通过 ✅ |
 | **2** | 配置默认键 | `config.json` + `main.py:SimpleConfig` + `test_override_config_defaults.py` | 2/2 通过；旧配置自动补齐 ✅ |
-| **3** | PDF 通道接入 | `privacyguard/workers/ocr_worker.py` + `main.py:MainWindow` + 画布右键菜单 | 6/6 通过；payload 改 `list[dict]` ✅ |
-| **4** | Word 通道接入 | `privacyguard/workers/word_worker.py` + `main.py:WebViewBridge` + 预览 JS | 7/7 通过 ✅ |
+| **3** | PDF 通道接入 | `secureredact/workers/ocr_worker.py` + `main.py:MainWindow` + 画布右键菜单 | 6/6 通过；payload 改 `list[dict]` ✅ |
+| **4** | Word 通道接入 | `secureredact/workers/word_worker.py` + `main.py:WebViewBridge` + 预览 JS | 7/7 通过 ✅ |
 | **5** | dock + 持久化 + 文档 + 全量回归 | 干预 dock、`SettingsDialog`、`version.txt`、`CHANGELOG.md`、本文档、`CLAUDE.md` | 3/3 通过 + 全量回归对齐 ✅ |
 
 ---
@@ -114,9 +114,9 @@ class Override:
 
 ### 3.4 不修改清单
 
-- `privacyguard/__init__.py`
-- `privacyguard/workers/__init__.py`
-- `privacyguard/pii/validators/*`
+- `secureredact/__init__.py`
+- `secureredact/workers/__init__.py`
+- `secureredact/pii/validators/*`
 - `theme.py`
 - `packaging/**`（待真机 smoke 后再动）
 

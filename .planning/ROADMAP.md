@@ -1,4 +1,4 @@
-# Roadmap: PrivacyGuard v39.0.0 — Word 脱敏重做
+# Roadmap: SecureRedact v39.0.0 — Word 脱敏重做
 
 **Milestone:** v39.0.0
 **Goal:** 系统性重做 Word 文档脱敏的架构 + 识别 + 扫描覆盖三类问题，根治误识 / 漏识 / 散落。
@@ -9,7 +9,7 @@
 
 ## Hard Constraints（贯穿全部 Phase）
 
-> **CONST-01**: v39 期间**不修改** `privacyguard/ocr/*`（PDF-only：`text_pdf.py` / `mixed_pdf.py`）+ `privacyguard/workers/ocr_worker.py` + `OCRWorker.page_result_signal` payload。PDF 端任何代码改动都视为 v39 引入的回归需立即修复。ARCH-03 仅产出"只读"边界文档，**不重构** PDF 侧。
+> **CONST-01**: v39 期间**不修改** `secureredact/ocr/*`（PDF-only：`text_pdf.py` / `mixed_pdf.py`）+ `secureredact/workers/ocr_worker.py` + `OCRWorker.page_result_signal` payload。PDF 端任何代码改动都视为 v39 引入的回归需立即修复。ARCH-03 仅产出"只读"边界文档，**不重构** PDF 侧。
 >
 > **CONST-02**: v39 走纯架构重构 + 工程调优，**零新 binary 依赖**（依赖矩阵与 v38 一致：python-docx 1.2.0 + lxml 6.1.1 + mammoth 1.11.0 + jieba 0.42.1 + rapidocr-onnxruntime 1.4.4 + difflib stdlib）。
 >
@@ -47,7 +47,7 @@ Pitfall 13（一次性替换 main.py）+ Pitfall 16（162 项数量伪基线）+
 
 ### Guard / Pre-condition
 
-- **未触动 PDF 端**：`git diff main.py privacyguard/ocr/* privacyguard/workers/ocr_worker.py` 保持 v38.0.1 的 hotfix diff 不变（本 Phase 也不去删这些 diff）。
+- **未触动 PDF 端**：`git diff main.py secureredact/ocr/* secureredact/workers/ocr_worker.py` 保持 v38.0.1 的 hotfix diff 不变（本 Phase 也不去删这些 diff）。
 - **162 项基线不退化**：跑全量回归，160 PASS + 2 known fail 保持。
 - 不修改 `main.py` 中任何 Word 相关代码；本 Phase 只新增文件。
 
@@ -74,7 +74,7 @@ Pitfall 13（一次性替换 main.py）+ Pitfall 16（162 项数量伪基线）+
 - 新增：`tests/fixtures/builders/PII_AUDIT.md`
 - 新增：`tests/unit/test_contract_freeze.py`
 - 新增：`tests/unit/test_main_sample_manifest.py`
-- 不动：`main.py` / `privacyguard/ocr/*` / `privacyguard/workers/ocr_worker.py` / `privacyguard/workers/word_worker.py`
+- 不动：`main.py` / `secureredact/ocr/*` / `secureredact/workers/ocr_worker.py` / `secureredact/workers/word_worker.py`
 
 ---
 
@@ -90,8 +90,8 @@ FN-01 + ARCH-02 必须先于一切规则调优（否则规则命中坐标不可�
 
 ### Guard / Pre-condition
 
-- **未触动 PDF 端**：`privacyguard/ocr/text_pdf.py` / `privacyguard/ocr/mixed_pdf.py` / `privacyguard/workers/ocr_worker.py` 与 v38.0.1 字节级一致。
-- Phase 1 的契约文档已落地，本 Phase 在 `privacyguard/word/contracts.py` 实现 TypedDict。
+- **未触动 PDF 端**：`secureredact/ocr/text_pdf.py` / `secureredact/ocr/mixed_pdf.py` / `secureredact/workers/ocr_worker.py` 与 v38.0.1 字节级一致。
+- Phase 1 的契约文档已落地，本 Phase 在 `secureredact/word/contracts.py` 实现 TypedDict。
 - 162 项基线不退化（Phase 2 仍不修改 main.py 的扫描代码，仅新增 `doc_scanner.py`；现有 main.py 的扫描路径与新增 `doc_scanner.py` 共存，main.py 暂不切换）。
 
 ### Maps to
@@ -111,14 +111,14 @@ FN-01 + ARCH-02 必须先于一切规则调优（否则规则命中坐标不可�
 
 ### Files Touched（预计）
 
-- 新增：`privacyguard/word/__init__.py`
-- 新增：`privacyguard/word/contracts.py`
-- 新增：`privacyguard/word/doc_scanner.py`
-- 新增：`privacyguard/word/text_linearizer.py`
+- 新增：`secureredact/word/__init__.py`
+- 新增：`secureredact/word/contracts.py`
+- 新增：`secureredact/word/doc_scanner.py`
+- 新增：`secureredact/word/text_linearizer.py`
 - 新增：`tests/fixtures/word/{nested_table,header_default,header_first,header_even,footer_default,comment,footnote,endnote,multi_section,hyperlink_cross_run}.docx`（或子目录）
 - 新增：`tests/unit/test_doc_scanner.py`、`test_doc_scanner_footnotes.py`、`test_text_linearizer.py`、`test_word_contracts.py`
 - 更新：`docs/word/FIELD_MAPPING.md`（Phase 2 增量）
-- 不动：`main.py` 现有扫描路径 / `privacyguard/ocr/*` / `privacyguard/workers/ocr_worker.py`
+- 不动：`main.py` 现有扫描路径 / `secureredact/ocr/*` / `secureredact/workers/ocr_worker.py`
 
 ---
 
@@ -126,7 +126,7 @@ FN-01 + ARCH-02 必须先于一切规则调优（否则规则命中坐标不可�
 
 ### Goal
 
-把 Word 的规则 / 命中 / 保存三个层从 `main.py` 抽出到 `privacyguard/word/{rule_engine,hit_collector,save_writer}.py`，main.py 改为调用新模块（保留兼容层），并实现「预览与保存共用 merge_priority 与 merged_hits_by_key」单一数据结构。
+把 Word 的规则 / 命中 / 保存三个层从 `main.py` 抽出到 `secureredact/word/{rule_engine,hit_collector,save_writer}.py`，main.py 改为调用新模块（保留兼容层），并实现「预览与保存共用 merge_priority 与 merged_hits_by_key」单一数据结构。
 
 ### 为什么这个顺序
 
@@ -134,9 +134,9 @@ ARCH-01/04 的落地必须配合 Strangler 抽取（Pitfall 13/14/15）。Phase 
 
 ### Guard / Pre-condition
 
-- **未触动 PDF 端**：`privacyguard/ocr/*` + `privacyguard/workers/ocr_worker.py` + `OCRWorker.page_result_signal` payload 与 v38.0.1 字节级一致。
+- **未触动 PDF 端**：`secureredact/ocr/*` + `secureredact/workers/ocr_worker.py` + `OCRWorker.page_result_signal` payload 与 v38.0.1 字节级一致。
 - Phase 2 的 `doc_scanner` + `contracts` 已落地。
-- 162 项基线不退化（Strangler 模式：main.py 调用 `privacyguard.word.*`，原实现保留为兼容层；新旧实现行为一致）。
+- 162 项基线不退化（Strangler 模式：main.py 调用 `secureredact.word.*`，原实现保留为兼容层；新旧实现行为一致）。
 
 ### Maps to
 
@@ -149,19 +149,19 @@ ARCH-01/04 的落地必须配合 Strangler 抽取（Pitfall 13/14/15）。Phase 
 1. **`rule_engine.scan(text, context) -> list[Hit]`** 跑通主样本：产出 hits 数量 ≥ v37.8.0 main.py 同路径（旧实现，保留兼容层）产出 hits；`source / rule_name / text / start / end` 字段值严格相等（`==`），允许 `replacement` 默认值差异但需记录在 `FIELD_MAPPING.md`。
 2. **`hit_collector.merge(hits) -> MergedHits`**：输入三通道命中（rule / manual / ocr），输出 `merged_hits_by_key`（key = `(location, start, end)`），合并顺序 `rule > manual > ocr`；`merged_hits_by_key[key].final_source ∈ {rule, manual}`，ocr 通道命中若与 rule/manual 同坐标被覆盖；`merged_hits_by_key` 与 `merge_priority` 同一数据结构引用，无副本漂移。
 3. **`save_writer.apply_hits(doc, merged_hits) -> SaveResult`**：实现 XML text-node patcher，**禁止** `run.text = ""` / `paragraph.text = ""`；patch 后重打开 docx 的 `paragraph.text` 与期望替换后文本严格相等，且不丢失批注 / 脚注引用 / drawing 子节点；`tests/unit/test_save_writer_patch.py` 跑通「patch 前 / patch 后 / 重打开」三阶段断言。
-4. **main.py 兼容层落地**：`main.py` 的 Word 路径改为调用 `privacyguard.word.*`，原 `WordWorker` 内联规则保留为 `_legacy_rule_engine` 私有函数；UI 行为不变（用户看不出差异）；`tests/unit/test_bridge_override_slots.py` + `test_word_source_field.py` + `test_pdf_source_field.py` 全部 PASS。
+4. **main.py 兼容层落地**：`main.py` 的 Word 路径改为调用 `secureredact.word.*`，原 `WordWorker` 内联规则保留为 `_legacy_rule_engine` 私有函数；UI 行为不变（用户看不出差异）；`tests/unit/test_bridge_override_slots.py` + `test_word_source_field.py` + `test_pdf_source_field.py` 全部 PASS。
 5. **核心 single-write test**：`tests/unit/test_word_core_single_write.py`：同一 paragraph 多次 patch 命中同一 run，最终 XML 仅 1 次写操作（避免循环 patcher）；通过 mock `lxml.etree._Element.text` setter 计数验证。
 6. **162 项基线不退化**：全量回归 160 PASS + 2 known fail 保持。
 
 ### Files Touched（预计）
 
-- 新增：`privacyguard/word/rule_engine.py`
-- 新增：`privacyguard/word/hit_collector.py`
-- 新增：`privacyguard/word/save_writer.py`
+- 新增：`secureredact/word/rule_engine.py`
+- 新增：`secureredact/word/hit_collector.py`
+- 新增：`secureredact/word/save_writer.py`
 - 新增：`tests/unit/test_rule_engine.py`、`test_hit_collector.py`、`test_save_writer_patch.py`、`test_word_core_single_write.py`
-- 修改：`main.py`（仅 Word 路径，调用 `privacyguard.word.*`；原实现保留为 `_legacy_*`）
+- 修改：`main.py`（仅 Word 路径，调用 `secureredact.word.*`；原实现保留为 `_legacy_*`）
 - 更新：`docs/word/FIELD_MAPPING.md`（Phase 3 双签 save / preview 视角）
-- 不动：`privacyguard/ocr/*` / `privacyguard/workers/ocr_worker.py` / PDF 路径
+- 不动：`secureredact/ocr/*` / `secureredact/workers/ocr_worker.py` / PDF 路径
 
 ---
 
@@ -169,11 +169,11 @@ ARCH-01/04 的落地必须配合 Strangler 抽取（Pitfall 13/14/15）。Phase 
 
 ### Goal
 
-把数字型规则（身份证 / 手机号 / 银行卡 / 邮箱 / 金额）+ Unicode block policy + 隔符号规范化统一封装到 `privacyguard/word/normalizer.py` + `privacyguard/word/numeric_rules.py`，使 FP-01 / FP-03 / FP-04 / FN-03 全部落地。
+把数字型规则（身份证 / 手机号 / 银行卡 / 邮箱 / 金额）+ Unicode block policy + 隔符号规范化统一封装到 `secureredact/word/normalizer.py` + `secureredact/word/numeric_rules.py`，使 FP-01 / FP-03 / FP-04 / FN-03 全部落地。
 
 ### Guard / Pre-condition
 
-- **未触动 PDF 端**：本 Phase 不修改 `privacyguard/ocr/text_pdf.py`（数字规则 Word 端独立维护；如 PDF 端未来需要复用走 ARCH-03 接口位）
+- **未触动 PDF 端**：本 Phase 不修改 `secureredact/ocr/text_pdf.py`（数字规则 Word 端独立维护；如 PDF 端未来需要复用走 ARCH-03 接口位）
 - Phase 2 / 3 的 `TextLinearizer` + `contracts` + `hit_collector` 已稳定
 - 162 项基线不退化（新增 normalizer，rule_engine 调用，行为变更需 manifest 对齐）
 
@@ -196,13 +196,13 @@ ARCH-01/04 的落地必须配合 Strangler 抽取（Pitfall 13/14/15）。Phase 
 
 ### Files Touched（预计）
 
-- 新增：`privacyguard/word/normalizer.py`
-- 新增：`privacyguard/word/numeric_rules.py`
-- 新增：`privacyguard/word/unicode_blocks.py`
+- 新增：`secureredact/word/normalizer.py`
+- 新增：`secureredact/word/numeric_rules.py`
+- 新增：`secureredact/word/unicode_blocks.py`
 - 新增：`tests/unit/test_normalizer_source_map.py`、`test_id_card_checkcode.py`、`test_bank_card_luhn.py`、`test_mobile_reject.py`、`test_is_han.py`、`test_no_boundary_swallow.py`
-- 修改：`privacyguard/word/rule_engine.py`（调用 normalizer + numeric_rules；旧 main.py 路径保留兼容层）
+- 修改：`secureredact/word/rule_engine.py`（调用 normalizer + numeric_rules；旧 main.py 路径保留兼容层）
 - 更新：`tests/fixtures/word/manifest.json`（增 normalizer manifest）
-- 不动：`privacyguard/ocr/*` / `privacyguard/workers/ocr_worker.py` / PDF 路径
+- 不动：`secureredact/ocr/*` / `secureredact/workers/ocr_worker.py` / PDF 路径
 
 ---
 
@@ -210,7 +210,7 @@ ARCH-01/04 的落地必须配合 Strangler 抽取（Pitfall 13/14/15）。Phase 
 
 ### Goal
 
-把 `privacyguard/pii/name_recognizer.py` 的 jieba `nr` 直接结论改为「候选 → 多层打分」，加入行政区划黑名单（GB/T 2260 子集）+ 职务词黑名单（经理 / 主任 / 法官 / 律师 / 法定代表人）+ 多字段组合上下文窗口（同一段 + 前后 50 字）。
+把 `secureredact/pii/name_recognizer.py` 的 jieba `nr` 直接结论改为「候选 → 多层打分」，加入行政区划黑名单（GB/T 2260 子集）+ 职务词黑名单（经理 / 主任 / 法官 / 律师 / 法定代表人）+ 多字段组合上下文窗口（同一段 + 前后 50 字）。
 
 ### Guard / Pre-condition
 
@@ -235,13 +235,13 @@ ARCH-01/04 的落地必须配合 Strangler 抽取（Pitfall 13/14/15）。Phase 
 
 ### Files Touched（预计）
 
-- 修改：`privacyguard/pii/name_recognizer.py`（jieba 候选 → 多层打分；行政区划 + 职务词黑名单）
-- 新增：`privacyguard/pii/name_blacklists.py`（GB/T 2260 子集 + 职务词子集）
-- 新增：`privacyguard/word/context_window.py`（多字段组合上下文窗口）
+- 修改：`secureredact/pii/name_recognizer.py`（jieba 候选 → 多层打分；行政区划 + 职务词黑名单）
+- 新增：`secureredact/pii/name_blacklists.py`（GB/T 2260 子集 + 职务词子集）
+- 新增：`secureredact/word/context_window.py`（多字段组合上下文窗口）
 - 新增：`tests/fixtures/word/hard_negative_names.docx`（合成 PII）
 - 新增：`tests/unit/test_name_recognizer_scoring.py`、`test_name_blacklists.py`、`test_name_recognizer_hard_negative.py`、`test_combined_context.py`、`test_name_segment_merge.py`
 - 更新：`docs/word/FIELD_MAPPING.md`（增 `field_type` 字段 + 打分权重表）
-- 不动：`privacyguard/ocr/*` / `privacyguard/workers/ocr_worker.py` / PDF 路径
+- 不动：`secureredact/ocr/*` / `secureredact/workers/ocr_worker.py` / PDF 路径
 
 ---
 
@@ -257,7 +257,7 @@ FN-02 需要复用 Phase 5 的 normalizer 处理 OCR 文本 + Phase 4 的 `start
 
 ### Guard / Pre-condition
 
-- **未触动 PDF 端**：本 Phase **仅 import 调用** `privacyguard.ocr.mixed_pdf.run_ocr` / `privacyguard.workers.ocr_worker.OCRWorker`（v37-v38 公开 API），**不修改** `privacyguard/ocr/mixed_pdf.py` / `privacyguard/workers/ocr_worker.py` / `OCRWorker.page_result_signal` payload。ARCH-03 接口位（v2+）不在本 Phase 落地。
+- **未触动 PDF 端**：本 Phase **仅 import 调用** `secureredact.ocr.mixed_pdf.run_ocr` / `secureredact.workers.ocr_worker.OCRWorker`（v37-v38 公开 API），**不修改** `secureredact/ocr/mixed_pdf.py` / `secureredact/workers/ocr_worker.py` / `OCRWorker.page_result_signal` payload。ARCH-03 接口位（v2+）不在本 Phase 落地。
 - Phase 5 的 NameRecognizer + 黑名单已稳定
 - 162 项基线不退化（OCR 通道对 Word 是新增能力，旧 fixture 无 OCR 命中）
 
@@ -278,13 +278,13 @@ FN-02 需要复用 Phase 5 的 normalizer 处理 OCR 文本 + Phase 4 的 `start
 
 ### Files Touched（预计）
 
-- 新增：`privacyguard/word/word_ocr.py`（`extract_media` + 按需触发 + cache）
-- 新增：`privacyguard/word/preview_bridge.py`（`build_base_html` + `left_panel` + `right_panel_updates`）
-- 新增：`privacyguard/word/web_bridge.py`（`WebViewBridge` 4 槽 + contextmenu）
+- 新增：`secureredact/word/word_ocr.py`（`extract_media` + 按需触发 + cache）
+- 新增：`secureredact/word/preview_bridge.py`（`build_base_html` + `left_panel` + `right_panel_updates`）
+- 新增：`secureredact/word/web_bridge.py`（`WebViewBridge` 4 槽 + contextmenu）
 - 新增：`tests/fixtures/word/{with_media,media_corrupt,media_unsupported,media_external}.docx`
 - 新增：`tests/unit/test_word_ocr.py`、`test_word_ocr_threshold.py`、`test_word_ocr_hits.py`、`test_word_ocr_degradation.py`、`test_preview_bridge.py`、`test_web_bridge.py`
 - 更新：`docs/word/FIELD_MAPPING.md`（Preview 视角新增 data-key / warnings 字段）
-- 不动：`privacyguard/ocr/*`（仅 import）+ `privacyguard/workers/ocr_worker.py`（仅 import）+ PDF 路径
+- 不动：`secureredact/ocr/*`（仅 import）+ `secureredact/workers/ocr_worker.py`（仅 import）+ PDF 路径
 
 ---
 
@@ -292,7 +292,7 @@ FN-02 需要复用 Phase 5 的 normalizer 处理 OCR 文本 + Phase 4 的 `start
 
 ### Goal
 
-把 `WordBatchReplaceWorker` 抽取到 `privacyguard/word/batch_replacer.py`（signal ABI 兼容 + `doc_converter` 复用），落地三类性能 fixture（text-heavy / table-heavy / media-heavy）+ 四段端到端断言（inventory → expected hits → apply redaction → reopen/package invariants），并产出 `docs/word/REUSE_BOUNDARY.md`（ARCH-03 只读边界文档）。
+把 `WordBatchReplaceWorker` 抽取到 `secureredact/word/batch_replacer.py`（signal ABI 兼容 + `doc_converter` 复用），落地三类性能 fixture（text-heavy / table-heavy / media-heavy）+ 四段端到端断言（inventory → expected hits → apply redaction → reopen/package invariants），并产出 `docs/word/REUSE_BOUNDARY.md`（ARCH-03 只读边界文档）。
 
 ### 为什么最后做
 
@@ -300,7 +300,7 @@ Phase 7 是 v39.0.0 release gate。批量 + 性能 + 安全需要 Phase 1-6 的�
 
 ### Guard / Pre-condition
 
-- **未触动 PDF 端**：本 Phase 不修改 `privacyguard/ocr/*` / `privacyguard/workers/ocr_worker.py`；`docs/word/REUSE_BOUNDARY.md` 仅描述 PDF 端公开 API 边界，**不重构 PDF 侧**
+- **未触动 PDF 端**：本 Phase 不修改 `secureredact/ocr/*` / `secureredact/workers/ocr_worker.py`；`docs/word/REUSE_BOUNDARY.md` 仅描述 PDF 端公开 API 边界，**不重构 PDF 侧**
 - Phase 6 的 preview_bridge + web_bridge + OCR 已稳定
 - 162 项基线不退化（性能基线比对：v38 旧版 baseline 需在 Phase 7 前采集）
 
@@ -331,16 +331,16 @@ Phase 7 是 v39.0.0 release gate。批量 + 性能 + 安全需要 Phase 1-6 的�
 
 ### Files Touched（预计）
 
-- 新增：`privacyguard/word/batch_replacer.py`
+- 新增：`secureredact/word/batch_replacer.py`
 - 新增：`docs/word/REUSE_BOUNDARY.md`
 - 新增：`tests/fixtures/perf/{text_heavy,table_heavy,media_heavy}.docx`
 - 新增：`tests/perf/test_perf_regression.py`
 - 新增：`tests/integration/test_end_to_end_redaction.py`
 - 新增：`tests/unit/test_batch_replacer_signal_abi.py`、`test_reuse_boundary_doc.py`、`test_mammoth_sanitize.py`、`test_failure_diagnostics.py`
-- 修改：`main.py`（删除 `_legacy_*` 兼容层；集成 `privacyguard.word.*`）
+- 修改：`main.py`（删除 `_legacy_*` 兼容层；集成 `secureredact.word.*`）
 - 更新：`docs/word/FIELD_MAPPING.md`（v39 闭环）
 - 更新：`CHANGELOG.md` + `version.txt`（v39.0.0 release）
-- 不动：`privacyguard/ocr/*` / `privacyguard/workers/ocr_worker.py` / PDF 路径
+- 不动：`secureredact/ocr/*` / `secureredact/workers/ocr_worker.py` / PDF 路径
 
 ---
 
@@ -348,7 +348,7 @@ Phase 7 是 v39.0.0 release gate。批量 + 性能 + 安全需要 Phase 1-6 的�
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ARCH-01（WordWorker/规则/命中/预览抽取到 privacyguard/word/*） | Phase 3, Phase 7（集成收尾） | Pending |
+| ARCH-01（WordWorker/规则/命中/预览抽取到 secureredact/word/*） | Phase 3, Phase 7（集成收尾） | Pending |
 | ARCH-02（规则/命中/预览三层接口契约 + 单一数据结构） | Phase 1（契约初稿）, Phase 2（实现）, Phase 3（落地） | Pending |
 | ARCH-03（PDF/Word 复用边界文档 — 只读不动） | Phase 7（`REUSE_BOUNDARY.md`） | Pending |
 | ARCH-04（字段命名统一 + FIELD_MAPPING.md 双签） | Phase 1（初版）, Phase 2（增量）, Phase 6（Preview）, Phase 7（闭环） | Pending |
@@ -394,7 +394,7 @@ Phase 7 (batch / perf / release) ── depends on Phase 1-6 全部
 
 每个 Phase 完成后：
 1. 162 项全量回归必须 160 PASS + 2 known fail 保持
-2. `git diff main.py privacyguard/ocr/* privacyguard/workers/ocr_worker.py` 与 v38.0.1 hotfix diff 一致（CONST-01 验证）
+2. `git diff main.py secureredact/ocr/* secureredact/workers/ocr_worker.py` 与 v38.0.1 hotfix diff 一致（CONST-01 验证）
 3. STATE.md 进度更新
 
 ---
@@ -407,7 +407,7 @@ Phase 7 (batch / perf / release) ── depends on Phase 1-6 全部
 | jieba 打分重做后 precision/recall 波动 | 姓名误识/漏识 | Phase 5 构造 ≥30 hard-negative fixture；commit 记录 v38 baseline 对比 |
 | mammoth HTML sanitize 不全 | XSS / 文件外泄 | Phase 7 `test_mammoth_sanitize.py` 强制覆盖 `javascript:` protocol + `external_file_access=False` |
 | 嵌入图 OCR 性能回归 | 主线程阻塞 5-30s | Phase 6 按需触发（尺寸 / DPI 阈值）+ blob hash cache；Phase 7 perf fixture 监控 |
-| Strangler 抽取期间 main.py 与 privacyguard.word.* 双轨漂移 | 行为分裂 | Phase 3-6 保留 `_legacy_*` 函数 + 断言新旧一致；Phase 7 一次性删除 |
+| Strangler 抽取期间 main.py 与 secureredact.word.* 双轨漂移 | 行为分裂 | Phase 3-6 保留 `_legacy_*` 函数 + 断言新旧一致；Phase 7 一次性删除 |
 | 162 项 fixture 一起改导致「假阳性全绿」 | 误判 PASS | 按 ID 比对（`test_convergence.py` + `test_config_alignment.py`）；differential regression 必跑 |
 
 ---

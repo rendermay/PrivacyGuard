@@ -1,27 +1,27 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""验证 privacyguard 模块语法"""
+"""验证 secureredact 模块语法"""
 
 import ast
 import sys
 
 files_to_check = [
-    'privacyguard/__init__.py',
-    'privacyguard/utils/__init__.py',
-    'privacyguard/utils/security.py',
-    'privacyguard/utils/config.py',
-    'privacyguard/utils/exceptions.py',
-    'privacyguard/utils/temp_manager.py',
-    'privacyguard/ocr/__init__.py',
-    'privacyguard/ocr/base.py',
-    'privacyguard/ocr/manager.py',
-    'privacyguard/ocr/rapidocr.py',
-    'privacyguard/ocr/text_pdf.py',
-    'privacyguard/ocr/mixed_pdf.py',
-    'privacyguard/workers/__init__.py',
-    'privacyguard/workers/ocr_worker.py',
-    'privacyguard/workers/word_worker.py',
-    'privacyguard/workers/image_merge.py',
+    'secureredact/__init__.py',
+    'secureredact/utils/__init__.py',
+    'secureredact/utils/security.py',
+    'secureredact/utils/config.py',
+    'secureredact/utils/exceptions.py',
+    'secureredact/utils/temp_manager.py',
+    'secureredact/ocr/__init__.py',
+    'secureredact/ocr/base.py',
+    'secureredact/ocr/manager.py',
+    'secureredact/ocr/rapidocr.py',
+    'secureredact/ocr/text_pdf.py',
+    'secureredact/ocr/mixed_pdf.py',
+    'secureredact/workers/__init__.py',
+    'secureredact/workers/ocr_worker.py',
+    'secureredact/workers/word_worker.py',
+    'secureredact/workers/image_merge.py',
 ]
 
 errors = []

@@ -22,7 +22,7 @@ class TestSettingsDialogRoundTrip(unittest.TestCase):
         # 用临时 config.json 隔离
         self.tmp_path = Path(tempfile.mktemp(suffix=".json"))
         # 重置 ConfigManager 单例
-        from privacyguard.utils.config import ConfigManager
+        from secureredact.utils.config import ConfigManager
         ConfigManager._instance = None
 
     def tearDown(self) -> None:

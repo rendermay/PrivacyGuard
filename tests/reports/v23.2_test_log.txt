@@ -1,4 +1,4 @@
-=== PrivacyGuard v23.2 测试日志 ===
+=== SecureRedact v23.2 测试日志 ===
 日期: 2026-02-10
 版本: v23.2 - Rectangle Deduplication
 状态: ✅ 通过

@@ -1,6 +1,6 @@
 # PrivacyApp 开发进度记录
 **日期:** 2026-02-09
-**项目:** PrivacyGuard 脱敏卫士
+**项目:** SecureRedact 信息脱敏助手
 **当前版本:** v19.4
 
 ---

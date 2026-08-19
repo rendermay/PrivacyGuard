@@ -1,12 +1,12 @@
 @echo off
-:: PrivacyGuard 紧急修复启动器
+:: SecureRedact 紧急修复启动器
 :: 如果打包后的应用因 DLL 问题无法启动，使用此脚本
 chcp 65001 > nul 2>&1
-title PrivacyGuard - Emergency Launcher
+title SecureRedact - Emergency Launcher
 
 echo.
 echo ========================================
-echo   PrivacyGuard 紧急修复启动器
+echo   SecureRedact 紧急修复启动器
 echo ========================================
 echo.
 
@@ -100,14 +100,14 @@ if exist "%APP_DIR%\vcruntime140_1.dll" (
 
 echo.
 echo ========================================
-echo   正在启动 PrivacyGuard...
+echo   正在启动 SecureRedact...
 echo ========================================
 echo.
 
 :: 启动应用
-if exist "%APP_DIR%\PrivacyGuard.exe" (
-    start "" "%APP_DIR%\PrivacyGuard.exe"
-    echo [OK] PrivacyGuard 已启动
+if exist "%APP_DIR%\SecureRedact.exe" (
+    start "" "%APP_DIR%\SecureRedact.exe"
+    echo [OK] SecureRedact 已启动
     echo.
     echo 如果应用仍然无法启动，请：
     echo 1. 确认已安装 VC++ Redistributable
@@ -115,9 +115,9 @@ if exist "%APP_DIR%\PrivacyGuard.exe" (
     echo.
     timeout /t 3 >nul
 ) else (
-    echo [ERROR] 未找到 PrivacyGuard.exe
+    echo [ERROR] 未找到 SecureRedact.exe
     echo.
-    echo 请确保此脚本位于 PrivacyGuard 应用目录中。
+    echo 请确保此脚本位于 SecureRedact 应用目录中。
     echo.
     pause
     exit /b 1

@@ -7,7 +7,7 @@
 import time
 import unittest
 
-from privacyguard.pii.name_recognizer import ChineseNameRecognizer, extract_person_names
+from secureredact.pii.name_recognizer import ChineseNameRecognizer, extract_person_names
 
 
 class TestChineseNameRecognizer(unittest.TestCase):

@@ -1,6 +1,6 @@
 # Phase: 中文姓名启发式识别 (jieba X3) 集成
 
-**目标**：在不破坏现有架构的前提下，为 PrivacyGuard 增加可选的中文人名启发式识别能力。
+**目标**：在不破坏现有架构的前提下，为 SecureRedact 增加可选的中文人名启发式识别能力。
 
 **创建日期**：2026-08-15
 **作者**：Claude Code (Phase)
@@ -25,9 +25,9 @@
 | Wave | 目标 | 文件清单 | 完成判据 |
 |------|------|---------|---------|
 | **0** | GSD 规划 | (本文档) | 文档落盘 |
-| **1** | 核心识别器 + 单测 | 新增 `privacyguard/pii/name_recognizer.py` + `tests/unit/test_name_recognizer.py` | 17/17 测试通过 + 全量回归 102/102 ✅ |
-| **2** | Worker 接入 (本阶段) | 修改 `privacyguard/workers/ocr_worker.py` + `word_worker.py` + `main.py` 兼容层 | 默认 OFF 时 102/102 全过；新增 worker mock 测试 PASS |
-| **3** | UI + 持久化 + spec + requirements | 修改 `main.py` SettingsDialog + `config.json` + `PrivacyGuard_verify.spec` + `requirements.txt` | UI smoke 通过 + 配置 round-trip 通过 + spec 语法编译通过 |
+| **1** | 核心识别器 + 单测 | 新增 `secureredact/pii/name_recognizer.py` + `tests/unit/test_name_recognizer.py` | 17/17 测试通过 + 全量回归 102/102 ✅ |
+| **2** | Worker 接入 (本阶段) | 修改 `secureredact/workers/ocr_worker.py` + `word_worker.py` + `main.py` 兼容层 | 默认 OFF 时 102/102 全过；新增 worker mock 测试 PASS |
+| **3** | UI + 持久化 + spec + requirements | 修改 `main.py` SettingsDialog + `config.json` + `SecureRedact_verify.spec` + `requirements.txt` | UI smoke 通过 + 配置 round-trip 通过 + spec 语法编译通过 |
 | **4** | 全量回归 + 性能 + 文档 | 修改 `CHANGELOG.md` / `docs/current/DEV_LOG.md` / `CLAUDE.md` | ≥102/102 PASS + 性能预算达成 + 三处文档同步 |
 
 ---
@@ -41,16 +41,16 @@
 ### 2.2 文件清单
 
 #### 修改
-- `privacyguard/workers/ocr_worker.py`
+- `secureredact/workers/ocr_worker.py`
   - 行 47–49 `OCRWorker.__init__` 增加 `enable_name_recognition: bool = False` 参数
   - 行 387 之前：仅当 `self.enable_name_recognition` 为真时追加识别人名
-- `privacyguard/workers/word_worker.py`
+- `secureredact/workers/word_worker.py`
   - 行 24 `WordWorker.__init__` 增加 `enable_name_recognition: bool = False` 参数
   - 行 111 之前：同上
 
 #### 不修改
-- `privacyguard/__init__.py`
-- `privacyguard/workers/__init__.py`
+- `secureredact/__init__.py`
+- `secureredact/workers/__init__.py`
 - `config.json`
 
 ### 2.3 关键约束
@@ -74,8 +74,8 @@
 ### 2.5 验证命令
 
 ```bash
-cd G:/Project/PrivacyGuard
-python -m compileall -q privacyguard/workers main.py
+cd G:/Project/SecureRedact
+python -m compileall -q secureredact/workers main.py
 python -m unittest tests.unit.test_mixed_pdf_ocr tests.unit.test_ocr_api tests.unit.test_word_replace_rules tests.unit.test_redaction_rule_patterns tests.unit.test_name_recognizer -v
 python -m unittest discover tests/unit -v   # 全量回归
 ```
@@ -104,11 +104,11 @@ python -m unittest discover tests/unit -v   # 全量回归
 
 ## 不修改清单 (边界守护)
 
-- `privacyguard/__init__.py` (保持现有懒加载)
-- `privacyguard/workers/__init__.py`
-- `privacyguard/pii/validators/*`
-- `privacyguard/ocr/*`
-- `privacyguard/utils/config.py` (新键归属 `redaction` 命名空间)
+- `secureredact/__init__.py` (保持现有懒加载)
+- `secureredact/workers/__init__.py`
+- `secureredact/pii/validators/*`
+- `secureredact/ocr/*`
+- `secureredact/utils/config.py` (新键归属 `redaction` 命名空间)
 - `theme.py`, `version.txt`, `packaging/**`
 
 ---

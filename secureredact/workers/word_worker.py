@@ -9,8 +9,8 @@ import copy
 import re
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
-from privacyguard.redaction.whitelist_split import _split_text_by_whitelist
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.redaction.whitelist_split import _split_text_by_whitelist
 
 # 常量定义
 PROGRESS_UPDATE_INTERVAL = 0.05
@@ -136,7 +136,7 @@ class WordWorker(QThread):
         # v37.7.x: 中文姓名启发式识别 (默认 OFF)
         if self.enable_name_recognition and text:
             try:
-                from privacyguard.pii.name_recognizer import (
+                from secureredact.pii.name_recognizer import (
                     extract_person_names,
                 )
                 _names = extract_person_names(text)

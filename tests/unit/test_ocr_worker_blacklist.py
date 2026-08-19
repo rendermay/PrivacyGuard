@@ -6,8 +6,8 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 from PyQt6.QtCore import QRectF
 
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
-from privacyguard.workers.ocr_worker import OCRWorker
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.workers.ocr_worker import OCRWorker
 
 
 class _DedupTest(unittest.TestCase):
@@ -58,7 +58,7 @@ class _CollectBlacklistTest(unittest.TestCase):
         out = w._collect_blacklist_hits(page, page_idx=0, blacklist=[], scan_scale=2.0)
         self.assertEqual(out, [])
 
-    @patch("privacyguard.workers.ocr_worker.collect_embedded_image_clip_rects")
+    @patch("secureredact.workers.ocr_worker.collect_embedded_image_clip_rects")
     def test_blacklist_injects_hit_for_matching_token(self, mock_collect):
         mock_collect.return_value = [(0, 0, 100, 100)]
         # 构造 stub OCR: 返回一个含 "盖章" 的 token
@@ -82,7 +82,7 @@ class _CollectBlacklistTest(unittest.TestCase):
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]["source"], "blacklist")
 
-    @patch("privacyguard.workers.ocr_worker.collect_embedded_image_clip_rects")
+    @patch("secureredact.workers.ocr_worker.collect_embedded_image_clip_rects")
     def test_no_attribute_error_when_ocr_clip_undefined(self, mock_collect):
         """v37.9.0-hotfix 回归测试: _collect_blacklist_hits 不应依赖不存在的 _ocr_clip.
 

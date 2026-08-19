@@ -1,4 +1,4 @@
-# PrivacyGuard 开发工作流
+# SecureRedact 开发工作流
 
 > 本文档描述当前项目的实际开发与发布流程，已统一到 `version.txt` 作为唯一版本源。
 
@@ -30,7 +30,7 @@
 ### 2. 进入项目并运行
 
 ```bash
-cd /Users/a49144/Desktop/codexhub/PrivacyGuardApp
+cd /Users/a49144/Desktop/codexhub/SecureRedactApp
 python3 main.py
 ```
 
@@ -44,7 +44,7 @@ python3 main.py
 ### 4. 修改后做最少验证
 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 python3 -m unittest \
   tests.unit.test_mixed_pdf_ocr \
   tests.test_path_validation \
@@ -77,7 +77,7 @@ python3 -m unittest \
 ### 当前规则
 
 - `version.txt` 是唯一版本源
-- `main.py` 和 `privacyguard.__version__` 都从 `version.txt` 读取
+- `main.py` 和 `secureredact.__version__` 都从 `version.txt` 读取
 - Windows 安装器默认版本与 EXE 版本资源要同步
 - macOS spec 从 `version.txt` 动态读取版本
 - 当前 packaging 文档以：
@@ -105,7 +105,7 @@ python3 packaging/windows/scripts/generate_version_info.py
 
 1. macOS 作为主要开发环境
 2. Windows 主要负责打包与发布验证
-3. 共享逻辑不要在 `main.py` 和 `privacyguard/*` 两边各写一份
+3. 共享逻辑不要在 `main.py` 和 `secureredact/*` 两边各写一份
 4. 打包方案当前以 `docs/packaging/*` 为主说明
 
 ---

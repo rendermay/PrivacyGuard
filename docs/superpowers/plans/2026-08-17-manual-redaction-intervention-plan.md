@@ -2,17 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 在 PrivacyGuard v37.8.x 引入"自动脱敏命中结果的人工干预机制",支持会话级 + 永久两种 scope 的 ignore / confirm 反馈,通过 PDF/Word 双端右键菜单 + 专用 dock 面板双入口暴露。
+**Goal:** 在 SecureRedact v37.8.x 引入"自动脱敏命中结果的人工干预机制",支持会话级 + 永久两种 scope 的 ignore / confirm 反馈,通过 PDF/Word 双端右键菜单 + 专用 dock 面板双入口暴露。
 
 **Architecture:** 在 worker 产出 hit 与 UI 渲染之间插入 `HitOverrideStore` 单例,统一管理两层 override(session + permanent),通过 `filtered_hits` API 过滤;old behavior 零破坏(空 override 时等价现有)。
 
-**Tech Stack:** Python 3.11+、PyQt6、PyMuPDF、python-docx;新增模块 `privacyguard.redaction.{hit_ref,override_store}`。
+**Tech Stack:** Python 3.11+、PyQt6、PyMuPDF、python-docx;新增模块 `secureredact.redaction.{hit_ref,override_store}`。
 
 ## Global Constraints
 
 - 默认配置下,所有 现有 114 项测试 必须 仍全过;override store 默认空,行为等价 v37.7.6
-- 不修改 `privacyguard/__init__.py`、`privacyguard/workers/__init__.py`、`privacyguard/pii/validators/*`、`theme.py`、`version.txt`、`packaging/**`
-- 命名空间:`privacyguard.redaction.*`(新增包,与 `pii` 同级)
+- 不修改 `secureredact/__init__.py`、`secureredact/workers/__init__.py`、`secureredact/pii/validators/*`、`theme.py`、`version.txt`、`packaging/**`
+- 命名空间:`secureredact.redaction.*`(新增包,与 `pii` 同级)
 - 配置键一律放在 `redaction.*` 命名空间下
 - 默认语言中文;代码注释中文;专有名词保留英文
 - 不引入新 pip 依赖
@@ -24,7 +24,7 @@
 
 ## File Structure
 
-### 新增模块 (`privacyguard/redaction/`)
+### 新增模块 (`secureredact/redaction/`)
 
 | 文件 | 职责 |
 |------|------|
@@ -51,18 +51,18 @@
 |------|------|
 | `config.json` | 新增 `redaction.overrides.permanent`、`redaction.enable_hit_override` |
 | `main.py` | 见各 Task 说明(SimpleConfig、MainWindow、PDFCanvas、WebViewBridge、OCRWorkerCompat、WordWorkerCompat、export 路径) |
-| `privacyguard/workers/ocr_worker.py` | `page_result_signal` payload 改为 `list[dict]`,携带 source/text/rule_name/rect |
-| `privacyguard/workers/word_worker.py` | `_find_matches` 返回 dict 加 `source` 字段 |
+| `secureredact/workers/ocr_worker.py` | `page_result_signal` payload 改为 `list[dict]`,携带 source/text/rule_name/rect |
+| `secureredact/workers/word_worker.py` | `_find_matches` 返回 dict 加 `source` 字段 |
 
 ---
 
 ## Task 1: HitRef + doc_hash + HitOverrideStore 核心 (Wave 1)
 
 **Files:**
-- Create: `privacyguard/redaction/__init__.py`
-- Create: `privacyguard/redaction/hit_ref.py`
-- Create: `privacyguard/redaction/doc_hash.py`
-- Create: `privacyguard/redaction/override_store.py`
+- Create: `secureredact/redaction/__init__.py`
+- Create: `secureredact/redaction/hit_ref.py`
+- Create: `secureredact/redaction/doc_hash.py`
+- Create: `secureredact/redaction/override_store.py`
 - Create: `tests/unit/test_hit_ref.py`
 - Create: `tests/unit/test_doc_hash.py`
 - Create: `tests/unit/test_override_store.py`
@@ -83,7 +83,7 @@
 # -*- coding: utf-8 -*-
 """HitRef 不可变标识与 hit_id 稳定性测试."""
 import unittest
-from privacyguard.redaction.hit_ref import HitRef
+from secureredact.redaction.hit_ref import HitRef
 
 
 class HitRefTest(unittest.TestCase):
@@ -133,11 +133,11 @@ Run:
 ```bash
 python3 -m unittest tests.unit.test_hit_ref -v
 ```
-Expected: `ModuleNotFoundError: No module named 'privacyguard.redaction.hit_ref'`
+Expected: `ModuleNotFoundError: No module named 'secureredact.redaction.hit_ref'`
 
 ### Step 1.3: 写 HitRef 实现
 
-**File:** `privacyguard/redaction/__init__.py`
+**File:** `secureredact/redaction/__init__.py`
 
 ```python
 # -*- coding: utf-8 -*-
@@ -145,12 +145,12 @@ Expected: `ModuleNotFoundError: No module named 'privacyguard.redaction.hit_ref'
 
 默认懒加载,任何调用方只 import 用到的子模块即可。
 """
-from privacyguard.redaction.hit_ref import HitRef, Override, VALID_SOURCES
+from secureredact.redaction.hit_ref import HitRef, Override, VALID_SOURCES
 
 __all__ = ["HitRef", "Override", "VALID_SOURCES"]
 ```
 
-**File:** `privacyguard/redaction/hit_ref.py`
+**File:** `secureredact/redaction/hit_ref.py`
 
 ```python
 # -*- coding: utf-8 -*-
@@ -233,7 +233,7 @@ Expected: 5/5 PASS
 import os
 import tempfile
 import unittest
-from privacyguard.redaction.doc_hash import compute_doc_hash
+from secureredact.redaction.doc_hash import compute_doc_hash
 
 
 class DocHashTest(unittest.TestCase):
@@ -280,11 +280,11 @@ Run:
 ```bash
 python3 -m unittest tests.unit.test_doc_hash -v
 ```
-Expected: `ModuleNotFoundError: No module named 'privacyguard.redaction.doc_hash'`
+Expected: `ModuleNotFoundError: No module named 'secureredact.redaction.doc_hash'`
 
 ### Step 1.7: 写 doc_hash 实现
 
-**File:** `privacyguard/redaction/doc_hash.py`
+**File:** `secureredact/redaction/doc_hash.py`
 
 ```python
 # -*- coding: utf-8 -*-
@@ -327,8 +327,8 @@ Expected: 4/4 PASS
 # -*- coding: utf-8 -*-
 """HitOverrideStore 单例逻辑测试."""
 import unittest
-from privacyguard.redaction.override_store import HitOverrideStore
-from privacyguard.redaction.hit_ref import HitRef, Override
+from secureredact.redaction.override_store import HitOverrideStore
+from secureredact.redaction.hit_ref import HitRef, Override
 
 
 def _ref(text="周强", source="jieba", location="p_3", start=10, end=12, doc_hash="a1b2c3d4"):
@@ -468,11 +468,11 @@ Run:
 ```bash
 python3 -m unittest tests.unit.test_override_store -v
 ```
-Expected: `ModuleNotFoundError: No module named 'privacyguard.redaction.override_store'`
+Expected: `ModuleNotFoundError: No module named 'secureredact.redaction.override_store'`
 
 ### Step 1.11: 写 override_store 实现
 
-**File:** `privacyguard/redaction/override_store.py`
+**File:** `secureredact/redaction/override_store.py`
 
 ```python
 # -*- coding: utf-8 -*-
@@ -484,7 +484,7 @@ import threading
 from datetime import datetime
 from typing import Dict, Iterator, List, Optional
 
-from privacyguard.redaction.hit_ref import HitRef, Override, VALID_ACTIONS, VALID_SCOPES
+from secureredact.redaction.hit_ref import HitRef, Override, VALID_ACTIONS, VALID_SCOPES
 
 logger = logging.getLogger(__name__)
 
@@ -707,7 +707,7 @@ Expected: 全部 PASS,无新增失败
 ### Step 1.14: 提交
 
 ```bash
-git add privacyguard/redaction/ tests/unit/test_hit_ref.py tests/unit/test_doc_hash.py tests/unit/test_override_store.py
+git add secureredact/redaction/ tests/unit/test_hit_ref.py tests/unit/test_doc_hash.py tests/unit/test_override_store.py
 git commit -m "feat(redaction): 引入 HitRef/doc_hash/HitOverrideStore 核心
 
 - HitRef 不可变 hit 标识 + hit_id 计算
@@ -758,7 +758,7 @@ class OverrideConfigDefaultsTest(unittest.TestCase):
 
     def test_defaults_present_when_missing(self):
         # import 触发 SimpleConfig 加载
-        from privacyguard.utils.config import SimpleConfig  # 路径可能不同,见 main.py:98
+        from secureredact.utils.config import SimpleConfig  # 路径可能不同,见 main.py:98
         # 若 SimpleConfig 在 main.py 内则改为:
         # from main import SimpleConfig
         cfg = SimpleConfig(self.path)
@@ -768,7 +768,7 @@ class OverrideConfigDefaultsTest(unittest.TestCase):
         self.assertTrue(cfg.get("redaction.enable_hit_override"))
 
     def test_round_trip_preserves_permanent(self):
-        from privacyguard.utils.config import SimpleConfig
+        from secureredact.utils.config import SimpleConfig
         cfg = SimpleConfig(self.path)
         cfg.load()
         cfg.set("redaction.overrides.permanent", [
@@ -867,11 +867,11 @@ git commit -m "feat(redaction): config.json 默认键 + SimpleConfig 兼容
 ## Task 3: OCRWorker payload 结构升级 (Wave 2.1)
 
 **Files:**
-- Modify: `privacyguard/workers/ocr_worker.py:43`(signal 定义注释)
-- Modify: `privacyguard/workers/ocr_worker.py:497`(emit 调用)
-- Modify: `privacyguard/workers/ocr_worker.py:449`(text_pdf hit 上报处)
-- Modify: `privacyguard/workers/ocr_worker.py:478`(image hit 上报处)
-- Modify: `privacyguard/workers/ocr_worker.py:496`(seal hit 上报处)
+- Modify: `secureredact/workers/ocr_worker.py:43`(signal 定义注释)
+- Modify: `secureredact/workers/ocr_worker.py:497`(emit 调用)
+- Modify: `secureredact/workers/ocr_worker.py:449`(text_pdf hit 上报处)
+- Modify: `secureredact/workers/ocr_worker.py:478`(image hit 上报处)
+- Modify: `secureredact/workers/ocr_worker.py:496`(seal hit 上报处)
 - Create: `tests/unit/test_ocr_worker_source_field.py`
 
 **Interfaces:**
@@ -893,12 +893,12 @@ from PyQt6.QtCore import QRectF
 class OCRWorkerPayloadTest(unittest.TestCase):
 
     def test_text_pdf_hits_emitted_as_dicts(self):
-        from privacyguard.workers.ocr_worker import OCRWorker
+        from secureredact.workers.ocr_worker import OCRWorker
 
         # 模拟 collect_text_pdf_hit_boxes 返回 (x,y,w,h) 4-tuple
-        with patch("privacyguard.workers.ocr_worker.collect_text_pdf_hit_boxes",
+        with patch("secureredact.workers.ocr_worker.collect_text_pdf_hit_boxes",
                    return_value=[(0, 0, 100, 20)]), \
-            patch("privacyguard.workers.ocr_worker.collect_embedded_image_clip_rects",
+            patch("secureredact.workers.ocr_worker.collect_embedded_image_clip_rects",
                    return_value=[]):
             worker = OCRWorker(
                 pdf_path="/dev/null", rules=[r"姓名"], use_enhance=False,
@@ -943,7 +943,7 @@ Expected: KeyError: 'source' or attribute mismatch
 
 ### Step 3.3: 修改 OCRWorker
 
-**File:** `privacyguard/workers/ocr_worker.py`
+**File:** `secureredact/workers/ocr_worker.py`
 
 1. 在 `page_result_signal.emit(i, rects)` 调用前,把所有 `rects.append(QRectF(...))` 改为 `rects.append({...dict...})`:
 
@@ -1006,9 +1006,9 @@ self.page_result_signal.emit(i, rects)  # 仍是 list,内容变 dict
 
 ### Step 3.4: 修改 collect_text_pdf_hit_boxes 返回 text
 
-**File:** `privacyguard/ocr/text_pdf.py`
+**File:** `secureredact/ocr/text_pdf.py`
 
-读取该文件,定位返回 hit 列表的位置,改为返回 `(x, y, w, h, text, rule_name)` 6-tuple。同步更新 `privacyguard/ocr/mixed_pdf.py` 中 `collect_image_block_ocr_hits` 调用方。
+读取该文件,定位返回 hit 列表的位置,改为返回 `(x, y, w, h, text, rule_name)` 6-tuple。同步更新 `secureredact/ocr/mixed_pdf.py` 中 `collect_image_block_ocr_hits` 调用方。
 
 **改动后,Step 3.3 的 emit 路径与 collect_* 调用方类型契约已对齐。**
 
@@ -1031,7 +1031,7 @@ Expected: 全部 PASS
 ### Step 3.7: 提交
 
 ```bash
-git add privacyguard/workers/ocr_worker.py privacyguard/ocr/text_pdf.py privacyguard/ocr/mixed_pdf.py tests/unit/test_ocr_worker_source_field.py
+git add secureredact/workers/ocr_worker.py secureredact/ocr/text_pdf.py secureredact/ocr/mixed_pdf.py tests/unit/test_ocr_worker_source_field.py
 git commit -m "feat(ocr): page_result_signal payload 改为 list[dict] 携带 source
 
 - text_pdf / image / jieba / seal 四源分别打 source 标签
@@ -1066,8 +1066,8 @@ git commit -m "feat(ocr): page_result_signal payload 改为 list[dict] 携带 so
 """MainWindow PDF 端 page_data + filtered_hits 接入测试."""
 import unittest
 from unittest.mock import MagicMock
-from privacyguard.redaction.hit_ref import HitRef
-from privacyguard.redaction.override_store import HitOverrideStore
+from secureredact.redaction.hit_ref import HitRef
+from secureredact.redaction.override_store import HitOverrideStore
 
 
 class PDFSourceFieldTest(unittest.TestCase):
@@ -1307,7 +1307,7 @@ git commit -m "feat(pdf): MainWindow PDF 端接入 HitOverrideStore
 ## Task 5: WordWorker + MainWindow Word 端 + WebViewBridge 4 槽 + HTML 渲染 (Wave 3)
 
 **Files:**
-- Modify: `privacyguard/workers/word_worker.py:138-148`(match dict 加 source)
+- Modify: `secureredact/workers/word_worker.py:138-148`(match dict 加 source)
 - Modify: `main.py:_build_word_text_blocks`(过 source)
 - Modify: `main.py:render_word_preview`(过 source,应用过滤)
 - Modify: `main.py:WebViewBridge`(新增 4 槽)
@@ -1332,7 +1332,7 @@ import unittest
 class WordWorkerSourceTest(unittest.TestCase):
 
     def test_match_dict_has_source_field(self):
-        from privacyguard.workers.word_worker import WordWorker
+        from secureredact.workers.word_worker import WordWorker
         # 构造 fake word_doc
         class FakePara:
             text = "周强是作者"
@@ -1369,7 +1369,7 @@ Expected: KeyError: 'source'
 
 ### Step 5.3: 修改 WordWorker._find_matches
 
-**File:** `privacyguard/workers/word_worker.py:138-148`
+**File:** `secureredact/workers/word_worker.py:138-148`
 
 ```python
 # 原:
@@ -1420,7 +1420,7 @@ Expected: PASS
 @pyqtSlot(str, str, str, str)
 def ignore_ocr_hit(self, key, source, text, hit_id):
     """JS 调用:忽略某条 OCR hit."""
-    from privacyguard.redaction.hit_ref import HitRef
+    from secureredact.redaction.hit_ref import HitRef
     try:
         doc_hash, location, start_s, end_s, src = hit_id.split("|", 4)
         ref = HitRef(
@@ -1437,7 +1437,7 @@ def ignore_ocr_hit(self, key, source, text, hit_id):
 
 @pyqtSlot(str, str, str, str)
 def confirm_ocr_hit(self, key, source, text, hit_id):
-    from privacyguard.redaction.hit_ref import HitRef
+    from secureredact.redaction.hit_ref import HitRef
     try:
         doc_hash, location, start_s, end_s, src = hit_id.split("|", 4)
         ref = HitRef(doc_hash, location, int(start_s), int(end_s), text, src)
@@ -1578,7 +1578,7 @@ Expected: 全部 PASS
 ### Step 5.11: 提交
 
 ```bash
-git add privacyguard/workers/word_worker.py main.py tests/unit/test_word_source_field.py tests/unit/test_bridge_override_slots.py
+git add secureredact/workers/word_worker.py main.py tests/unit/test_word_source_field.py tests/unit/test_bridge_override_slots.py
 git commit -m "feat(word): Word 端接入 HitOverrideStore + 4 槽函数
 
 - WordWorker match dict 加 source 字段(jieba/rule)
@@ -1614,8 +1614,8 @@ git commit -m "feat(word): Word 端接入 HitOverrideStore + 4 槽函数
 import json
 import os
 import unittest
-from privacyguard.redaction.override_store import HitOverrideStore
-from privacyguard.redaction.hit_ref import HitRef
+from secureredact.redaction.override_store import HitOverrideStore
+from secureredact.redaction.hit_ref import HitRef
 
 
 class OverridesPersistenceTest(unittest.TestCase):
@@ -1631,7 +1631,7 @@ class OverridesPersistenceTest(unittest.TestCase):
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_save_load_round_trip(self):
-        from main import SimpleConfig  # 或 privacyguard.utils.config
+        from main import SimpleConfig  # 或 secureredact.utils.config
         s = HitOverrideStore.instance()
         ref = HitRef("a1b2c3d4", "p_1", 0, 2, "周强", "jieba")
         s.ignore(ref, scope="permanent")
@@ -1645,7 +1645,7 @@ class OverridesPersistenceTest(unittest.TestCase):
         self.assertTrue(s2.is_ignored(ref))
 
     def test_clean_stale_removes_only_old(self):
-        from privacyguard.redaction.override_store import clean_stale_permanent
+        from secureredact.redaction.override_store import clean_stale_permanent
         items = [
             {"hit_id": "a|p|0|2|jieba", "doc_hash": "a", "location": "p",
              "start": 0, "end": 2, "text": "x", "source": "jieba",
@@ -1675,7 +1675,7 @@ Expected: `ImportError: cannot import name 'clean_stale_permanent'`
 
 ### Step 6.3: 在 override_store 加 clean_stale_permanent 静态函数
 
-**File:** `privacyguard/redaction/override_store.py`(追加)
+**File:** `secureredact/redaction/override_store.py`(追加)
 
 ```python
 from datetime import datetime, timedelta
@@ -1839,7 +1839,7 @@ clean_btn.clicked.connect(self._on_clean_stale_overrides)
 section_overrides.addWidget(clean_btn)
 
 def _on_clean_stale_overrides(self):
-    from privacyguard.redaction.override_store import clean_stale_permanent
+    from secureredact.redaction.override_store import clean_stale_permanent
     items = self.main_window._config.get("redaction.overrides.permanent", []) or []
     cleaned = clean_stale_permanent(items, max_age_days=30)
     self.main_window._config.set("redaction.overrides.permanent", cleaned)
@@ -1866,7 +1866,7 @@ Expected: 基线 114 + 新增 38 = 152 项 PASS(实际取决于 Wave 间合并,�
 ### Step 6.11: 提交
 
 ```bash
-git add privacyguard/redaction/override_store.py main.py tests/unit/test_overrides_persistence.py
+git add secureredact/redaction/override_store.py main.py tests/unit/test_overrides_persistence.py
 git commit -m "feat(ui): 干预 dock 面板 + 持久化 + 设置中心清理
 
 - OverrideDock(QDockWidget): 显示 ignore/confirm 列表 + 摘要 + 操作
@@ -1900,7 +1900,7 @@ git commit -m "feat(ui): 干预 dock 面板 + 持久化 + 设置中心清理
 +37.8.0
 ```
 
-确认 `main.py` 中 `__version__` 回退值,以及 `packaging/windows/config/PrivacyGuard_windows.spec` 中 `__version__` 一致。
+确认 `main.py` 中 `__version__` 回退值,以及 `packaging/windows/config/SecureRedact_windows.spec` 中 `__version__` 一致。
 
 ### Step 7.2: 更新 CHANGELOG
 
@@ -1978,7 +1978,7 @@ echo "Checkpoint: $BACKUP" >> rollback_journal.md
 
 Run:
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 python3 -m unittest \
   tests.unit.test_hit_ref \
   tests.unit.test_doc_hash \

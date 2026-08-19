@@ -1,4 +1,4 @@
-# PrivacyGuard v22.1 测试计划
+# SecureRedact v22.1 测试计划
 
 **测试日期:** 2026-02-09
 **项目版本:** v22.1 - Viewport Filter
@@ -155,4 +155,4 @@ VERSION = "22.1 - Viewport Filter"
 
 **文档版本:** 1.0
 **创建日期:** 2026-02-09
-**适用版本:** PrivacyGuard v22.1 - Viewport Filter
+**适用版本:** SecureRedact v22.1 - Viewport Filter

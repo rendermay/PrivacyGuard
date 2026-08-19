@@ -1,6 +1,6 @@
 # PrivacyApp 开发进度记录
 **日期:** 2026-02-08
-**项目:** PrivacyGuard 脱敏卫士
+**项目:** SecureRedact 信息脱敏助手
 **当前版本:** v19.3 (调试中)
 
 ---
@@ -105,8 +105,8 @@ PrivacyApp/
 ├── main.py                                    # 主程序 (当前 v19.3)
 ├── venv/                                      # 虚拟环境
 ├── dist/                                      # 打包输出
-│   ├── PrivacyGuard.app/                     # macOS 应用
-│   └── PrivacyGuard/
+│   ├── SecureRedact.app/                     # macOS 应用
+│   └── SecureRedact/
 ├── build/                                     # 构建临时文件
 ├── test_sample.pdf                            # 测试 PDF (2页)
 ├── test_data.txt                              # 测试数据源
@@ -144,7 +144,7 @@ cd "/Users/a49144/Desktop/临时coding/PrivacyApp"
 
 ### 启动应用 (打包)
 ```bash
-open "/Users/a49144/Desktop/临时coding/PrivacyApp/dist/PrivacyGuard.app"
+open "/Users/a49144/Desktop/临时coding/PrivacyApp/dist/SecureRedact.app"
 ```
 
 ### 运行自动化测试

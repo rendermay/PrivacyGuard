@@ -10,9 +10,9 @@ import shutil
 import subprocess
 import tempfile
 
-from privacyguard.utils.exceptions import ConversionError
-from privacyguard.utils.security import validate_safe_path
-from privacyguard.utils.temp_manager import TempFileManager
+from secureredact.utils.exceptions import ConversionError
+from secureredact.utils.security import validate_safe_path
+from secureredact.utils.temp_manager import TempFileManager
 
 
 def resolve_soffice_cmd():

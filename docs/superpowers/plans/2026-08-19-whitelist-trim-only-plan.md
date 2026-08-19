@@ -4,7 +4,7 @@
 
 **Goal:** 让白名单条目仅豁免自身所在的字符区间，同 hit 区间内的其他敏感内容（如「周超」）仍正常脱敏；同时保留 v37.9.0 的「整条剥掉」行为作为可回退开关。
 
-**Architecture:** 在 `privacyguard/redaction/whitelist_split.py` 实现纯函数 `_split_text_by_whitelist`，由 Word worker 与 OCR worker 在 filter 阶段调用；新增 `BlackWhiteListStore.is_trim_only()` 读 `redaction.whitelist_trim_only` 开关（默认 `True`）；PDF 通道通过新静态方法 `_sub_rect_for_text_span` 用字符权重比例估算子矩形；多行 / 退化场景走保守回退。
+**Architecture:** 在 `secureredact/redaction/whitelist_split.py` 实现纯函数 `_split_text_by_whitelist`，由 Word worker 与 OCR worker 在 filter 阶段调用；新增 `BlackWhiteListStore.is_trim_only()` 读 `redaction.whitelist_trim_only` 开关（默认 `True`）；PDF 通道通过新静态方法 `_sub_rect_for_text_span` 用字符权重比例估算子矩形；多行 / 退化场景走保守回退。
 
 **Tech Stack:** Python 3、PyQt6（QRectF）、现有 PyMuPDF/RapidOCR 管线、unittest。
 
@@ -12,10 +12,10 @@
 
 | File | Responsibility |
 |---|---|
-| `privacyguard/redaction/whitelist_split.py` (Create) | 纯函数 `_split_text_by_whitelist`，无外部依赖 |
-| `privacyguard/redaction/black_white_list_store.py` (Modify) | 新增 `is_trim_only()` / `set_trim_only()`；扩展单例状态 |
-| `privacyguard/workers/word_worker.py` (Modify) | `_filter_whitelist` 改写支持 trim 模式 |
-| `privacyguard/workers/ocr_worker.py` (Modify) | `_apply_whitelist_filter` 改写 + 新增 `_sub_rect_for_text_span` 静态方法 |
+| `secureredact/redaction/whitelist_split.py` (Create) | 纯函数 `_split_text_by_whitelist`，无外部依赖 |
+| `secureredact/redaction/black_white_list_store.py` (Modify) | 新增 `is_trim_only()` / `set_trim_only()`；扩展单例状态 |
+| `secureredact/workers/word_worker.py` (Modify) | `_filter_whitelist` 改写支持 trim 模式 |
+| `secureredact/workers/ocr_worker.py` (Modify) | `_apply_whitelist_filter` 改写 + 新增 `_sub_rect_for_text_span` 静态方法 |
 | `tests/unit/test_whitelist_split.py` (Create) | `_split_text_by_whitelist` 全分支单测 |
 | `tests/unit/test_whitelist_trim_only.py` (Create) | Word worker / OCR worker trim 集成单测 |
 | `tests/unit/test_whitelist_trim_only_config.py` (Create) | store.is_trim_only + 配置兼容单测 |
@@ -31,7 +31,7 @@
 - v37.8.0 `HitOverrideStore` 唯一消费入口语义：子 hit 的 `hit_id` 因 start/end 变化而独立，符合预期，本任务不动 override store。
 - v37.9.0 `redaction.blacklist` / `redaction.whitelist` 字段路径不变；新增 `redaction.whitelist_trim_only` 为同级 bool 字段。
 - v37.9.0 `BlackWhiteListStore` 单例架构不变；新增方法不破坏既有签名。
-- 字符权重需与 `privacyguard/workers/ocr_worker.py:_calculate_from_line.get_char_weight` 完全一致（含 CJK 扩展 A / 兼容汉字）。
+- 字符权重需与 `secureredact/workers/ocr_worker.py:_calculate_from_line.get_char_weight` 完全一致（含 CJK 扩展 A / 兼容汉字）。
 - 多行 / 退化场景必须保守回退（整条剥掉），不可错画矩形。
 - 所有测试遵循项目既定 `unittest` 风格，禁止引入新框架。
 
@@ -40,7 +40,7 @@
 ## Task 1: 实现 `_split_text_by_whitelist` 纯函数
 
 **Files:**
-- Create: `privacyguard/redaction/whitelist_split.py`
+- Create: `secureredact/redaction/whitelist_split.py`
 - Test: `tests/unit/test_whitelist_split.py`
 
 **Interfaces:**
@@ -56,7 +56,7 @@
 """_split_text_by_whitelist 单元测试."""
 import unittest
 
-from privacyguard.redaction.whitelist_split import _split_text_by_whitelist
+from secureredact.redaction.whitelist_split import _split_text_by_whitelist
 
 
 class SplitTextByWhitelistTest(unittest.TestCase):
@@ -136,11 +136,11 @@ if __name__ == "__main__":
 - [ ] **Step 2: 跑测试确认失败**
 
 Run: `python3 -m unittest tests.unit.test_whitelist_split -v`
-Expected: `ModuleNotFoundError: No module named 'privacyguard.redaction.whitelist_split'`
+Expected: `ModuleNotFoundError: No module named 'secureredact.redaction.whitelist_split'`
 
 - [ ] **Step 3: 实现 `_split_text_by_whitelist`**
 
-创建 `privacyguard/redaction/whitelist_split.py`：
+创建 `secureredact/redaction/whitelist_split.py`：
 
 ```python
 # -*- coding: utf-8 -*-
@@ -233,7 +233,7 @@ Expected: `Ran 13 tests ... OK`
 - [ ] **Step 5: 提交**
 
 ```bash
-git add privacyguard/redaction/whitelist_split.py tests/unit/test_whitelist_split.py
+git add secureredact/redaction/whitelist_split.py tests/unit/test_whitelist_split.py
 git commit -m "feat(redaction): _split_text_by_whitelist — 白名单片段级拆分纯函数"
 ```
 
@@ -242,7 +242,7 @@ git commit -m "feat(redaction): _split_text_by_whitelist — 白名单片段级�
 ## Task 2: 给 BlackWhiteListStore 加 `is_trim_only()` / `set_trim_only()` + 配置读取
 
 **Files:**
-- Modify: `privacyguard/redaction/black_white_list_store.py:31-156`
+- Modify: `secureredact/redaction/black_white_list_store.py:31-156`
 - Test: `tests/unit/test_whitelist_trim_only_config.py`
 
 **Interfaces:**
@@ -259,7 +259,7 @@ git commit -m "feat(redaction): _split_text_by_whitelist — 白名单片段级�
 import unittest
 from unittest.mock import MagicMock
 
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
 
 
 class IsTrimOnlyTest(unittest.TestCase):
@@ -292,7 +292,7 @@ class IsTrimOnlyTest(unittest.TestCase):
         config = MagicMock()
         config.get.return_value = "true"  # 字符串, 应回退
         BlackWhiteListStore.instance().bind_config(config)
-        with self.assertLogs("privacyguard.redaction.black_white_list_store",
+        with self.assertLogs("secureredact.redaction.black_white_list_store",
                              level="WARNING") as cm:
             self.assertTrue(BlackWhiteListStore.instance().is_trim_only())
         self.assertTrue(any("whitelist_trim_only" in m for m in cm.output))
@@ -323,7 +323,7 @@ Expected: `AttributeError: 'BlackWhiteListStore' object has no attribute 'is_tri
 
 - [ ] **Step 3: 在 store 上实现 `is_trim_only` / `set_trim_only`**
 
-修改 `privacyguard/redaction/black_white_list_store.py`：
+修改 `secureredact/redaction/black_white_list_store.py`：
 
 1. 顶部 import 增加 `from typing import Any`（已有可忽略）
 2. `__init__` 末尾追加：
@@ -382,7 +382,7 @@ Expected: 全部通过
 - [ ] **Step 6: 提交**
 
 ```bash
-git add privacyguard/redaction/black_white_list_store.py tests/unit/test_whitelist_trim_only_config.py
+git add secureredact/redaction/black_white_list_store.py tests/unit/test_whitelist_trim_only_config.py
 git commit -m "feat(redaction): BlackWhiteListStore.is_trim_only / set_trim_only — v38 开关"
 ```
 
@@ -391,7 +391,7 @@ git commit -m "feat(redaction): BlackWhiteListStore.is_trim_only / set_trim_only
 ## Task 3: 改写 WordWorker `_filter_whitelist` 支持 trim 模式
 
 **Files:**
-- Modify: `privacyguard/workers/word_worker.py:193-207` (替换 `_filter_whitelist` 方法体)
+- Modify: `secureredact/workers/word_worker.py:193-207` (替换 `_filter_whitelist` 方法体)
 - Test: `tests/unit/test_whitelist_trim_only.py` (本任务写 Word 部分)
 
 **Interfaces:**
@@ -407,8 +407,8 @@ git commit -m "feat(redaction): BlackWhiteListStore.is_trim_only / set_trim_only
 """白名单 trim_only 集成测试 — Word + PDF."""
 import unittest
 
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
-from privacyguard.workers.word_worker import WordWorker
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.workers.word_worker import WordWorker
 
 
 def _match(text, source="rule", start=0, end=None, pattern="x"):
@@ -505,11 +505,11 @@ Expected: `AssertionError` 在 `test_trim_only_true_splits_hit_into_kept_span`�
 
 - [ ] **Step 3: 改写 `_filter_whitelist`**
 
-修改 `privacyguard/workers/word_worker.py`：
+修改 `secureredact/workers/word_worker.py`：
 
-1. 在 `from privacyguard.redaction.black_white_list_store import BlackWhiteListStore` 之后增加：
+1. 在 `from secureredact.redaction.black_white_list_store import BlackWhiteListStore` 之后增加：
    ```python
-   from privacyguard.redaction.whitelist_split import _split_text_by_whitelist
+   from secureredact.redaction.whitelist_split import _split_text_by_whitelist
    ```
 
 2. 替换 `_filter_whitelist`（约 193-207 行）：
@@ -567,7 +567,7 @@ Expected: 全部通过
 - [ ] **Step 6: 提交**
 
 ```bash
-git add privacyguard/workers/word_worker.py tests/unit/test_whitelist_trim_only.py
+git add secureredact/workers/word_worker.py tests/unit/test_whitelist_trim_only.py
 git commit -m "feat(word): WordWorker._filter_whitelist 支持 trim_only — 只豁免白名单片段"
 ```
 
@@ -576,7 +576,7 @@ git commit -m "feat(word): WordWorker._filter_whitelist 支持 trim_only — 只
 ## Task 4: 改写 OCRWorker `_apply_whitelist_filter` + 新增 `_sub_rect_for_text_span`
 
 **Files:**
-- Modify: `privacyguard/workers/ocr_worker.py:305-325` (替换 `_apply_whitelist_filter`) + 新增静态方法
+- Modify: `secureredact/workers/ocr_worker.py:305-325` (替换 `_apply_whitelist_filter`) + 新增静态方法
 - Test: `tests/unit/test_whitelist_trim_only.py` (追加 OCR 部分)
 
 **Interfaces:**
@@ -591,7 +591,7 @@ git commit -m "feat(word): WordWorker._filter_whitelist 支持 trim_only — 只
 
 ```python
 from PyQt6.QtCore import QRectF
-from privacyguard.workers.ocr_worker import OCRWorker
+from secureredact.workers.ocr_worker import OCRWorker
 
 
 class _StubOCRWorker(OCRWorker):
@@ -728,11 +728,11 @@ Expected: 大部分失败，旧代码无 trim 逻辑
 
 - [ ] **Step 3: 在 OCR worker 实现 `_sub_rect_for_text_span` + 改写 `_apply_whitelist_filter`**
 
-修改 `privacyguard/workers/ocr_worker.py`：
+修改 `secureredact/workers/ocr_worker.py`：
 
 1. 在 import 区域增加：
    ```python
-   from privacyguard.redaction.whitelist_split import _split_text_by_whitelist
+   from secureredact.redaction.whitelist_split import _split_text_by_whitelist
    ```
 
 2. 在 `_apply_whitelist_filter` 方法（305-325 行）之后新增静态方法：
@@ -842,7 +842,7 @@ Expected: 全部通过
 - [ ] **Step 6: 提交**
 
 ```bash
-git add privacyguard/workers/ocr_worker.py tests/unit/test_whitelist_trim_only.py
+git add secureredact/workers/ocr_worker.py tests/unit/test_whitelist_trim_only.py
 git commit -m "feat(ocr): OCRWorker._apply_whitelist_filter 支持 trim_only — 只豁免白名单片段"
 ```
 
@@ -888,12 +888,12 @@ git commit -m "feat(ocr): OCRWorker._apply_whitelist_filter 支持 trim_only —
 ```python
     def test_trim_only_keeps_only_non_whitelisted_substring(self):
         """v38: trim_only=True 时, 整段 Word 命中被切成非白名单位置的子 match."""
-        from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+        from secureredact.redaction.black_white_list_store import BlackWhiteListStore
         BlackWhiteListStore.reset_singleton()
         store = BlackWhiteListStore.instance()
         store.load_permanent([], ["法定代表人"])
         store.set_trim_only(True)
-        from privacyguard.workers.word_worker import WordWorker
+        from secureredact.workers.word_worker import WordWorker
         w = WordWorker.__new__(WordWorker)
         hits = [{
             "pattern": "test", "rule_name": "test",
@@ -909,7 +909,7 @@ git commit -m "feat(ocr): OCRWorker._apply_whitelist_filter 支持 trim_only —
 
 - [ ] **Step 3: 更新 `config.json`**
 
-修改 `/mnt/g/Project/PrivacyGuard/config.json`，在 `redaction` 节点下（与 `blacklist` / `whitelist` 同级）增加：
+修改 `/mnt/g/Project/SecureRedact/config.json`，在 `redaction` 节点下（与 `blacklist` / `whitelist` 同级）增加：
 
 ```json
     "whitelist_trim_only": true,
@@ -929,7 +929,7 @@ git commit -m "feat(ocr): OCRWorker._apply_whitelist_filter 支持 trim_only —
 - **白名单片段级豁免**：白名单条目仅豁免自身所在片段，同 hit 区间内的其他敏感内容仍然脱敏。
   - 例：「法定代表人：周超」+ 白名单「法定代表人」→ 「法定代表人」不脱敏，「周超」仍然脱敏。
 - 新增开关 `redaction.whitelist_trim_only`（默认 `true`）。设为 `false` 回退到 v37.9.0 「子串命中即整条剥掉」行为。
-- 新增模块 `privacyguard/redaction/whitelist_split.py` 与静态工具 `OCRWorker._sub_rect_for_text_span`（CJK 字符权重比例估算）。
+- 新增模块 `secureredact/redaction/whitelist_split.py` 与静态工具 `OCRWorker._sub_rect_for_text_span`（CJK 字符权重比例估算）。
 
 ### 影响范围
 
@@ -950,7 +950,7 @@ git commit -m "feat(ocr): OCRWorker._apply_whitelist_filter 支持 trim_only —
 
 Run: 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 python3 -m unittest \
   tests.unit.test_whitelist_split \
   tests.unit.test_whitelist_trim_only \
@@ -1023,7 +1023,7 @@ git commit -m "feat(redaction): v38 端到端 trim 用例 + config + CHANGELOG"
 
 - [ ] **Step 1: 在 CLAUDE.md §Common Commands 追加扩展回归命令**
 
-修改 `/mnt/g/Project/PrivacyGuard/CLAUDE.md`，在 `### Extended regression (hit override / 人工干预)` 段之后追加：
+修改 `/mnt/g/Project/SecureRedact/CLAUDE.md`，在 `### Extended regression (hit override / 人工干预)` 段之后追加：
 
 ```markdown
 ### Extended regression (whitelist trim_only / 白名单片段级豁免)
@@ -1062,7 +1062,7 @@ python3 -m unittest \
 
 - [ ] **Step 3: 在 CLAUDE.md §Read First 列表中追加本 spec**
 
-修改 `/mnt/g/Project/PrivacyGuard/CLAUDE.md`，在 `### Read First` 段中追加：
+修改 `/mnt/g/Project/SecureRedact/CLAUDE.md`，在 `### Read First` 段中追加：
 
 ```markdown
 7. `docs/superpowers/specs/2026-08-19-whitelist-trim-only-design.md`

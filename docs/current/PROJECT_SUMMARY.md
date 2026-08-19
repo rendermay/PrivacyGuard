@@ -1,4 +1,4 @@
-# PrivacyGuard 项目摘要
+# SecureRedact 项目摘要
 
 **当前版本：** v37.7.4  
 **版本标识：** `37.7.4 - Release Audit and Final Polish`  
@@ -9,7 +9,7 @@
 
 ## 项目定位
 
-PrivacyGuard 是一个基于 Python + PyQt6 的桌面文档脱敏工具，面向 PDF 与 Word 文档场景，提供 OCR 智能脱敏、手动精确脱敏、批量替换、以及可回滚的迭代开发流程。
+SecureRedact 是一个基于 Python + PyQt6 的桌面文档脱敏工具，面向 PDF 与 Word 文档场景，提供 OCR 智能脱敏、手动精确脱敏、批量替换、以及可回滚的迭代开发流程。
 
 ---
 
@@ -50,7 +50,7 @@ PrivacyGuard 是一个基于 Python + PyQt6 的桌面文档脱敏工具，面向
 
 ## 当前主要风险
 
-1. `main.py` 仍然偏大，后续继续迭代时要避免与 `privacyguard/*` 逻辑漂移
+1. `main.py` 仍然偏大，后续继续迭代时要避免与 `secureredact/*` 逻辑漂移
 2. Phase 2 的“每文件单独规则映射”尚未实现
 3. Windows 真机 `100% / 125% / 150% / 175%` 缩放下仍建议继续做截图驱动细调
 

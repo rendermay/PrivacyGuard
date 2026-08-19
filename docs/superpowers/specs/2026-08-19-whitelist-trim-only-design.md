@@ -2,7 +2,7 @@
 
 **作者**: Claude (brainstorming 流程产物)
 **日期**: 2026-08-19
-**项目**: PrivacyGuard 脱敏卫士
+**项目**: SecureRedact 信息脱敏助手
 **目标版本**: v38.0.0
 **状态**: 设计中 (待用户审阅)
 **前置 spec**: `docs/superpowers/specs/2026-08-18-blacklist-whitelist-design.md` (v37.9.0)
@@ -20,7 +20,7 @@ v37.9.0 黑/白名单上线后，遇到一个语义颗粒度问题：
 根因：v37.9.0 决策 2 选择「子串匹配」+「命中即整条剥掉」语义：
 
 ```python
-# privacyguard/workers/ocr_worker.py:322
+# secureredact/workers/ocr_worker.py:322
 if any(wl and wl in text for wl in whitelist):
     continue  # 整条 hit 被剥掉
 ```
@@ -65,7 +65,7 @@ if any(wl and wl in text for wl in whitelist):
 | 4 | 子 hit 与 override 关联 | 继承原 hit_id / 新 hit_id | **新 hit_id** (start/end 变化即新决策) |
 | 5 | 多行 hit 处理 | 尽量裁剪 / 保守回退 | **保守回退** (整条剥掉) |
 | 6 | 命名空间 | `redaction.whitelist_trim_only` (bool) | 同上 |
-| 7 | 算法归属文件 | 嵌入 worker / 独立模块 | **独立模块** `privacyguard/redaction/whitelist_split.py` |
+| 7 | 算法归属文件 | 嵌入 worker / 独立模块 | **独立模块** `secureredact/redaction/whitelist_split.py` |
 
 ---
 
@@ -83,7 +83,7 @@ if any(wl and wl in text for wl in whitelist):
 │            │ whitelist items          │ trim_only flag       │
 │            ▼                         ▼                       │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │  privacyguard/redaction/whitelist_split.py (新)      │   │
+│  │  secureredact/redaction/whitelist_split.py (新)      │   │
 │  │  _split_text_by_whitelist(text, whitelist)           │   │
 │  │    → List[(start_offset, end_offset, text_span)]    │   │
 │  └─────────┬─────────────────────────┬─────────────────┘   │
@@ -149,7 +149,7 @@ class BlackWhiteListStore:
 
 ### 5.3 核心算法：`_split_text_by_whitelist`
 
-新文件 `privacyguard/redaction/whitelist_split.py`：
+新文件 `secureredact/redaction/whitelist_split.py`：
 
 ```python
 def _split_text_by_whitelist(
@@ -182,7 +182,7 @@ def _split_text_by_whitelist(
 
 ## 6. 各通道集成
 
-### 6.1 Word 通道（`privacyguard/workers/word_worker.py`）
+### 6.1 Word 通道（`secureredact/workers/word_worker.py`）
 
 `_filter_whitelist` 改写：
 
@@ -226,7 +226,7 @@ def _filter_whitelist(self, hits: list) -> list:
     return kept
 ```
 
-### 6.2 PDF 文本通道（`privacyguard/workers/ocr_worker.py`）
+### 6.2 PDF 文本通道（`secureredact/workers/ocr_worker.py`）
 
 新增静态工具 `_sub_rect_for_text_span`：
 
@@ -248,7 +248,7 @@ def _sub_rect_for_text_span(
     kept_span = text[kept_start:kept_end]
     if "\n" in kept_span:
         return None
-    # 与 privacyguard/workers/ocr_worker.py:_calculate_from_line 的 get_char_weight 对齐
+    # 与 secureredact/workers/ocr_worker.py:_calculate_from_line 的 get_char_weight 对齐
     weights = [
         1.0 if (
             "一" <= c <= "鿿"   # CJK 统一汉字
@@ -417,7 +417,7 @@ trim 算法与 sub-rect 估算逻辑相同，无需额外分支。
 
 ## 10. 实施清单（概要，供 writing-plans 拆解）
 
-1. 新增 `privacyguard/redaction/whitelist_split.py` 及 `_split_text_by_whitelist`
+1. 新增 `secureredact/redaction/whitelist_split.py` 及 `_split_text_by_whitelist`
 2. `BlackWhiteListStore` 增加 `is_trim_only()` 方法 + 配置读取
 3. `OCRWorker._apply_whitelist_filter` 改写 + `_sub_rect_for_text_span` 静态方法
 4. `WordWorker._filter_whitelist` 改写

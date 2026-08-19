@@ -3,6 +3,6 @@
 
 默认懒加载,任何调用方只 import 用到的子模块即可。
 """
-from privacyguard.redaction.hit_ref import HitRef, Override, VALID_SOURCES
+from secureredact.redaction.hit_ref import HitRef, Override, VALID_SOURCES
 
 __all__ = ["HitRef", "Override", "VALID_SOURCES"]

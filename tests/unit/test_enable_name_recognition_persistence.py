@@ -3,7 +3,7 @@
 Wave 3 配置持久化测试:
 - redaction.enable_name_recognition 键的 round-trip
 - 默认值 (缺省键) 应返回 False
-- 三处对齐: main.py / privacyguard.utils.config / config.json
+- 三处对齐: main.py / secureredact.utils.config / config.json
 """
 import json
 import os
@@ -16,12 +16,12 @@ class TestEnableNameRecognitionPersistence(unittest.TestCase):
 
     def setUp(self) -> None:
         # 重置 ConfigManager 单例,确保每个用例独立
-        from privacyguard.utils.config import ConfigManager
+        from secureredact.utils.config import ConfigManager
         ConfigManager._instance = None
 
     def test_default_value_when_key_missing(self):
         """缺省键时,ConfigManager 应返回 False (向后兼容)."""
-        from privacyguard.utils.config import ConfigManager
+        from secureredact.utils.config import ConfigManager
         # 用临时路径初始化,避免污染真实 config.json
         import tempfile
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json',
@@ -37,7 +37,7 @@ class TestEnableNameRecognitionPersistence(unittest.TestCase):
 
     def test_round_trip_through_set(self):
         """写入 True → 读取应回 True."""
-        from privacyguard.utils.config import ConfigManager
+        from secureredact.utils.config import ConfigManager
         import tempfile
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json',
                                          delete=False, encoding='utf-8') as tmp:
@@ -55,7 +55,7 @@ class TestEnableNameRecognitionPersistence(unittest.TestCase):
 
 
 class TestEnableNameRecognitionAlignment(unittest.TestCase):
-    """三处对齐: SimpleConfig (main.py) / ConfigManager (privacyguard.utils.config)."""
+    """三处对齐: SimpleConfig (main.py) / ConfigManager (secureredact.utils.config)."""
 
     def test_main_default_rules_does_not_break_existing(self):
         # Wave 3 不应修改 DEFAULT_RULES 字典,只新增 enable_name_recognition 键
@@ -66,8 +66,8 @@ class TestEnableNameRecognitionAlignment(unittest.TestCase):
             self.assertIn(name, DEFAULT_RULES)
 
     def test_module_default_config_unchanged(self):
-        # privacyguard.utils.config.DEFAULT_CONFIG 应保持现状
-        from privacyguard.utils.config import DEFAULT_CONFIG
+        # secureredact.utils.config.DEFAULT_CONFIG 应保持现状
+        from secureredact.utils.config import DEFAULT_CONFIG
         self.assertNotIn(
             "enable_name_recognition",
             DEFAULT_CONFIG.get("redaction", {}),

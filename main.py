@@ -14,13 +14,13 @@ from pathlib import Path
 from io import BytesIO
 from PIL import Image
 from bs4 import BeautifulSoup
-from privacyguard.ocr.mixed_pdf import (
+from secureredact.ocr.mixed_pdf import (
     collect_embedded_image_clip_rects,
     collect_image_block_ocr_hits,
 )
-from privacyguard.ocr.text_pdf import collect_text_pdf_hit_boxes
-from privacyguard.utils.security import validate_safe_path, resource_path
-from privacyguard.utils.exceptions import (
+from secureredact.ocr.text_pdf import collect_text_pdf_hit_boxes
+from secureredact.utils.security import validate_safe_path, resource_path
+from secureredact.utils.exceptions import (
     PrivacyAppError,
     ConversionError,
     FileFormatError,
@@ -28,15 +28,15 @@ from privacyguard.utils.exceptions import (
     MemoryLimitError,
     WorkerCancelledError,
 )
-from privacyguard.utils.temp_manager import TempFileManager
-from privacyguard.workers.image_merge import ImageMergeWorker
-from privacyguard.workers.word_worker import WordWorker as _ModularWordWorker
-from privacyguard.workers.ocr_worker import OCRWorker as _ModularOCRWorker
-from privacyguard.utils.doc_converter import convert_doc_to_docx as _shared_convert_doc_to_docx
-from privacyguard.redaction.hit_ref import HitRef  # v37.8.x: 人工干预
-from privacyguard.redaction.override_store import HitOverrideStore  # v37.8.x: override store 单例
-from privacyguard.redaction.doc_hash import compute_doc_hash  # v37.8.x: 文档 hash
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore  # v37.9.0: 黑/白名单 store
+from secureredact.utils.temp_manager import TempFileManager
+from secureredact.workers.image_merge import ImageMergeWorker
+from secureredact.workers.word_worker import WordWorker as _ModularWordWorker
+from secureredact.workers.ocr_worker import OCRWorker as _ModularOCRWorker
+from secureredact.utils.doc_converter import convert_doc_to_docx as _shared_convert_doc_to_docx
+from secureredact.redaction.hit_ref import HitRef  # v37.8.x: 人工干预
+from secureredact.redaction.override_store import HitOverrideStore  # v37.8.x: override store 单例
+from secureredact.redaction.doc_hash import compute_doc_hash  # v37.8.x: 文档 hash
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore  # v37.9.0: 黑/白名单 store
 
 # v37.0.5: 延迟导入 OCR 模块，便于错误处理
 RapidOCR = None
@@ -195,7 +195,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 
 # === 软件配置 ===
 # v37.0: 从配置读取，失败时使用硬编码后备
-APP_NAME = config.get("app.name", "PrivacyGuard 脱敏卫士") if config else "PrivacyGuard 脱敏卫士"
+APP_NAME = config.get("app.name", "SecureRedact 信息脱敏助手") if config else "SecureRedact 信息脱敏助手"
 APP_VERSION = read_app_version()
 VERSION = f"{APP_VERSION} - Engineering Remediation"
 PREVIEW_FONT_STACK = '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif'
@@ -2829,7 +2829,7 @@ class SettingsDialog(QDialog):
         if not self.config:
             QMessageBox.warning(self, "提示", "未挂载配置管理器,无法清理。")
             return
-        from privacyguard.redaction.override_store import clean_stale_permanent
+        from secureredact.redaction.override_store import clean_stale_permanent
         items = self.config.get("redaction.overrides.permanent", []) or []
         if not isinstance(items, list):
             QMessageBox.warning(self, "提示", "permanent 字段格式异常,无法清理。")
@@ -4669,7 +4669,7 @@ class WebViewBridge(QObject):
     @pyqtSlot(str, str, str, str)
     def ignore_ocr_hit(self, key, source, text, hit_id):
         """JS 调用:忽略某条 OCR / jieba hit (session 级别)."""
-        from privacyguard.redaction.hit_ref import HitRef
+        from secureredact.redaction.hit_ref import HitRef
         try:
             doc_hash, location, start_s, end_s, src = hit_id.split("|", 4)
             ref = HitRef(
@@ -4686,7 +4686,7 @@ class WebViewBridge(QObject):
     @pyqtSlot(str, str, str, str)
     def confirm_ocr_hit(self, key, source, text, hit_id):
         """JS 调用:确认某条 OCR / jieba hit 为敏感信息 (session 级别)."""
-        from privacyguard.redaction.hit_ref import HitRef
+        from secureredact.redaction.hit_ref import HitRef
         try:
             doc_hash, location, start_s, end_s, src = hit_id.split("|", 4)
             ref = HitRef(doc_hash, location,
@@ -5355,7 +5355,7 @@ class MainWindow(QMainWindow):
         self.resize(default_width, default_height)
 
         # 窗口状态保存
-        self.settings = QSettings("PrivacyGuard", "App")
+        self.settings = QSettings("SecureRedact", "App")
         self._restore_window_state()
 
         self.doc = None
@@ -6052,7 +6052,7 @@ class MainWindow(QMainWindow):
         workbench_text.setSpacing(4)
         self.workbench_text_layout = workbench_text
 
-        self.lbl_workbench_title = QLabel("欢迎使用 PrivacyGuard")
+        self.lbl_workbench_title = QLabel("欢迎使用 SecureRedact")
         self.lbl_workbench_title.setObjectName("workbenchTitle")
         self.lbl_workbench_subtitle = QLabel("拖拽或打开文件即可开始处理。")
         self.lbl_workbench_subtitle.setObjectName("workbenchSubtitle")
@@ -9951,7 +9951,7 @@ class MainWindow(QMainWindow):
             self.lbl_workbench_subtitle.setText(f"当前待合并图片：{self.image_merge_total_images} 张 · 完成后自动进入 PDF 脱敏模式")
             guidance_items = build_workbench_guidance("image_merge")
         else:
-            self.lbl_workbench_title.setText("欢迎使用 PrivacyGuard")
+            self.lbl_workbench_title.setText("欢迎使用 SecureRedact")
             self.lbl_workbench_subtitle.setText("拖拽或打开文件即可开始处理。")
 
         self.lbl_workbench_focus.setText(focus_text)
@@ -11272,7 +11272,7 @@ sudo dnf install antiword
 
     def _convert_doc_to_docx(self, doc_path, method='libreoffice'):
         """v37.7.6: 委托给共享转换模块。"""
-        from privacyguard.utils.doc_converter import (
+        from secureredact.utils.doc_converter import (
             convert_with_libreoffice, convert_with_antiword,
         )
         try:

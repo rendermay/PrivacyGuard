@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PrivacyGuard Windows Build Spec File v2
+SecureRedact Windows Build Spec File v2
 PyInstaller Configuration - Enhanced for onnxruntime 1.24.1 compatibility
 """
 
@@ -267,7 +267,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='PrivacyGuard',
+    name='SecureRedact',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -290,5 +290,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='PrivacyGuard',
+    name='SecureRedact',
 )

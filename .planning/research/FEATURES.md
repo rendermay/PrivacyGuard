@@ -15,7 +15,7 @@ v39 的目标不是"加新功能"，而是把 Word 端的三类问题**结构性
 |------|----------------------|----------|
 | **结构覆盖** | 仅段落 + 表格主表 | 段落 / 表格 / 页眉 / 页脚 / 批注 / 脚注 / 尾注 / 嵌入图 / 修订痕迹 |
 | **识别精度** | regex 命中即报，FP 高 | 字段词权重 + 行政区划 + 职务词 + 上下文拒识 |
-| **架构** | main.py 散落 12k+ 行 | `privacyguard/word/*` 边界，规则 / 命中 / 预览解耦 |
+| **架构** | main.py 散落 12k+ 行 | `secureredact/word/*` 边界，规则 / 命中 / 预览解耦 |
 | **接口契约** | `source/start/end/rect/text` 命名不一致 | 统一字段映射表，与 PDF 端共用语义 |
 
 下文按 Table Stakes / Differentiators / Anti-Features 三档展开，每档给出真实场景、复杂度、维护成本与对 v39 的明确建议（**做 / 不做 / 延后**）。
@@ -151,7 +151,7 @@ v39 的目标不是"加新功能"，而是把 Word 端的三类问题**结构性
 
 | Anti-Feature | 表面吸引力 | 为什么不做 | 替代方案 |
 |--------------|------------|------------|----------|
-| **LLM 云端 NER 调用**（GPT / 文心 / 通义） | 准确率高、零维护 | (1) 违反 **local-first** 架构约束（PROJECT.md Constraint）；(2) 用户文档含未公开案件信息，云端调用违反律师 / 当事人保密义务；(3) 每次调用 3-8s 延迟，破坏"1 分钟完成一次脱敏"指标；(4) 厂商限流 / 服务下线 / 涨价都是风险 | 架构层在 `privacyguard/word/rules/` 预留 `LlmBackend` 抽象接口位（v39 不实现，v2+ 评估） |
+| **LLM 云端 NER 调用**（GPT / 文心 / 通义） | 准确率高、零维护 | (1) 违反 **local-first** 架构约束（PROJECT.md Constraint）；(2) 用户文档含未公开案件信息，云端调用违反律师 / 当事人保密义务；(3) 每次调用 3-8s 延迟，破坏"1 分钟完成一次脱敏"指标；(4) 厂商限流 / 服务下线 / 涨价都是风险 | 架构层在 `secureredact/word/rules/` 预留 `LlmBackend` 抽象接口位（v39 不实现，v2+ 评估） |
 | **本地大模型推理**（Qwen / ChatGLM / Llama 量化） | 离线 + 高精度 | (1) 4-bit 量化 7B 模型 ≥ 4 GB binary，PyInstaller 打包后安装包膨胀 10x+；(2) CPU 推理 50+ token/s 对单文档可能 1-3 分钟，破坏 1 分钟指标；(3) GPU 推理要 CUDA，Mac 用户不支持；(4) 模型 license 复杂（Qwen 商用授权、Llama 社区协议） | 词典 + regex + 启发式组合（v39 方案），覆盖率 90%+；剩余 10% 留给人工干预 |
 | **AI 自动决定替换内容**（"智能替换"） | UX 上"全自动很爽" | (1) 替换内容是法律 / 政务严肃操作，"张某某" vs "张三" vs "当事人 A" 对法律效力影响不同，必须由人定；(2) 自动替换一旦错，用户回滚成本极高（要重打开原文档）；(3) v37.8.0 已经提供"提升为永久规则"机制，AI 自动反而削弱这条人工控制路径 | 保留"预览 + 人工干预"链路；v39 不引入任何自动替换决策 |
 | **OCR 全自动预处理**（打开文档先 OCR 一遍） | "文档里有图也能扫"很诱人 | (1) OCR 一次 5-30 秒，绝大多数纯文本 Word 不需要；(2) OCR 命中与文本层命中会产生冲突，需要去重；(3) 嵌入图 OCR 走"按需 OCR"才合理 | v39 只在"嵌入图检测到时按需 OCR"，且 OCR 结果必须与文本层命中做去重（PDF 端已有此逻辑可复用） |
@@ -176,7 +176,7 @@ FN-01 结构全覆盖（页眉/页脚/批注/脚注/尾注）
 
 FN-02 嵌入图 OCR
     └──requires──> FN-01（同结构扫描框架）
-    └──requires──> privacyguard/ocr/RapidOCR（PDF 端已有，可复用）
+    └──requires──> secureredact/ocr/RapidOCR（PDF 端已有，可复用）
 
 FN-03 隔符号鲁棒
     └──requires──> FP-01 拒识规则（同一 normalizer 层）
@@ -213,7 +213,7 @@ TEST-02 真实样本 fixture
 
 ### 6.1 Launch With（v39.0.0 必达 — 不达不出）
 
-- [ ] **ARCH-01** main.py Word 散落抽取到 `privacyguard/word/*` — 用户价值: HIGH, 成本: HIGH, **P1**
+- [ ] **ARCH-01** main.py Word 散落抽取到 `secureredact/word/*` — 用户价值: HIGH, 成本: HIGH, **P1**
 - [ ] **ARCH-02** 规则 / 命中 / 预览三层接口契约 — 用户价值: HIGH（开发期价值），成本: MEDIUM, **P1**
 - [ ] **ARCH-03** PDF/Word 复用边界文档（OCRWorker / HitOverrideStore / whitelist_split） — 用户价值: MEDIUM, 成本: LOW, **P1**
 - [ ] **ARCH-04** 统一字段命名（source/start/end/rect/text）+ 字段映射表 — 用户价值: HIGH, 成本: LOW, **P1**
@@ -326,15 +326,15 @@ TEST-02 真实样本 fixture
 
 ### 项目内源
 
-- `/mnt/g/Project/PrivacyGuard/.planning/PROJECT.md` — v39 范围、ARCH/FP/FN/TEST 编号、Out of Scope 决策
-- `/mnt/g/Project/PrivacyGuard/CLAUDE.md` — 当前技术现实、版本号、回归基线
-- `/mnt/g/Project/PrivacyGuard/CHANGELOG.md` — v37-v38 已落地能力清单
-- `/mnt/g/Project/PrivacyGuard/docs/superpowers/specs/2026-08-19-whitelist-trim-only-design.md` — 白名单片段级豁免设计基线
-- `/mnt/g/Project/PrivacyGuard/docs/current/STATUS.md` — 当前状态 + 已知回归 2 项
-- `/mnt/g/Project/PrivacyGuard/pdf/抵账协议0522.docx----刘骁毅原版.docx` — v39 主样本
-- `/mnt/g/Project/PrivacyGuard/pdf/丰满法院民事判决书捷信小额贷(1).pdf` — 民事判决书样本
-- `/mnt/g/Project/PrivacyGuard/pdf/付明义判决书2026-07-29 14.29.pdf` — 判决书样本
-- `/mnt/g/Project/PrivacyGuard/pdf/周强起诉状.pdf` — 起诉状样本
+- `/mnt/g/Project/SecureRedact/.planning/PROJECT.md` — v39 范围、ARCH/FP/FN/TEST 编号、Out of Scope 决策
+- `/mnt/g/Project/SecureRedact/CLAUDE.md` — 当前技术现实、版本号、回归基线
+- `/mnt/g/Project/SecureRedact/CHANGELOG.md` — v37-v38 已落地能力清单
+- `/mnt/g/Project/SecureRedact/docs/superpowers/specs/2026-08-19-whitelist-trim-only-design.md` — 白名单片段级豁免设计基线
+- `/mnt/g/Project/SecureRedact/docs/current/STATUS.md` — 当前状态 + 已知回归 2 项
+- `/mnt/g/Project/SecureRedact/pdf/抵账协议0522.docx----刘骁毅原版.docx` — v39 主样本
+- `/mnt/g/Project/SecureRedact/pdf/丰满法院民事判决书捷信小额贷(1).pdf` — 民事判决书样本
+- `/mnt/g/Project/SecureRedact/pdf/付明义判决书2026-07-29 14.29.pdf` — 判决书样本
+- `/mnt/g/Project/SecureRedact/pdf/周强起诉状.pdf` — 起诉状样本
 
 ### 已沉淀测试基线
 
@@ -378,11 +378,11 @@ TEST-02 真实样本 fixture
 
 **与 PROJECT.md v39 必达对齐：**
 - ✓ 162 项全量回归不退化（已知 2 项失败保持）
-- ✓ Word 脱敏独立可调用接口（`privacyguard/word/*` 边界清晰）
+- ✓ Word 脱敏独立可调用接口（`secureredact/word/*` 边界清晰）
 - ✓ Word 结构全覆盖（每类 ≥1 fixture 端到端验证）
 
 ---
 
-*Feature research for: PrivacyGuard v39.0.0 Word 脱敏重做*
+*Feature research for: SecureRedact v39.0.0 Word 脱敏重做*
 *Researched: 2026-08-19*
 *Confidence: HIGH*

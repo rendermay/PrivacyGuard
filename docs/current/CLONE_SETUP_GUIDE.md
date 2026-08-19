@@ -1,6 +1,6 @@
 # 跨设备 Clone 与环境搭建指南
 
-本指南说明在新设备上从 GitHub clone PrivacyGuard 仓库（含本次 fix/pii-e2e 分支修复）并搭建可运行环境的标准流程。
+本指南说明在新设备上从 GitHub clone SecureRedact 仓库（含本次 fix/pii-e2e 分支修复）并搭建可运行环境的标准流程。
 
 适用版本：**v37.7.7** 之后（含中文姓名启发式识别 + 图片通道修复链）
 
@@ -10,8 +10,8 @@
 
 | 仓库 | URL | 用途 |
 |---|---|---|
-| **个人 fork (推荐)** | `https://github.com/rendermay/PrivacyGuard.git` | 个人工作分支，含本次修复 |
-| 项目上游 | `https://github.com/lizilaywer/PrivacyGuard.git` | 主分支，正式发布版 |
+| **个人 fork (推荐)** | `https://github.com/rendermay/SecureRedact.git` | 个人工作分支，含本次修复 |
+| 项目上游 | `https://github.com/lizilaywer/SecureRedact.git` | 主分支，正式发布版 |
 
 **本次修复已发布到 fork**：`fix/pii-e2e` 分支，commit `eae7656`。
 
@@ -22,8 +22,8 @@
 ### 2.1 仅个人 fork（推荐场景）
 
 ```bash
-git clone https://github.com/rendermay/PrivacyGuard.git
-cd PrivacyGuard
+git clone https://github.com/rendermay/SecureRedact.git
+cd SecureRedact
 git checkout fix/pii-e2e
 ```
 
@@ -31,19 +31,19 @@ git checkout fix/pii-e2e
 
 ```bash
 # 1. clone 个人 fork
-git clone https://github.com/rendermay/PrivacyGuard.git
-cd PrivacyGuard
+git clone https://github.com/rendermay/SecureRedact.git
+cd SecureRedact
 
 # 2. 加 upstream 远程
-git remote add upstream https://github.com/lizilaywer/PrivacyGuard.git
+git remote add upstream https://github.com/lizilaywer/SecureRedact.git
 
 # 3. 验证 remote 配置
 git remote -v
 # 期望输出:
-# fork    https://github.com/rendermay/PrivacyGuard.git (fetch)
-# fork    https://github.com/rendermay/PrivacyGuard.git (push)
-# upstream https://github.com/lizilaywer/PrivacyGuard.git (fetch)
-# upstream https://github.com/lizilaywer/PrivacyGuard.git (push)
+# fork    https://github.com/rendermay/SecureRedact.git (fetch)
+# fork    https://github.com/rendermay/SecureRedact.git (push)
+# upstream https://github.com/lizilaywer/SecureRedact.git (fetch)
+# upstream https://github.com/lizilaywer/SecureRedact.git (push)
 
 # 4. 切换到本次修复分支
 git checkout fix/pii-e2e
@@ -121,7 +121,7 @@ pip install -r requirements.txt
 ### 4.1 编译检查
 
 ```bash
-python -m compileall -q main.py privacyguard tests
+python -m compileall -q main.py secureredact tests
 ```
 
 期望：**无输出**（静默成功）。
@@ -287,8 +287,8 @@ python main.py
 ## 9. 一键复现脚本
 
 ```bash
-git clone https://github.com/rendermay/PrivacyGuard.git
-cd PrivacyGuard
+git clone https://github.com/rendermay/SecureRedact.git
+cd SecureRedact
 git checkout fix/pii-e2e
 python -m venv venv
 
@@ -299,7 +299,7 @@ source venv/Scripts/activate
 
 pip install --upgrade pip
 pip install -r requirements.txt
-python -m compileall -q main.py privacyguard tests
+python -m compileall -q main.py secureredact tests
 python -m unittest discover tests/unit
 ```
 
@@ -316,5 +316,5 @@ OK
 
 ## 10. 联系与反馈
 
-- **GitHub Issues**: https://github.com/rendermay/PrivacyGuard/issues
+- **GitHub Issues**: https://github.com/rendermay/SecureRedact/issues
 - **内部反馈表**: https://fcnwakmkeuz7.feishu.cn/share/base/form/shrcnEM1JEbdIKzdB400egj9lHe

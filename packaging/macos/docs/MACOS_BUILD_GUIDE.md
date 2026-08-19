@@ -1,4 +1,4 @@
-# PrivacyGuard macOS 打包指南（目录内索引）
+# SecureRedact macOS 打包指南（目录内索引）
 
 此文档保留在 `packaging/macos/docs/` 仅用于就地导航。  
 macOS 打包完整指南统一维护在：
@@ -34,6 +34,6 @@ macOS 打包完整指南统一维护在：
 - 本文件只保留最小索引，避免与主文档重复维护。
 - 当前 active 打包说明已经统一到 `v37.7.4`。
 - 当前 macOS 打包脚本统一通过 `python3 -m PyInstaller` 执行，并使用 `build/.pyinstaller-cache`。
-- 2026-03-18 已在当前机器跑通到 `.app`；当前环境缺少 `create-dmg`，且 `hdiutil` 本次未成功生成 DMG，脚本已按回退逻辑复制 `releases/macos/PrivacyGuard.app`。
+- 2026-03-18 已在当前机器跑通到 `.app`；当前环境缺少 `create-dmg`，且 `hdiutil` 本次未成功生成 DMG，脚本已按回退逻辑复制 `releases/macos/SecureRedact.app`。
 
 最后同步：2026-03-18

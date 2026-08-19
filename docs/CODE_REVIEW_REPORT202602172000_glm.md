@@ -10,7 +10,7 @@
 
 | 项目属性 | 详情 |
 |---------|------|
-| **名称** | PrivacyGuard 脱敏卫士 |
+| **名称** | SecureRedact 信息脱敏助手 |
 | **版本** | v36.4 - Code Refactoring |
 | **主文件** | main.py (~4177行) |
 | **技术栈** | Python 3.11 + PyQt6 + PyMuPDF + RapidOCR |

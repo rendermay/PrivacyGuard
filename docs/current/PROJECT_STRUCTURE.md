@@ -1,4 +1,4 @@
-# PrivacyGuard 当前项目结构说明
+# SecureRedact 当前项目结构说明
 
 > 仅保留当前生效结构与路径，不再混用旧版目录命名和历史脚本名。
 
@@ -7,7 +7,7 @@
 ## 根目录关键文件
 
 ```text
-PrivacyGuard/
+SecureRedact/
 ├── main.py
 ├── theme.py
 ├── version.txt
@@ -28,7 +28,7 @@ PrivacyGuard/
 ## 当前代码目录
 
 ```text
-privacyguard/
+secureredact/
 ├── __init__.py
 ├── ocr/
 │   ├── __init__.py
@@ -43,7 +43,7 @@ privacyguard/
 
 说明：
 - `main.py` 仍是活动运行时主入口。
-- `privacyguard/` 提供共享模块，但并未完全替代 `main.py`。
+- `secureredact/` 提供共享模块，但并未完全替代 `main.py`。
 - v38 UI 改造代码层仍主要落在 `main.py` 中，包含首页、主工作区和高级设置的响应式壳层逻辑。
 - OCR 当前固定为 RapidOCR 单引擎。
 

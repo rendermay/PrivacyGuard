@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from main import SimpleConfig, read_app_version
-from privacyguard.utils.config import ConfigManager, DEFAULT_CONFIG
+from secureredact.utils.config import ConfigManager, DEFAULT_CONFIG
 
 
 class TestConfigAlignment(unittest.TestCase):

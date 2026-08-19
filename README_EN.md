@@ -1,4 +1,4 @@
-# PrivacyGuard
+# SecureRedact
 
 > Intelligent document redaction tool for PDF and Word files, built with Python + PyQt6
 
@@ -56,7 +56,7 @@ python3 main.py
 ### Syntax Check
 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 ```
 
 ### Run Tests
@@ -99,12 +99,12 @@ See `docs/packaging/` for detailed guides.
 ## Project Structure
 
 ```
-PrivacyGuardApp/
+SecureRedactApp/
 ├── main.py                  # Application entry point (runtime)
 ├── theme.py                 # UI theme definitions (light/dark)
 ├── version.txt              # Single version source
 ├── config.json              # Runtime configuration
-├── privacyguard/            # Modular package
+├── secureredact/            # Modular package
 │   ├── ocr/                 # OCR engine layer
 │   │   ├── base.py          # Abstract base class
 │   │   ├── rapidocr.py      # RapidOCR wrapper

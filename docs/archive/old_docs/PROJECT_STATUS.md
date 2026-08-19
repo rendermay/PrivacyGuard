@@ -8,7 +8,7 @@
 
 ## 项目概述
 
-**名称**: PrivacyGuard 脱敏卫士
+**名称**: SecureRedact 信息脱敏助手
 **类型**: PDF 隐私信息脱敏工具
 **语言**: Python 3 + PyQt6
 **用途**: 智能识别并脱敏 PDF 文档中的敏感信息

@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PrivacyGuard Windows Build Spec File
+SecureRedact Windows Build Spec File
 PyInstaller Configuration - Enhanced for onnxruntime stability
 """
 
@@ -126,39 +126,39 @@ for dll_name in vc_dlls:
 # 收集 PyQt6 WebEngine 相关 DLL（可能缺失）
 pyqt6_binaries = collect_dynamic_libs('PyQt6', destdir='PyQt6/Qt6/bin')
 
-# 收集 privacyguard 包的所有子模块（修复 ModuleNotFoundError）
-privacyguard_hiddenimports = collect_submodules('privacyguard')
-print(f"[INFO] Collected {len(privacyguard_hiddenimports)} privacyguard submodules")
+# 收集 secureredact 包的所有子模块（修复 ModuleNotFoundError）
+secureredact_hiddenimports = collect_submodules('secureredact')
+print(f"[INFO] Collected {len(secureredact_hiddenimports)} secureredact submodules")
 
-# 注意：不要使用 collect_all 收集 privacyguard 的数据文件！
+# 注意：不要使用 collect_all 收集 secureredact 的数据文件！
 # 这会导致 .py 文件被作为数据文件复制，而不是作为 Python 模块处理
 # 从而破坏模块导入机制
 
-# 手动添加所有 privacyguard 子模块（确保完整）
-privacyguard_hiddenimports.extend([
-    'privacyguard',
-    'privacyguard.utils',
-    'privacyguard.utils.security',
-    'privacyguard.utils.config',
-    'privacyguard.utils.exceptions',
-    'privacyguard.utils.temp_manager',
-    'privacyguard.ocr',
-    'privacyguard.ocr.base',
-    'privacyguard.ocr.manager',
-    'privacyguard.ocr.rapidocr',
-    'privacyguard.ocr.text_pdf',
-    'privacyguard.ocr.mixed_pdf',
-    'privacyguard.workers',
-    'privacyguard.workers.ocr_worker',
-    'privacyguard.workers.word_worker',
-    'privacyguard.workers.image_merge',
-    'privacyguard.core',
-    'privacyguard.ui',
+# 手动添加所有 secureredact 子模块（确保完整）
+secureredact_hiddenimports.extend([
+    'secureredact',
+    'secureredact.utils',
+    'secureredact.utils.security',
+    'secureredact.utils.config',
+    'secureredact.utils.exceptions',
+    'secureredact.utils.temp_manager',
+    'secureredact.ocr',
+    'secureredact.ocr.base',
+    'secureredact.ocr.manager',
+    'secureredact.ocr.rapidocr',
+    'secureredact.ocr.text_pdf',
+    'secureredact.ocr.mixed_pdf',
+    'secureredact.workers',
+    'secureredact.workers.ocr_worker',
+    'secureredact.workers.word_worker',
+    'secureredact.workers.image_merge',
+    'secureredact.core',
+    'secureredact.ui',
 ])
 
 # 去重
-privacyguard_hiddenimports = list(set(privacyguard_hiddenimports))
-print(f"[INFO] Total privacyguard hidden imports after dedup: {len(privacyguard_hiddenimports)}")
+secureredact_hiddenimports = list(set(secureredact_hiddenimports))
+print(f"[INFO] Total secureredact hidden imports after dedup: {len(secureredact_hiddenimports)}")
 
 print(f"[INFO] Collected {len(onnx_binaries)} onnxruntime binaries")
 print(f"[INFO] Collected {len(extra_onnx_binaries)} extra onnxruntime libs")
@@ -169,11 +169,11 @@ print(f"[INFO] Collected {len(numpy_compat_datas)} numpy compatibility data dirs
 print(f"[INFO] Collected {len(bs4_binaries)} bs4 related binaries")
 print(f"[INFO] Collected {len(bs4_submodules)} bs4 submodules")
 print(f"[INFO] Collected {len(lxml_hiddenimports)} lxml hiddenimports")
-print(f"[INFO] Collected {len(privacyguard_hiddenimports)} privacyguard submodules")
+print(f"[INFO] Collected {len(secureredact_hiddenimports)} secureredact submodules")
 
 a = Analysis(
     [os.path.join(project_root, 'main.py')],  # main.py 在项目根目录
-    pathex=[project_root, current_dir, os.path.join(project_root, 'privacyguard'), os.path.join(project_root, 'privacyguard', 'utils'), os.path.join(project_root, 'privacyguard', 'ocr'), os.path.join(project_root, 'privacyguard', 'workers')],
+    pathex=[project_root, current_dir, os.path.join(project_root, 'secureredact'), os.path.join(project_root, 'secureredact', 'utils'), os.path.join(project_root, 'secureredact', 'ocr'), os.path.join(project_root, 'secureredact', 'workers')],
     binaries=onnx_binaries + rapid_binaries + extra_onnx_binaries + vcrt_binaries + pyqt6_binaries + numpy_binaries + bs4_binaries,
     datas=[
         # 包含主题文件
@@ -182,7 +182,7 @@ a = Analysis(
         (os.path.join(project_root, 'config.json'), '.'),
         # 包含 assets 目录（二维码图片等）
         (os.path.join(project_root, 'assets'), 'assets'),
-    ] + onnx_datas + rapid_datas + numpy_datas + numpy_compat_datas + bs4_datas + copy_metadata('numpy'),  # 注意：不要包含 privacyguard_datas_all！
+    ] + onnx_datas + rapid_datas + numpy_datas + numpy_compat_datas + bs4_datas + copy_metadata('numpy'),  # 注意：不要包含 secureredact_datas_all！
     hiddenimports=[
         # PyQt6
         'PyQt6.QtCore',
@@ -227,29 +227,29 @@ a = Analysis(
         'lxml',
         'lxml.etree',
         'lxml._elementpath',
-        # privacyguard 包（修复 ModuleNotFoundError）
-        'privacyguard',
-        'privacyguard.utils',
-        'privacyguard.utils.security',
-        'privacyguard.utils.config',
-        'privacyguard.utils.exceptions',
-        'privacyguard.utils.temp_manager',
-        'privacyguard.ocr',
-        'privacyguard.ocr.base',
-        'privacyguard.ocr.manager',
-        'privacyguard.ocr.rapidocr',
-        'privacyguard.ocr.text_pdf',
-        'privacyguard.ocr.mixed_pdf',
-        'privacyguard.workers',
-        'privacyguard.workers.ocr_worker',
-        'privacyguard.workers.word_worker',
-        'privacyguard.workers.image_merge',
-        'privacyguard.core',
-        'privacyguard.ui',
-    ] + onnx_hiddenimports + rapid_hiddenimports + numpy_hiddenimports + bs4_hiddenimports + privacyguard_hiddenimports,
-    hookspath=[current_dir],  # 包含 hook-privacyguard.py
+        # secureredact 包（修复 ModuleNotFoundError）
+        'secureredact',
+        'secureredact.utils',
+        'secureredact.utils.security',
+        'secureredact.utils.config',
+        'secureredact.utils.exceptions',
+        'secureredact.utils.temp_manager',
+        'secureredact.ocr',
+        'secureredact.ocr.base',
+        'secureredact.ocr.manager',
+        'secureredact.ocr.rapidocr',
+        'secureredact.ocr.text_pdf',
+        'secureredact.ocr.mixed_pdf',
+        'secureredact.workers',
+        'secureredact.workers.ocr_worker',
+        'secureredact.workers.word_worker',
+        'secureredact.workers.image_merge',
+        'secureredact.core',
+        'secureredact.ui',
+    ] + onnx_hiddenimports + rapid_hiddenimports + numpy_hiddenimports + bs4_hiddenimports + secureredact_hiddenimports,
+    hookspath=[current_dir],  # 包含 hook-secureredact.py
     hooksconfig={},
-    runtime_hooks=[os.path.join(current_dir, 'runtime_hook_privacyguard.py')],  # 运行时添加 privacyguard 路径
+    runtime_hooks=[os.path.join(current_dir, 'runtime_hook_secureredact.py')],  # 运行时添加 secureredact 路径
     excludes=[
         # 排除不需要的模块以减小体积
         'matplotlib',
@@ -273,7 +273,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='PrivacyGuard',
+    name='SecureRedact',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -296,5 +296,5 @@ coll = COLLECT(
     strip=False,
     upx=False,  # 禁用 UPX 压缩（可能导致 DLL 加载失败）
     upx_exclude=[],
-    name='PrivacyGuard',
+    name='SecureRedact',
 )

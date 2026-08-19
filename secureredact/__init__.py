@@ -1,5 +1,5 @@
 """
-PrivacyGuard 脱敏卫士
+SecureRedact 信息脱敏助手
 
 v36.5: 模块化重构版本
 v37.7.3: 修复 PyInstaller 打包时的相对导入问题
@@ -18,10 +18,10 @@ def _read_version():
 
 
 __version__ = _read_version()
-__app_name__ = "PrivacyGuard 脱敏卫士"
+__app_name__ = "SecureRedact 信息脱敏助手"
 
 # 导出工具模块（使用绝对导入，修复 PyInstaller 打包问题）
-from privacyguard.utils import (
+from secureredact.utils import (
     PrivacyAppError,
     ConversionError,
     FileFormatError,
@@ -59,12 +59,12 @@ __all__ = [
 ]
 
 _LAZY_IMPORTS = {
-    'ImageMergeWorker': ('privacyguard.workers', 'ImageMergeWorker'),
-    'OCRWorker': ('privacyguard.workers', 'OCRWorker'),
-    'WordWorker': ('privacyguard.workers', 'WordWorker'),
-    'OCREngineManager': ('privacyguard.ocr', 'OCREngineManager'),
-    'OCRResult': ('privacyguard.ocr', 'OCRResult'),
-    'CharInfo': ('privacyguard.ocr', 'CharInfo'),
+    'ImageMergeWorker': ('secureredact.workers', 'ImageMergeWorker'),
+    'OCRWorker': ('secureredact.workers', 'OCRWorker'),
+    'WordWorker': ('secureredact.workers', 'WordWorker'),
+    'OCREngineManager': ('secureredact.ocr', 'OCREngineManager'),
+    'OCRResult': ('secureredact.ocr', 'OCRResult'),
+    'CharInfo': ('secureredact.ocr', 'CharInfo'),
 }
 
 

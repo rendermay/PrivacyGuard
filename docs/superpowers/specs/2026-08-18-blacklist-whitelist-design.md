@@ -2,7 +2,7 @@
 
 **作者**: Claude (brainstorming 流程产物)
 **日期**: 2026-08-18
-**项目**: PrivacyGuard 脱敏卫士
+**项目**: SecureRedact 信息脱敏助手
 **目标版本**: v37.9.0
 **状态**: 设计中 (待用户审阅)
 
@@ -117,7 +117,7 @@ v37.7.x 启用了中文姓名启发式识别（jieba），但带来两类**误�
 ### 5.2 BlackWhiteListStore 单例
 
 ```
-路径: privacyguard/redaction/black_white_list_store.py
+路径: secureredact/redaction/black_white_list_store.py
 模式: 与 override_store.py 同款 (单例 + threading.Lock)
 ```
 

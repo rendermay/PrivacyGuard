@@ -12,7 +12,7 @@ from typing import Dict, List
 
 
 # 复刻 DEFAULT_RULES 中"扩展规则"的 pattern
-# 一旦 main.py 或 privacyguard/utils/config.py 修改了这里使用的 pattern,
+# 一旦 main.py 或 secureredact/utils/config.py 修改了这里使用的 pattern,
 # 本测试会立刻失败, 提醒维护者同步更新.
 _EXPECTED_PATTERNS: Dict[str, str] = {
     "地址（含门牌号）": (
@@ -116,7 +116,7 @@ class TestRedactionRulePatterns(unittest.TestCase):
 
 
 class TestMainDefaultRulesExtended(unittest.TestCase):
-    """验证 main.py / privacyguard.utils.config / config.json 三处规则集合对齐."""
+    """验证 main.py / secureredact.utils.config / config.json 三处规则集合对齐."""
 
     EXPECTED_EXTENSIONS: List[str] = [
         "地址（含门牌号）",
@@ -129,7 +129,7 @@ class TestMainDefaultRulesExtended(unittest.TestCase):
         return DEFAULT_RULES
 
     def _load_module_default_config(self):
-        from privacyguard.utils.config import DEFAULT_CONFIG  # type: ignore
+        from secureredact.utils.config import DEFAULT_CONFIG  # type: ignore
         return DEFAULT_CONFIG["redaction"]["default_rules"]
 
     def test_main_default_rules_contains_extensions(self):
@@ -145,7 +145,7 @@ class TestMainDefaultRulesExtended(unittest.TestCase):
             self.assertTrue(cfg[name].get("pattern"), f"模块规则 {name} pattern 为空")
 
     def test_three_way_alignment(self):
-        """main.py / privacyguard.utils.config / config.json 名称集合一致."""
+        """main.py / secureredact.utils.config / config.json 名称集合一致."""
         cfg_json_path = Path(__file__).resolve().parents[2] / "config.json"
         with open(cfg_json_path, "r", encoding="utf-8") as f:
             cfg_json = json.load(f)

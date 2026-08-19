@@ -1,15 +1,15 @@
-; PrivacyGuard Windows 安装程序配置
+; SecureRedact Windows 安装程序配置
 ; Inno Setup 脚本
 ; 版本来源: 命令行 /DMyAppVersion 或默认值
 
-#define MyAppName "PrivacyGuard"
-#define MyAppNameFull "PrivacyGuard 脱敏卫士"
+#define MyAppName "SecureRedact"
+#define MyAppNameFull "SecureRedact 信息脱敏助手"
 #ifndef MyAppVersion
   #define MyAppVersion "37.7.4"
 #endif
-#define MyAppPublisher "PrivacyGuard Team"
-#define MyAppURL "https://github.com/privacyguard/privacyguard"
-#define MyAppExeName "PrivacyGuard.exe"
+#define MyAppPublisher "SecureRedact Team"
+#define MyAppURL "https://github.com/secureredact/secureredact"
+#define MyAppExeName "SecureRedact.exe"
 
 [Setup]
 ; AppId must be unique for each application
@@ -26,7 +26,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
 OutputDir=..\..\..\releases\windows
-OutputBaseFilename=PrivacyGuard-{#MyAppVersion}-Setup
+OutputBaseFilename=SecureRedact-{#MyAppVersion}-Setup
 SetupIconFile=..\..\..\assets\logo\windows\app_icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma
@@ -113,8 +113,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; OnlyBelowVersion: 6.1; Check: not IsAdminInstallMode
 
 [Files]
-Source: "..\..\..\dist\PrivacyGuard\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\..\dist\PrivacyGuard\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\..\dist\SecureRedact\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\..\dist\SecureRedact\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Launcher wrapper for DLL checking
 Source: "..\scripts\launcher_wrapper.bat"; DestDir: "{app}"; Flags: ignoreversion
 ; 注意: 不要在任何共享系统文件上使用 "Flags: ignoreversion"
