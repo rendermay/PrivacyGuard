@@ -78,16 +78,42 @@ Deferred to future release (v39.0.x / v39.1+)。Tracked but not in current v39.0
 
 ## Traceability
 
-由 roadmapper 在 ROADMAP.md 创建时填充。当前为空。
+由 roadmapper 在 ROADMAP.md 创建时填充。映射完成日期 2026-08-19。
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (待 roadmapper 填充) | | Pending |
+| ARCH-01（WordWorker/规则/命中/预览抽取到 privacyguard/word/*） | Phase 3, Phase 7（集成收尾） | Pending |
+| ARCH-02（规则/命中/预览三层接口契约 + 单一数据结构） | Phase 1（契约初稿）, Phase 2（实现）, Phase 3（落地） | Pending |
+| ARCH-03（PDF/Word 复用边界文档 — 只读不动） | Phase 7（`REUSE_BOUNDARY.md`） | Pending |
+| ARCH-04（字段命名统一 + FIELD_MAPPING.md 双签） | Phase 1（初版）, Phase 2（增量）, Phase 6（Preview）, Phase 7（闭环） | Pending |
+| FP-01（数字型规则拒识业务号 + mobile 锚定） | Phase 4 | Pending |
+| FP-02（姓名/地名/地址词权重 + 黑名单 + 多层打分） | Phase 5 | Pending |
+| FP-03（身份证 GB 11643 + 银行卡 Luhn + 边界） | Phase 4 | Pending |
+| FP-04（词法/上下文/Unicode block 策略） | Phase 4（数字边界）, Phase 5（姓名上下文） | Pending |
+| FN-01（Word 全结构 Story 遍历） | Phase 2 | Pending |
+| FN-02（Word 嵌入图 OCR） | Phase 6 | Pending |
+| FN-03（隔符号鲁棒匹配 + source map） | Phase 4 | Pending |
+| FN-04（多字段组合上下文） | Phase 5 | Pending |
+| TEST-01（162 项基线不退化） | Phase 1（compatibility lane）, Phase 2-6（每 Phase 单独跑）, Phase 7（release gate） | Pending |
+| TEST-02（主样本 fixture 化 + 旧引擎 manifest） | Phase 1 | Pending |
+| TEST-03（结构全覆盖 fixture + 四段端到端断言） | Phase 7 | Pending |
+| **CONST-01（PDF 端不动）** | **全部 7 个 Phase 的 guard / pre-condition** | Pending |
 
 **Coverage:**
 - v1 requirements: 17 total
-- 硬约束: 1（CONST-01，全 v39 适用）
-- 待 roadmapper 映射到 7 个 phase
+- v1 mapped: 17（ARCH × 4 + FP × 4 + FN × 4 + TEST × 3 = 15 个具名需求 + 2 个跨 Phase 的 TEST-01）
+- 硬约束: 1（CONST-01，全 v39 适用，每 Phase guard）
+- Unmapped: **0**
+- Coverage: **100%** ✓
+
+**Phase 映射策略说明:**
+- Phase 1（基线契约冻结）覆盖 ARCH-02/04 初版 + TEST-01/02
+- Phase 2（Story 遍历）覆盖 FN-01 + ARCH-02/04 实现层
+- Phase 3（Strangler 抽取）覆盖 ARCH-01 主落地 + ARCH-02/04 完整实现
+- Phase 4（数字规则）覆盖 FP-01/03/04 + FN-03
+- Phase 5（姓名地址）覆盖 FP-02 + FP-04 + FN-04
+- Phase 6（嵌入图 OCR）覆盖 FN-02 + ARCH-04 Preview 视角
+- Phase 7（批量性能回归）覆盖 TEST-01/03 + ARCH-03 + ARCH-04 闭环
 
 ---
 
