@@ -28,6 +28,10 @@ PrivacyGuard is a Python + PyQt6 desktop application for intelligent redaction o
 - Word dual preview:
   - left: original preview with OCR/manual highlights
   - right: merged replaced preview (`rule > manual > ocr`)
+- 白名单片段级豁免 (Whitelist Span Trim, v38):
+  - 白名单条目仅豁免自身所在片段，同区间内其他敏感内容仍脱敏
+  - 通过 `redaction.whitelist_trim_only`（默认 True）控制；设为 False 回退到 v37.9.0 行为
+  - 覆盖 Word matches、PDF 文本通道、PDF 图片通道 OCR
 - Drag & drop open
 - 人工干预 (Manual Redaction Intervention):
   - 自动命中支持右键「忽略 / 确认 / 撤销 / 提升为永久」
@@ -48,9 +52,10 @@ When resuming work, read these files in order:
 4. `docs/current/V38_UI_REFACTOR_PLAN.md`
 5. `CHANGELOG.md`
 6. `rollback_journal.md`
-7. `docs/current/PRIORITY_REMEDIATION_PLAN.md`
-8. `docs/diary/20260309_2338_release_sync_diary.md`
-9. `docs/diary/20260311_pyinstaller_packaging_fix_diary.md`
+7. `docs/superpowers/specs/2026-08-19-whitelist-trim-only-design.md`
+8. `docs/current/PRIORITY_REMEDIATION_PLAN.md`
+9. `docs/diary/20260309_2338_release_sync_diary.md`
+10. `docs/diary/20260311_pyinstaller_packaging_fix_diary.md`
 
 ---
 
@@ -242,6 +247,9 @@ python3 -m unittest \
   tests.unit.test_name_recognizer \
   tests.unit.test_worker_name_recognition \
   tests.unit.test_enable_name_recognition_persistence \
+  tests.unit.test_whitelist_split \
+  tests.unit.test_whitelist_trim_only \
+  tests.unit.test_whitelist_trim_only_config \
   -v
 ```
 
@@ -260,6 +268,18 @@ python3 -m unittest \
   tests.unit.test_name_recognizer \
   tests.unit.test_worker_name_recognition \
   tests.unit.test_enable_name_recognition_persistence \
+  -v
+```
+
+### Extended regression (whitelist trim_only / 白名单片段级豁免)
+
+```bash
+python3 -m unittest \
+  tests.unit.test_whitelist_split \
+  tests.unit.test_whitelist_trim_only \
+  tests.unit.test_whitelist_trim_only_config \
+  tests.unit.test_ocr_worker_whitelist \
+  tests.unit.test_word_worker_black_white \
   -v
 ```
 
