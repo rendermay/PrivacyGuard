@@ -7,6 +7,14 @@ import fitz
 import numpy as np
 
 
+# ┌────────────────────────────────────────────────────────────────────┐
+# │ ⚠️  DO NOT LOWER THIS THRESHOLD without re-tuning the CJK weights   │
+# │ in _calculate_from_line (ocr_worker.py). The 30px gap is calibrated   │
+# │ against get_char_weight() = 1.0 for CJK vs 0.55 for digits; if you │
+# │ change either side, run tests/unit/test_mixed_pdf_ocr.py + the      │
+# │ "刘妹 034-62407159"-style regression sample before merging.          │
+# └────────────────────────────────────────────────────────────────────┘
+#
 # v37.7.x 方案 X: 同一 OCR 行内,水平相邻的命中 rect 合并阈值 (扫描坐标像素).
 # 解决 Page 0 "刘妹 034-62407159" 这类场景下,字符级 _calculate_from_line
 # 行级线性插值在"汉字 pattern + 数字 pattern"同一行时产生的 rect 间隙.
@@ -95,7 +103,18 @@ def _line_y_center(line_box):
 
 
 def _rect_to_tuple(rect):
-    """归一化 rect 为 (x, y, w, h) tuple. 支持 QRectF, SimpleNamespace, dict, tuple."""
+    """归一化 rect 为 (x, y, w, h) tuple. 支持 QRectF, SimpleNamespace, dict, tuple.
+
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ ⚠️  DO NOT REMOVE any of the four duck-typed branches — each is    │
+    │ produced by a different upstream caller:                           │
+    │   - QRectF      : PyQt6 主路径 (main.py / OCRWorker)                │
+    │   - fitz.Rect   : collect_embedded_image_clip_rects 透传            │
+    │   - dict        : tests/unit fixture (test_mixed_pdf_ocr)          │
+    │   - tuple/list  : 早期 main.py 内部调用遗留                          │
+    │ 漏掉任意分支都会让对应调用方报 AttributeError, 在批量 OCR 静默丢矩形.   │
+    └────────────────────────────────────────────────────────────────────┘
+    """
     if rect is None:
         return None
     # QRectF / QRect
@@ -150,6 +169,17 @@ def merge_adjacent_hit_rects(
     Returns:
         合并后的 rect 列表. 默认每个 rect 都满足 duck typing .x()/.y()/.width()/.height(),
         与 PyQt6.QtCore.QRectF 接口一致, 兼容 main.py 的 _deduplicate_rects 调用.
+
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ ⚠️  DO NOT reorder the (y_center, x) sort key or change the        │
+    │ bucket-by-y grouping — output rects are produced in scan-image     │
+    │ coordinates (NOT page coordinates). Downstream calls assume each   │
+    │ rect came from a single OCR line; mixing lines silently yields     │
+    │ y-stretched spans that cover unrelated text.                       │
+    │                                                                    │
+    │ 锁定测试: tests/unit/test_mixed_pdf_ocr.py::                       │
+    │           test_merge_adjacent_hit_rects (CJK + digit 同行场景).      │
+    └────────────────────────────────────────────────────────────────────┘
     """
     if output_factory is None:
         output_factory = _make_output_rect
@@ -262,7 +292,26 @@ def collect_image_block_ocr_hits(
     render_clip_fn=None,
     image_clip_rects=None,
 ):
-    """对嵌入图片区域执行 OCR，并返回页面坐标系下的命中矩形。"""
+    """对嵌入图片区域执行 OCR，并返回页面坐标系下的命中矩形。
+
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ ⚠️  DO NOT DROP either 路 1 (原始图) or 路 2 (预处理图) below.       │
+    │                                                                    │
+    │ 路 1 (原始图): 手写体友好 — 直接跑 RapidOCR, 保留手写笔触.            │
+    │ 路 2 (预处理图): 印刷体增强 — OTSU 二值化 + erode 增强印刷字.          │
+    │                                                                    │
+    │ 历史 bug: 早期版本仅跑预处理图, preprocess_image 把手写体行擦掉,      │
+    │ 导致"签名"等手写内容无法脱敏. 修复后两路 OCR 输出合并, 由            │
+    │ merge_adjacent_hit_rects 去重.                                      │
+    │                                                                    │
+    │ hit.text 故意保持空字符串: 由 _apply_whitelist_filter 中             │
+    │ original_text_was_empty 分支走 v37.9.0 整条剥掉行为. 详见             │
+    │ ocr_worker.py._apply_whitelist_filter 顶部 docstring + CHANGELOG    │
+    │ v38.0.0 段.                                                        │
+    │                                                                    │
+    │ 锁定测试: tests/unit/test_mixed_pdf_ocr.py (合并去重 + 手写场景).    │
+    └────────────────────────────────────────────────────────────────────┘
+    """
     compiled_patterns = compile_active_patterns(patterns)
     if not compiled_patterns:
         return []

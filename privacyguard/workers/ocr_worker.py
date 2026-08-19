@@ -82,7 +82,19 @@ class OCRWorker(QThread):
         print(f"[OCRWorker] 初始化, seal_detection_enabled={seal_detection_enabled}")
 
     def preprocess_image(self, img_np):
-        """图像预处理"""
+        """图像预处理
+
+        ┌────────────────────────────────────────────────────────────────────┐
+        │ ⚠️  BGR→GRAY→OTSU→erode 这条 pipeline 是 collect_image_block_ocr_hits│
+        │ 路 2 (印刷体增强) 的唯一来源. 任何一步调整 (核大小 / iterations /    │
+        │ 阈值方法) 都会改变印刷体识别率, 并间接影响                            │
+        │ merge_adjacent_hit_rects 的合并阈值是否仍然合适.                  │
+        │                                                                    │
+        │ 历史教训: 早期版本 erode iterations=2 会把手写体行擦掉, 导致        │
+        │ collect_image_block_ocr_hits 仅剩路 1 输出, 印刷体命中率下降.     │
+        │ 现在 iterations=1 是反复调参后的折中.                              │
+        └────────────────────────────────────────────────────────────────────┘
+        """
         try:
             gray = cv2.cvtColor(img_np, cv2.COLOR_BGR2GRAY)
             _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -97,6 +109,12 @@ class OCRWorker(QThread):
         """v37.7.x: 把整页 PDF 渲染为 BGR 图像 (供全页 OCR 用).
 
         与 render_pdf_clip_to_bgr 的区别: 不带 clip, 整页 0..width 0..height.
+
+        ┌────────────────────────────────────────────────────────────────────┐
+        │ ⚠️  alpha=False 必须保留 — 否则 cv2.imdecode 拿到 4 通道 BGRA,     │
+        │ 后面的 cv2.cvtColor(img, BGR2GRAY) 会因通道数不匹配抛异常, 全页    │
+        │ OCR / 姓名识别 / 黑名单注入 整条链路静默失效.                       │
+        └────────────────────────────────────────────────────────────────────┘
         """
         pix = page.get_pixmap(
             matrix=fitz.Matrix(scan_scale, scan_scale),
@@ -126,6 +144,20 @@ class OCRWorker(QThread):
 
         Returns:
             list[QRectF]: 印章区域列表（PDF 坐标系）
+
+        ┌────────────────────────────────────────────────────────────────────┐
+        │ ⚠️  HSV 阈值 (H 0-20 + 160-180, S/V 30-255), 面积上下限            │
+        │ (100×100 < area < 50%×image), red_ratio/solidity/aspect/          │
+        │ circularity 阈值 都是 v37.5.0 反复调参后的实测值, 不能凭直觉       │
+        │ "优化". 放宽任一阈值 → 红色印刷字被误判为印章 (覆盖过大);           │
+        │ 收紧任一阈值 → 真印章漏检.                                         │
+        │                                                                    │
+        │ 坐标换算 (x / scan_scale) 必须保留 — seal_rects 走 source="seal", │
+        │ 与 OCR hit 在同一坐标系混用, 改换算单位会导致 hit rect 跨页错位.   │
+        │                                                                    │
+        │ 锁定测试: tests/unit/test_ocr_worker_source_field.py (seal      │
+        │ source 字段断言).                                                  │
+        └────────────────────────────────────────────────────────────────────┘
         """
         seal_rects = []
 
@@ -551,7 +583,20 @@ class OCRWorker(QThread):
         return out
 
     def _collect_blacklist_hits(self, page, page_idx: int, blacklist: list, scan_scale: float) -> list:
-        """扫描 image 通道 OCR tokens,命中 blacklist 条目 → 构造 hit."""
+        """扫描 image 通道 OCR tokens,命中 blacklist 条目 → 构造 hit.
+
+        ┌────────────────────────────────────────────────────────────────────┐
+        │ ⚠️  历史上曾分支调用 self._ocr_clip(...) 但该方法从未实现,          │
+        │ AttributeError 被 try/except 吞掉 → 黑名单注入静默失效 (扫描型    │
+        │ PDF 上 blacklist 完全不工作). 当前统一走 _ocr_full_page_tokens    │
+        │ full-page OCR fast path. 任何"按 clip 范围 OCR"的优化必须先        │
+        │ 实现 _ocr_clip 并保留 full-page 回退, 不能直接换掉 fast path.      │
+        │                                                                    │
+        │ hit 走 source="blacklist", 必须在 _apply_whitelist_filter 二次过滤  │
+        │ 之后追加 (见 _process_page 末尾的二次 whitelist 调用), 否则同条目  │
+        │ blacklist 命中会被白名单先剥掉.                                     │
+        └────────────────────────────────────────────────────────────────────┘
+        """
         from privacyguard.ocr.mixed_pdf import collect_embedded_image_clip_rects
         from PyQt6.QtCore import QRectF
 
@@ -617,6 +662,22 @@ class OCRWorker(QThread):
 
         Returns:
             QRectF: 子字符串矩形区域（PDF坐标系）
+
+        ┌────────────────────────────────────────────────────────────────────┐
+        │ ⚠️  get_char_weight() 内嵌的 CJK 权重 1.0 vs 数字/英文 0.55 是    │
+        │ v37.7.x 反复调参的结果, 与 mixed_pdf.DEFAULT_HIT_MERGE_GAP_PX     │
+        │ (30px) 联合调过 — 任一侧变动都会让"汉字 + 数字"同行场景出现         │
+        │ rect 间隙 (例 "刘妹 034-62407159"). 调整前必须跑                  │
+        │ tests/unit/test_mixed_pdf_ocr.py 全量回归.                         │
+        │                                                                    │
+        │ 坐标换算 (/ self.scan_scale, - self.off_x, - self.off_w) 也不能动: │
+        │ mixed_pdf.collect_image_block_ocr_hits 的调用方依赖此函数返回      │
+        │ PDF 坐标系 rect, 若改成 scan 坐标, 后续 save_pdf 的                │
+        │ page.add_redact_annot 会把脱敏区画到完全错的位置.                  │
+        │                                                                    │
+        │ img_region 优先于 shrunk_box 的分支顺序不能换 — 像素边界精度       │
+        │ 高于经验收缩, 换顺序会让手写体场景下边界检测被跳过.                 │
+        └────────────────────────────────────────────────────────────────────┘
         """
         try:
             # 优先使用像素边界检测
