@@ -309,12 +309,28 @@ class OCRWorker(QThread):
         OCR/seal 通道 hit.text 为空时,委托 _resolve_text_from_rect 查回.
         manual 来源豁免 (人工框选是显式意图).
 
-        v38.0.1 hotfix: image-channel / seal hit (原 text 为空) 走 v37.9.0 行为 (整条剥掉),
-        不做 trim — 因为 _resolve_text_from_rect 反查可能返回比原 hit rect 更长的 OCR token
-        文本 (例如 custom_keyword 命中「签名或者盖章」中的「盖章」子串, 原 hit rect 只覆盖
-        「盖章」位置, 但 resolve 返回整条「签名或者盖章」), 此时 _sub_rect_for_text_span
-        用原小 rect 做权重切分会把「签名或者」画到「盖章」位置, 导致错误脱敏.
-        text-channel hit (原 text 非空) 继续走 trim.
+        ┌────────────────────────────────────────────────────────────────────┐
+        │ ⚠️  v38.0.1 hotfix — DO NOT REMOVE the original_text_was_empty    │
+        │ branch below without first implementing proper matched-text      │
+        │ propagation for image-channel hits.                               │
+        │                                                                    │
+        │ 历史 bug: image-channel custom_keyword 命中「签名或者盖章」中的     │
+        │ 「盖章」子串时, _resolve_text_from_rect 反查得到整条 OCR token      │
+        │ 文本「签名或者盖章」(因为小 hit rect 中心落在大 token bbox 内),   │
+        │ trim + _sub_rect_for_text_span 用原小 rect 做权重切分会把          │
+        │ 「签名或者」画到「盖章」位置, 导致错误脱敏.                       │
+        │                                                                    │
+        │ 当前修复: image-channel / seal hit (原 text 为空) 走 v37.9.0 行为  │
+        │ (整条剥掉), 不做 trim. text-channel hit (原 text 非空) 继续走 trim. │
+        │                                                                    │
+        │ 锁定测试: tests/unit/test_whitelist_trim_only.py::                 │
+        │           OCRFilterImageChannelEmptyTextTest                      │
+        │                                                                    │
+        │ 完整修复路径 (让 image-channel 也能 trim) 需要让                    │
+        │ collect_image_block_ocr_hits 返回 matched 子串, 让 hit.text         │
+        │ 携带精确 keyword, 避免 resolve 反查歧义. 见                        │
+        │ CHANGELOG.md v38.0.0 「已知限制」段.                               │
+        └────────────────────────────────────────────────────────────────────┘
         """
         store = BlackWhiteListStore.instance()
         whitelist = store.effective_whitelist()
@@ -335,12 +351,15 @@ class OCRWorker(QThread):
                 # 解析失败 → 沿用旧行为保留
                 kept.append(hit)
                 continue
-            # image-channel / seal hit (原 text 空): 走 v37.9.0 整条剥掉.
-            # 理由: 反查得到的 text 可能远超原 hit rect 实际覆盖范围,
-            # trim + sub-rect 计算会画到错误位置.
+            # ┌────────────────────────────────────────────────────────────┐
+            # │ ⚠️  v38.0.1 hotfix — DO NOT REMOVE / SKIP THIS BRANCH.       │
+            # │ image-channel / seal hit (原 text 为空): 必须走 v37.9.0       │
+            # │ 整条剥掉, 不做 trim. 原因见上方 docstring 与 CHANGELOG.       │
+            # │ 任何放宽此约束的修改都必须先实现 matched 子串传递到 hit.text.   │
+            # └────────────────────────────────────────────────────────────┘
             if original_text_was_empty:
                 if any(wl and wl in text for wl in whitelist):
-                    continue  # 整条剥掉
+                    continue  # 整条剥掉 — 勿改为 drop-while-preserve
                 kept.append(hit)
                 continue
             spans = _split_text_by_whitelist(text, whitelist)
@@ -413,6 +432,13 @@ class OCRWorker(QThread):
         """从该页已缓存的 OCR token 列表中, 找包含 rect 中心的 token, 返回其原文.
 
         未命中返回空串.  由 _warm_rect_text_cache 填充缓存.
+
+        ┌────────────────────────────────────────────────────────────────────┐
+        │ ⚠️  注意 — 返回的 text 可能是完整的 OCR token (而非 rect 实际       │
+        │ 覆盖范围的子串). 调用方必须理解此特性, 不能直接拿返回值做精确     │
+        │ 字符级 sub-rect 切分. 具体案例与处理见 _apply_whitelist_filter     │
+        │ 中 `original_text_was_empty` 分支 (v38.0.1 hotfix).               │
+        └────────────────────────────────────────────────────────────────────┘
         """
         if rect is None:
             return ""
@@ -787,6 +813,10 @@ class OCRWorker(QThread):
             rects.extend({
                 "rect": qr,
                 "source": "ocr",
+                # ⚠️  v38.0.1: 故意保持 text="" 不要改. 改为非空需先实现
+                # collect_image_block_ocr_hits 返回 matched 子串 (而非仅 rect),
+                # 否则 _apply_whitelist_filter 的 image-channel 分支会错位涂黑.
+                # 详见 _apply_whitelist_filter 顶部 docstring + CHANGELOG v38.0.0.
                 "text": "",
                 "rule_name": "OCR图像通道",
             } for qr in image_hit_rects)
@@ -829,6 +859,10 @@ class OCRWorker(QThread):
                 rects.extend({
                     "rect": sr,
                     "source": "seal",
+                    # ⚠️  v38.0.1: seal hit text 故意保持 "" 不要改.
+                    # _apply_whitelist_filter 中 `original_text_was_empty` 分支
+                    # 会让 seal hit 走 v37.9.0 整条剥掉行为 (不 trim), 避免 sub-rect
+                    # 错位. 详见 _apply_whitelist_filter 顶部 docstring.
                     "text": "",
                     "rule_name": "印章检测",
                 } for sr in seal_rects)

@@ -442,3 +442,32 @@ trim 算法与 sub-rect 估算逻辑相同，无需额外分支。
 | config.json 缺字段时默认 True 破坏老用户预期 | 文档说明 + WARN；可一键回退 |
 
 无未决问题。
+
+---
+
+## 12. v38.0.1 hotfix（2026-08-19）
+
+### 触发场景
+用户在 `pdf/周强起诉状.pdf` 加 custom_keyword「盖章」+ 白名单「盖章」，期望「盖章」不被脱敏。但 v38.0.0 输出仍把「盖章」涂黑。
+
+### 根因
+1. image-channel custom_keyword「盖章」命中 OCR 行「3.被传唤人收到传票后，应在送达回证上**签名或者盖章**。」的「盖章」子串
+2. `calculate_sub_rect` 返回只覆盖「盖章」位置的小 `QRectF`
+3. `_resolve_text_from_rect` 用「小 rect center 落在大 token bbox 内」反查，**返回整条 token 文本**「签名或者盖章」
+4. `_split_text_by_whitelist("签名或者盖章", ["盖章"])` → `[("签名或者", 0, 4), ("。", 6, 7)]`
+5. `_sub_rect_for_text_span` 用**原小 rect**做字符权重比例切分 → 把「签名或者」错误地画到「盖章」位置 →「盖章」rect 被涂黑
+
+### 修复
+`OCRWorker._apply_whitelist_filter` 增加 `original_text_was_empty` 分支：image-channel / seal hit（原原 hit.text 为空）走 **v37.9.0 整条剥掉**行为，不做 trim。text-channel hit（原原 hit.text 非空）继续走 v38 trim。
+
+### 锁定测试
+`tests/unit/test_whitelist_trim_only.py::OCRFilterImageChannelEmptyTextTest`（3 用例）—— 删除/修改本测试即删除 hotfix 行为，**严禁**。
+
+### 代码注释
+- `OCRWorker._apply_whitelist_filter` 顶部 docstring 含完整 bug 上下文 + 锁定测试引用
+- `OCRWorker._apply_whitelist_filter` 内 `original_text_was_empty` 分支含显式 `⚠️` 警告
+- `OCRWorker._resolve_text_from_rect` 顶部 docstring 标注返回值可能是完整 token
+- `OCRWorker._process_page` 中 image-channel / seal hit 的 `text=""` 处含显式 `⚠️` 警告
+
+### 完整修复路径（未来工作）
+让 `collect_image_block_ocr_hits` 返回 matched 子串（而非仅 rect），让 `hit.text` 携带精确 keyword 文本，避免 resolve 反查带来的歧义。这样 image-channel 也能正确 trim。**任何尝试完整修复的 PR 必须先保留本节列出的所有注释与锁定测试**，确保不破坏当前正确行为。

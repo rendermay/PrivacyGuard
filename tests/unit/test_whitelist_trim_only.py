@@ -224,6 +224,14 @@ class OCRFilterImageChannelEmptyTextTest(unittest.TestCase):
     不做 trim — _resolve_text_from_rect 反查可能返回比原 hit rect 更长的 OCR token
     (例如 custom_keyword 命中「签名或者盖章」中的「盖章」子串), 此时 _sub_rect_for_text_span
     用原小 rect 做权重切分会把「签名或者」画到「盖章」位置, 导致错误脱敏.
+
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ ⚠️  本测试是 v38.0.1 hotfix 的回归锁 — 删除/修改前必须先实现            │
+    │ collect_image_block_ocr_hits 返回 matched 子串 (而非仅 rect), 让     │
+    │ hit.text 携带精确 keyword, 避免 resolve 反查歧义.                  │
+    │ 详见 OCRWorker._apply_whitelist_filter 顶部 docstring +              │
+    │ CHANGELOG.md v38.0.0 「已知限制」段.                                  │
+    └────────────────────────────────────────────────────────────────────┘
     """
 
     def setUp(self):
