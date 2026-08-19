@@ -10,6 +10,7 @@ import re
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+from privacyguard.redaction.whitelist_split import _split_text_by_whitelist
 
 # 常量定义
 PROGRESS_UPDATE_INTERVAL = 0.05
@@ -191,19 +192,41 @@ class WordWorker(QThread):
     # ---- v37.9.0: 黑/白名单串联 ----
 
     def _filter_whitelist(self, hits: list) -> list:
-        """剥掉包含白名单子串的 hit. manual 来源豁免."""
-        whitelist = BlackWhiteListStore.instance().effective_whitelist()
-        if not whitelist:
+        """v38: 剥掉包含白名单子串的 hit; trim_only=True 时只剥白名单片段."""
+        store = BlackWhiteListStore.instance()
+        whitelist = store.effective_whitelist()
+        if not whitelist or not hits:
             return hits
-        kept = []
+        trim_only = store.is_trim_only()
+        kept: list = []
         for hit in hits:
             if hit.get("source") == "manual":
                 kept.append(hit)
                 continue
             text = hit.get("text", "") or ""
-            if any(wl and wl in text for wl in whitelist):
+            spans = _split_text_by_whitelist(text, whitelist)
+            # 无 trim 必要 → no_split 成立 ⟺ text 不含 wl, 旧行为与新行为都是原样保留
+            no_split = (
+                len(spans) == 1
+                and spans[0][0] == 0
+                and spans[0][1] == len(text)
+            )
+            if no_split:
+                kept.append(hit)
                 continue
-            kept.append(hit)
+            # 旧行为 (v37.9.0): 整条剥掉
+            if not trim_only:
+                continue
+            # 新行为 (v38): 每段保留片段生成新 hit
+            hit_start = hit.get("start", 0)
+            for s, e, t in spans:
+                if not t:
+                    continue
+                new_hit = dict(hit)
+                new_hit["start"] = hit_start + s
+                new_hit["end"] = hit_start + e
+                new_hit["text"] = t
+                kept.append(new_hit)
         return kept
 
     @staticmethod
