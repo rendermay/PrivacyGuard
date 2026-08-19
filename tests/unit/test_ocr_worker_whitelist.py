@@ -61,6 +61,8 @@ class ApplyWhitelistFilterTest(unittest.TestCase):
     def test_ocr_channel_empty_text_falls_back_to_resolve(self):
         """OCR 通道 text 为空, 应通过 _resolve_text_from_rect 查回."""
         BlackWhiteListStore.instance().load_permanent([], ["盖章"])
+        # v38 修订: trim_only 默认 True → 此用例覆盖"整条剥掉"语义, 显式关闭
+        BlackWhiteListStore.instance().set_trim_only(False)
         w = _StubOCRWorker()
         # stub 提供 _resolve_text_from_rect
         w._resolve_text_from_rect = lambda rect, page_idx: "签名或者盖章"

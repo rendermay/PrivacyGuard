@@ -31,6 +31,7 @@ from privacyguard.ocr.mixed_pdf import (
 )
 from privacyguard.ocr.text_pdf import collect_text_pdf_hit_boxes
 from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+from privacyguard.redaction.whitelist_split import _split_text_by_whitelist
 
 # 常量定义
 PROGRESS_UPDATE_INTERVAL = 0.05
@@ -303,14 +304,17 @@ class OCRWorker(QThread):
             return None
 
     def _apply_whitelist_filter(self, rects: list, page_idx: int) -> list:
-        """剥掉包含白名单子串的 hit. manual 来源豁免.
+        """v38: 剥掉包含白名单子串的 hit; trim_only=True 时只剥白名单片段.
 
         OCR/seal 通道 hit.text 为空时,委托 _resolve_text_from_rect 查回.
+        manual 来源豁免 (人工框选是显式意图).
         """
-        whitelist = BlackWhiteListStore.instance().effective_whitelist()
+        store = BlackWhiteListStore.instance()
+        whitelist = store.effective_whitelist()
         if not whitelist:
             return rects
-        kept = []
+        trim_only = store.is_trim_only()
+        kept: list = []
         for hit in rects:
             source = hit.get("source", "ocr")
             if source == "manual":
@@ -319,10 +323,75 @@ class OCRWorker(QThread):
             text = hit.get("text", "") or ""
             if not text:
                 text = self._resolve_text_from_rect(hit.get("rect"), page_idx) or ""
-            if any(wl and wl in text for wl in whitelist):
+            if not text:
+                # 解析失败 → 沿用旧行为保留
+                kept.append(hit)
                 continue
-            kept.append(hit)
+            spans = _split_text_by_whitelist(text, whitelist)
+            # 无 trim 必要 → 原样保留 (旧/新行为一致)
+            no_split = (
+                len(spans) == 1
+                and spans[0][0] == 0
+                and spans[0][1] == len(text)
+            )
+            if no_split:
+                kept.append(hit)
+                continue
+            # 旧行为 (v37.9.0): 整条剥掉
+            if not trim_only:
+                continue
+            # 新行为 (v38): 每个保留片段生成子 hit
+            original_rect = hit.get("rect")
+            for s, e, t in spans:
+                if not t:
+                    continue
+                sub_rect = self._sub_rect_for_text_span(original_rect, text, s, e)
+                if sub_rect is None:
+                    continue  # 保守回退 (含换行 / 退化宽度)
+                new_hit = dict(hit)
+                new_hit["rect"] = sub_rect
+                new_hit["text"] = t
+                kept.append(new_hit)
         return kept
+
+    @staticmethod
+    def _sub_rect_for_text_span(
+        rect,
+        text: str,
+        kept_start: int,
+        kept_end: int,
+    ):
+        """v38: 字符权重比例估算子矩形. 多行 / 退化 → 返回 None (保守回退).
+
+        字符权重与 _calculate_from_line.get_char_weight 对齐:
+          - CJK 统一汉字 (一-鿿): 1.0
+          - CJK 扩展 A (㐀-䶿): 1.0
+          - CJK 兼容汉字 (豈-﫿): 1.0
+          - 其它: 0.55
+        """
+        if rect is None or not text or kept_end <= kept_start:
+            return None
+        kept_span = text[kept_start:kept_end]
+        if "\n" in kept_span:
+            return None
+        weights = [
+            1.0 if (
+                "一" <= c <= "鿿"
+                or "㐀" <= c <= "䶿"
+                or "豈" <= c <= "﫿"
+            ) else 0.55
+            for c in text
+        ]
+        total = sum(weights) or len(text)
+        prefix = sum(weights[:kept_start])
+        match = sum(weights[kept_start:kept_end])
+        if total <= 0 or match <= 0:
+            return None
+        sub_x = rect.x() + (prefix / total) * rect.width()
+        sub_w = (match / total) * rect.width()
+        if sub_w <= 0:
+            return None
+        return QRectF(sub_x, rect.y(), sub_w, rect.height())
 
     def _resolve_text_from_rect(self, rect, page_idx: int) -> str:
         """从该页已缓存的 OCR token 列表中, 找包含 rect 中心的 token, 返回其原文.
