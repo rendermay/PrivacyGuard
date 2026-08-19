@@ -99,6 +99,7 @@
     "overrides": {
       "permanent": []
     },
+    "whitelist_trim_only": true,
     "blacklist": [
       "0432"
     ],

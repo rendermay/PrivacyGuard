@@ -4,6 +4,28 @@
 
 ---
 
+## [38.0.0] - 2026-08-19 — 白名单片段级豁免 (Whitelist Span Trim)
+
+### Added
+- **白名单片段级豁免**：白名单条目仅豁免自身所在片段，同 hit 区间内的其他敏感内容仍然脱敏。
+  - 例：「法定代表人：周超」+ 白名单「法定代表人」→ 「法定代表人」不脱敏，「周超」仍然脱敏。
+- 新增开关 `redaction.whitelist_trim_only`（默认 `true`）。设为 `false` 回退到 v37.9.0 「子串命中即整条剥掉」行为。
+- 新增模块 `privacyguard/redaction/whitelist_split.py` 与静态工具 `OCRWorker._sub_rect_for_text_span`（CJK 字符权重比例估算）。
+
+### 影响范围
+- Word 段落 / 表格 matches（rule / jieba / blacklist）
+- PDF 文本通道 hits（rule / jieba / custom_keyword）
+- PDF 图片通道 OCR hits
+- `source="manual"` 命中永远 passthrough（v37.8.0 不变）
+- `source="seal"` 命中 passthrough（text 为空，无可裁剪语义）
+- 多行 hit 走保守回退（整条剥掉）
+
+### 兼容性
+- 子 hit 的 `hit_id` 因 start/end 变化而独立，不与原 hit 的永久 override 关联（trim 本身是新决策，符合 v37.8.0 唯一消费入口语义）。
+- v37.9.0 用户升级后想恢复旧行为：设 `"redaction.whitelist_trim_only": false`。
+
+---
+
 ## [Unreleased]
 
 ### 🔄 下一步

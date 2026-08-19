@@ -109,6 +109,21 @@ class ApplyWhitelistFilterTest(unittest.TestCase):
         resolved = OCRWorker._resolve_text_from_rect(w, hit_rect, page_idx=0)
         self.assertEqual(resolved, "")
 
+    def test_trim_only_keeps_only_non_whitelisted_substring(self):
+        """v38: trim_only=True 时, 整段命中应被切成非白名单位置的子 hit."""
+        BlackWhiteListStore.instance().load_permanent([], ["法定代表人"])
+        BlackWhiteListStore.instance().set_trim_only(True)
+        w = _StubOCRWorker()
+        rects = [_hit("法定代表人：周超", x=0, y=0, w=100, h=12)]
+        out = w._apply_whitelist_filter(rects, page_idx=0)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["text"], "：周超")
+        sub = out[0]["rect"]
+        # 子矩形必须落在原矩形范围内
+        self.assertGreaterEqual(sub.x(), 0)
+        self.assertLessEqual(sub.x() + sub.width(), 100.01)
+        self.assertLess(sub.width(), 100)
+
 
 if __name__ == "__main__":
     unittest.main()

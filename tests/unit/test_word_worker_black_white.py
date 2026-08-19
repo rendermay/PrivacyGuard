@@ -37,6 +37,26 @@ class _WordFilterTest(unittest.TestCase):
         out = w._filter_whitelist(hits)
         self.assertEqual(out, hits)
 
+    def test_trim_only_keeps_only_non_whitelisted_substring(self):
+        """v38: trim_only=True 时, 整段 Word 命中被切成非白名单位置的子 match."""
+        from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+        BlackWhiteListStore.reset_singleton()
+        store = BlackWhiteListStore.instance()
+        store.load_permanent([], ["法定代表人"])
+        store.set_trim_only(True)
+        from privacyguard.workers.word_worker import WordWorker
+        w = WordWorker.__new__(WordWorker)
+        hits = [{
+            "pattern": "test", "rule_name": "test",
+            "start": 0, "end": 8, "text": "法定代表人：周超",
+            "replacement": "***", "source": "rule",
+        }]
+        out = w._filter_whitelist(hits)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["text"], "：周超")
+        self.assertEqual(out[0]["start"], 5)
+        self.assertEqual(out[0]["end"], 8)
+
 
 class _WordBlacklistInjectTest(unittest.TestCase):
     """直接测试纯函数: 给定 text + blacklist → 命中列表."""
