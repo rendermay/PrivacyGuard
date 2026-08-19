@@ -24,6 +24,9 @@
 - 子 hit 的 `hit_id` 因 start/end 变化而独立，不与原 hit 的永久 override 关联（trim 本身是新决策，符合 v37.8.0 唯一消费入口语义）。
 - v37.9.0 用户升级后想恢复旧行为：设 `"redaction.whitelist_trim_only": false`。
 
+### 已知限制
+- **PDF 图片通道 OCR hits** (`source="ocr"` 且 `hit.text=""`) 不走 trim，回退到 v37.9.0 行为（整条剥掉）。原因：`_resolve_text_from_rect` 反查可能返回比原 hit rect 实际覆盖范围更长的 OCR token 文本（例如 custom_keyword 命中「签名或者盖章」中的「盖章」子串，resolve 拿到整条 token），此时 `_sub_rect_for_text_span` 用原小 rect 做权重切分会把「签名或者」画到「盖章」位置，导致错误脱敏。图片通道 trim 的完整实现留待后续版本。
+
 ---
 
 ## [Unreleased]
