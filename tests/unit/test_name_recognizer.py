@@ -77,6 +77,18 @@ class TestChineseNameRecognizer(unittest.TestCase):
         result = self.recognizer.extract("刘x妹")
         self.assertIsInstance(result, list)
 
+    # ---- 姓氏集合完整性 (regression: v37.x 漏"付") ----
+
+    def test_recognizes_fu_surname(self):
+        # regression: SURNAME_SET 历史上漏了"付",导致"付明义"这类姓名被漏识别
+        names = self.recognizer.extract("原告付明义向本院提出诉讼请求：")
+        self.assertIn("付明义", names)
+
+    def test_recognizes_standalone_fu_name(self):
+        # 单独"付明义"也应识别
+        names = self.recognizer.extract("付明义")
+        self.assertIn("付明义", names)
+
 
 class TestExtractPersonNamesConvenience(unittest.TestCase):
     """便捷函数 extract_person_names(text) 应等价于单例方法."""
@@ -87,6 +99,11 @@ class TestExtractPersonNamesConvenience(unittest.TestCase):
 
     def test_convenience_handles_empty(self):
         self.assertEqual(extract_person_names(""), [])
+
+    def test_convenience_recognizes_fu(self):
+        # regression: 漏"付"姓 — 见 TestChineseNameRecognizer.test_recognizes_fu_surname
+        names = extract_person_names("原告付明义向本院提出诉讼请求：")
+        self.assertIn("付明义", names)
 
 
 class TestRecognizerResilience(unittest.TestCase):

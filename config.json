@@ -98,7 +98,16 @@
     "enable_hit_override": true,
     "overrides": {
       "permanent": []
-    }
+    },
+    "blacklist": [
+      "0432"
+    ],
+    "whitelist": [
+      "盖章",
+      "吉铁",
+      "丰满区",
+      "全能王"
+    ]
   },
   "ocr": {
     "min_rect_width": 5,

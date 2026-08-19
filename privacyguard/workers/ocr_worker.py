@@ -589,11 +589,17 @@ class OCRWorker(QThread):
         # 原实现 (page_text 非空才注入) 在扫描型 PDF (page_text="") 上完全失效.
         # 修复: 即使 page_text 为空, 也先用 RapidOCR 全页扫一次,把行级文本拼起来
         # 喂给 jieba 抽取人名,然后 re.escape 追加到 all_patterns (image 通道后续会用到).
+        #
+        # v37.x 修订: 阈值化触发条件. CamScanner/intsig 等扫描型 PDF 的 page_text
+        # 几乎为空但非空 — 通常仅含页码水印 (如 "1\n", 长度 < 10). 原 `not jieba_source_text`
+        # 在此场景下判 False, 兜底 OCR 永远不触发, jieba 拿到 "1" → 0 个人名 →
+        # 整页姓名脱敏静默失效. 阈值 JIEBA_MIN_TEXT_LEN 用于判定"文本太短, 走 OCR 兜底".
+        JIEBA_MIN_TEXT_LEN = 50
         all_patterns = self.rules + self.custom_keywords
         jieba_extra = []
         if self.enable_name_recognition:
             jieba_source_text = page_text or ""
-            if not jieba_source_text and image_clip_rects:
+            if len(jieba_source_text.strip()) < JIEBA_MIN_TEXT_LEN and image_clip_rects:
                 try:
                     _ocr_for_names = ocr_engine.recognize(
                         self._render_full_page_bgr(page, scan_scale)

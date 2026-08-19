@@ -201,17 +201,19 @@ def _filter_whitelist(self, hits: list) -> list:
             continue
         text = hit.get("text", "") or ""
         spans = _split_text_by_whitelist(text, whitelist)
-        # 无 trim 必要 → 原样保留
-        if len(spans) == 1 and spans[0][0] == 0 and spans[0][1] == len(text):
-            if not trim_only and any(wl in text for wl in whitelist):
-                # 旧行为: 整条剥掉
-                continue
+        # 无 trim 必要 → no_split 成立 ⟺ text 不含 wl, 旧行为与新行为都是原样保留
+        no_split = (
+            len(spans) == 1
+            and spans[0][0] == 0
+            and spans[0][1] == len(text)
+        )
+        if no_split:
             kept.append(hit)
             continue
-        # trim_only=False 但需要整条剥掉 (text 含 wl 且 spans != 原片段)
+        # 旧行为: 整条剥掉
         if not trim_only:
             continue
-        # trim_only=True: 每段保留片段生成新 hit
+        # 新行为: 每段保留片段生成新 hit
         hit_start = hit.get("start", 0)
         for s, e, t in spans:
             if not t:
@@ -246,8 +248,13 @@ def _sub_rect_for_text_span(
     kept_span = text[kept_start:kept_end]
     if "\n" in kept_span:
         return None
+    # 与 privacyguard/workers/ocr_worker.py:_calculate_from_line 的 get_char_weight 对齐
     weights = [
-        1.0 if "一" <= c <= "鿿" else 0.55
+        1.0 if (
+            "一" <= c <= "鿿"   # CJK 统一汉字
+            or "㐀" <= c <= "䶿"  # CJK 扩展 A
+            or "豈" <= c <= "﫿"  # CJK 兼容汉字
+        ) else 0.55  # 数字 / 英文 / 标点 / 其他
         for c in text
     ]
     total = sum(weights) or len(text)
@@ -285,24 +292,26 @@ def _apply_whitelist_filter(self, rects: list, page_idx: int) -> list:
             kept.append(hit)  # 解析失败 → 沿用旧行为保留
             continue
         spans = _split_text_by_whitelist(text, whitelist)
-        no_split = (len(spans) == 1
-                    and spans[0][0] == 0
-                    and spans[0][1] == len(text))
+        # 无 trim 必要 → no_split 成立 ⟺ text 不含 wl, 旧行为与新行为都是原样保留
+        no_split = (
+            len(spans) == 1
+            and spans[0][0] == 0
+            and spans[0][1] == len(text)
+        )
         if no_split:
-            if not trim_only and any(wl and wl in text for wl in whitelist):
-                continue  # 旧行为: 整条剥掉
             kept.append(hit)
             continue
+        # 旧行为: 整条剥掉
         if not trim_only:
             continue
-        # trim_only=True: 每个保留片段生成子 hit
+        # 新行为: 每个保留片段生成子 hit
         original_rect = hit.get("rect")
         for s, e, t in spans:
             if not t:
                 continue
             sub_rect = self._sub_rect_for_text_span(original_rect, text, s, e)
             if sub_rect is None:
-                continue  # 保守回退
+                continue  # 保守回退 (含换行 / 退化宽度)
             new_hit = dict(hit)
             new_hit["rect"] = sub_rect
             new_hit["text"] = t
@@ -334,8 +343,9 @@ trim 算法与 sub-rect 估算逻辑相同，无需额外分支。
 | OCR 通道解析文本失败（cache 未命中） | 该 hit 沿用旧行为保留（不剥不裁剪） |
 | 跨多行 hit 命中白名单 | 保守回退：trim_only=True 也按整条剥掉 |
 | `source="manual"` 命中 | 永远 passthrough |
-| `source="seal"` 命中 | 永远 passthrough（text 为空） |
+| `source="seal"` 命中 | 永远 passthrough（text 为空，无可裁剪语义） |
 | 多源混合 hit（blacklist 注入 + rule 同位置） | 按生成顺序处理；同位置的 whitelist 子串对两类都生效 |
+| blacklist hit 含 whitelist 子串（如 bl_item="法定代表人张三" + wl=["法定代表人"]） | trim 语义生效：bl_item 被切成「张三」片段并保留为子 hit；用户黑名单语义被 trim 精细化。如不希望此行为，将 blacklist 条目收紧到精确 token |
 
 ---
 
