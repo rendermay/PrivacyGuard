@@ -47,10 +47,12 @@ class SplitTextByWhitelistTest(unittest.TestCase):
         self.assertEqual(_split_text_by_whitelist("abc", ["a", "c"]), [(1, 2, "b")])
 
     def test_overlapping_wl_merged(self):
-        # "aaaa" + ["aa", "aaa"] → wl 位置 [(0,2),(0,3)] 合并 [(0,3)] → 反转 [("a", 3, 4)]
+        # "aaaa" + ["aa", "aaa"] → 所有位置 0-3 都被至少一个 wl 覆盖,
+        # 标准并集合并得 [(0,4)], 取反集为空 []. 原先期望 [(3,4,"a")] 是
+        # 基于"起点严格内部→跳过"的非标准合并规则, 已纠正为 union-merge 语义.
         self.assertEqual(
             _split_text_by_whitelist("aaaa", ["aa", "aaa"]),
-            [(3, 4, "a")],
+            [],
         )
 
     def test_wl_appearing_multiple_times(self):

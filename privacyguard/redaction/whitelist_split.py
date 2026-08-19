@@ -29,9 +29,9 @@ def _split_text_by_whitelist(
     Notes:
         - 空字符串 / 纯空格 wl 条目跳过 (store 层已 sanitize, 此处再次防御)
         - 收集阶段允许同一 wl 内重叠匹配 (idx = pos + 1)
-        - 合并阶段: 跨条目 / 跨位置重叠时, 若新区间起点与已合并区间起点对齐
-          则扩展; 若新区间起点严格落在已合并区间内部则忽略, 避免链式扩展
-          把后段保留片段吞掉 (典型场景: ["aa","aaa"] 匹配 "aaaa" → 仅 (0,3)).
+        - 合并阶段: 跨条目 / 跨位置重叠时, 使用标准区间并集 (union) 合并 —
+          若新区间起点 <= 已合并区间尾端, 则扩展; 否则新建一段. 任何位置
+          被任意 wl 条目命中即整体豁免.
         - 单条目多次出现 → 每处都豁免
     """
     if not isinstance(text, str):
@@ -65,29 +65,14 @@ def _split_text_by_whitelist(
     if not spans:
         return [(0, len(text), text)]
 
-    # 2) 合并区间: 起点对齐的区间合并; 起点严格落在已有区间内的忽略.
+    # 2) 合并区间: 标准并集 (union) 合并 — 任一位置被任意 wl 命中即整体豁免.
     spans.sort()
     merged: List[Tuple[int, int]] = []
     for s, e in spans:
-        if not merged:
+        if merged and s <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], e))
+        else:
             merged.append((s, e))
-            continue
-        prev_s, prev_e = merged[-1]
-        if s > prev_e:
-            # 完全在后 → 新建一段
-            merged.append((s, e))
-        elif s < prev_s:
-            # sort 后理论上不应发生, 防御性添加
-            merged.append((s, e))
-        elif s == prev_s:
-            # 起点对齐 → 取更长的尾端
-            merged[-1] = (prev_s, max(prev_e, e))
-        elif s < prev_e:
-            # 起点严格落在已合并区间内部 → 跳过, 防止链式扩展
-            continue
-        else:  # s == prev_e
-            # 紧邻 → 拼接
-            merged[-1] = (prev_s, e)
 
     # 3) 取反集
     kept: List[Tuple[int, int, str]] = []
