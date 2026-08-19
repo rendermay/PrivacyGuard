@@ -35,6 +35,7 @@ class BlackWhiteListStore:
         self._session_blacklist: List[str] = []
         self._session_whitelist: List[str] = []
         self._config = None  # type: ignore[assignment]
+        self._trim_only_override: Optional[bool] = None  # v38: 测试用, 优先级最高
 
     @classmethod
     def instance(cls) -> "BlackWhiteListStore":
@@ -154,3 +155,38 @@ class BlackWhiteListStore:
                 continue
             out.append(stripped)
         return out
+
+    # ---- v38: trim_only 开关 ----
+
+    def is_trim_only(self) -> bool:
+        """v38: 是否启用「白名单只豁免片段」语义.
+
+        优先级: set_trim_only 覆盖 > bind_config 配置 > 默认 True.
+        非 bool 配置值回退 True 并 WARN 一次.
+        """
+        if self._trim_only_override is not None:
+            return self._trim_only_override
+        if self._config is None:
+            return True
+        try:
+            val = self._config.get(
+                "redaction.whitelist_trim_only", True
+            )
+        except Exception as exc:
+            logger.warning("is_trim_only 读配置失败,回退 True: %s", exc)
+            return True
+        if not isinstance(val, bool):
+            logger.warning(
+                "whitelist_trim_only 类型错误,回退 True: %s",
+                type(val).__name__,
+            )
+            return True
+        return val
+
+    def set_trim_only(self, value: bool) -> None:
+        """v38: 测试用直接覆盖 trim_only. 优先级高于 bind_config 配置.
+
+        生产代码不要调用本方法; 走 config.json 自然切换.
+        """
+        with self._lock:
+            self._trim_only_override = bool(value)
