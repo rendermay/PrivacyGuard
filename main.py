@@ -308,6 +308,25 @@ DEBUG_MODE = os.getenv('PRIVACYGUARD_DEBUG', 'False').lower() == 'true' if not c
 # v1.1.12: 同时构建 DEFAULT_RULES_META,提供每条规则的 mask_mode / mask_keep_prefix / mask_keep_suffix / mask_char
 DEFAULT_RULES = {}
 DEFAULT_RULES_META = {}
+
+
+def _v113_apply_rule_overrides():
+    """v1.1.13 强制代码层默认 — 不依赖磁盘 config.json 漂移.
+
+    修复场景: 即使磁盘 config.json 中 '日期时间.enabled=true' 或
+    '法定代表人.pattern' 被改回旧版, 代码层仍强制以下行为:
+      1) '日期时间' 规则强制禁用 (用户决策: 选 B 不脱敏, 过度脱敏风险高于收益)
+      2) '法定代表人' pattern 强制覆盖为带正向 lookahead 的版本,
+         防止贪婪匹配把 '继续主张'/'继承' 等普通动词当人名 mask
+    """
+    DEFAULT_RULES.pop("日期时间", None)
+    DEFAULT_RULES_META.pop("日期时间", None)
+    DEFAULT_RULES["法定代表人"] = (
+        r"法定代表人\s*[::：]?\s*[一-龥]{2,4}(?:·[一-龥]{2,4})?"
+        r"(?=[的之及与和按于在跟同向对为由被让等,，。；;）)\]】\s]|$)"
+    )
+
+
 if config:
     _rules_from_config = config.get_redaction_rules()
     for name, rule in _rules_from_config.items():
@@ -336,6 +355,8 @@ if config:
     print(f"[v1.1.12 启动诊断] DEFAULT_RULES_META 加载: {len(DEFAULT_RULES_META)} 条")
     for _line in _mask_diag:
         print(f"  - {_line}")
+    # v1.1.13: 强制代码层默认 — 不依赖磁盘 config.json 漂移
+    _v113_apply_rule_overrides()
 else:
     DEFAULT_RULES = {
         "身份证号": r"(?<!\d)([1-9]\d{5}(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]|\d{15})(?!\d)",
@@ -367,6 +388,8 @@ else:
         "统一社会信用代码": {"mask_mode": "default", "mask_keep_prefix": 4, "mask_keep_suffix": 4, "mask_char": "*"},
         "公司名": {"mask_mode": "default", "mask_keep_prefix": 0, "mask_keep_suffix": 0, "mask_char": "*"},
     }
+    # v1.1.13: 强制代码层默认 — 不依赖磁盘 config.json 漂移
+    _v113_apply_rule_overrides()
 
 WORD_RULE_SCHEMA_VERSION = 1
 

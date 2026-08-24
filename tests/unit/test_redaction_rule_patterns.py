@@ -258,6 +258,57 @@ class TestDateTimeRuleDisabled(unittest.TestCase):
             f"{rule.get('enabled')}")
 
 
+class TestV113CodeLayerRuleOverrides(unittest.TestCase):
+    """v1.1.13 代码层强制规则覆盖 — 不依赖磁盘 config.json 漂移.
+
+    修复背景: 即使磁盘 config.json 中 '日期时间.enabled=true' 或
+    '法定代表人.pattern' 被改回旧版, 代码层 (_v113_apply_rule_overrides)
+    仍强制以下行为:
+      1) '日期时间' 规则强制从 DEFAULT_RULES 移除 (默认禁用)
+      2) '法定代表人' pattern 强制覆盖为带正向 lookahead 的版本
+    本测试通过 main.py 源码静态检查覆盖逻辑, 避免 import main.py
+    触发 PyQt6 DLL 加载 (测试环境受限).
+    """
+
+    @staticmethod
+    def _read_main_src() -> str:
+        return Path(__file__).resolve().parents[2].joinpath("main.py").read_text(
+            encoding="utf-8"
+        )
+
+    def test_v113_override_function_defined(self):
+        """_v113_apply_rule_overrides 必须在 main.py 定义."""
+        src = self._read_main_src()
+        self.assertIn("def _v113_apply_rule_overrides():", src,
+            "main.py 必须定义 _v113_apply_rule_overrides 函数")
+
+    def test_v113_override_removes_date_time(self):
+        """override 必须从 DEFAULT_RULES 移除 '日期时间'."""
+        src = self._read_main_src()
+        self.assertIn('DEFAULT_RULES.pop("日期时间", None)', src,
+            "_v113_apply_rule_overrides 必须 pop '日期时间'")
+        self.assertIn('DEFAULT_RULES_META.pop("日期时间", None)', src,
+            "META 也需清理对应 mask 配置")
+
+    def test_v113_override_replaces_legal_rep_pattern(self):
+        """override 必须把 '法定代表人' pattern 替换为带 lookahead 版本."""
+        src = self._read_main_src()
+        # lookhead 边界集合的关键片段必须存在
+        self.assertIn("[的之及与和按于在跟同向对为由被让等", src,
+            "_v113_apply_rule_overrides 必须覆盖 '法定代表人' pattern 为带 lookahead 版本")
+        self.assertIn("DEFAULT_RULES[\"法定代表人\"]", src,
+            "_v113_apply_rule_overrides 必须显式赋值 '法定代表人'")
+
+    def test_v113_override_called_in_both_config_paths(self):
+        """override 必须在 if config 分支和 else fallback 分支都被调用."""
+        src = self._read_main_src()
+        count = src.count("_v113_apply_rule_overrides()")
+        # 至少 3 次: 1 次定义 + 1 次 if 分支调用 + 1 次 else 分支调用
+        self.assertGreaterEqual(count, 3,
+            f"_v113_apply_rule_overrides 应被调用至少 2 次 (if/else 两个分支), "
+            f"源码实际出现次数: {count}")
+
+
 class TestPlaintiffNameRedaction(unittest.TestCase):
     """原告姓名识别 — 应在原告段、著作权人段、签名段都被命中.
 
