@@ -38,8 +38,8 @@
       },
       "日期时间": {
         "pattern": "\\d{4}[年\\-\\.]\\d{1,2}[月\\-\\.]\\d{1,2}[日]?",
-        "enabled": true,
-        "description": "匹配日期格式",
+        "enabled": false,
+        "description": "匹配日期格式。v1.1.13 起默认禁用 (用户决策: 选 B 不脱敏, 过度脱敏风险高于收益)。",
         "mask_mode": "default",
         "mask_keep_prefix": 0,
         "mask_keep_suffix": 0,
@@ -87,9 +87,9 @@
         "mask_char": "*"
       },
       "法定代表人": {
-        "pattern": "法定代表人\\s*[::：]?\\s*[一-龥]{2,4}(?:·[一-龥]{2,4})?",
+        "pattern": "法定代表人\\s*[::：]?\\s*[一-龥]{2,4}(?:·[一-龥]{2,4})?(?=[的之及与和按于在跟同向对为由被让等,，。；;）)\\]】\\s]|$)",
         "enabled": true,
-        "description": "匹配'法定代表人'标签后的人名(支持半角/全角冒号)",
+        "description": "匹配'法定代表人'标签后的人名(支持半角/全角冒号)。v1.1.13: 加正向 lookahead 边界 — 防止贪婪匹配把 '继续主张' 等普通动词当人名 mask",
         "mask_mode": "name",
         "mask_keep_prefix": 1,
         "mask_keep_suffix": 0,

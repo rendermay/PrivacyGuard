@@ -1,7 +1,7 @@
 """
 SecureRedact 配置管理模块
 
-v37.0: 配置系统实现 - 支持 JSON 配置文件、热重载、向后兼容
+v1.1.11: 配置系统实现 - 支持 JSON 配置文件、热重载、向后兼容
 """
 
 import json
@@ -50,27 +50,47 @@ DEFAULT_CONFIG = {
             "身份证号": {
                 "pattern": r"(?<!\d)([1-9]\d{5}(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]|\d{15})(?!\d)",
                 "enabled": True,
-                "description": "匹配15位或18位身份证号码"
+                "description": "匹配15位或18位身份证号码",
+                "mask_mode": "default",
+                "mask_keep_prefix": 6,
+                "mask_keep_suffix": 4,
+                "mask_char": "*",
             },
             "手机号码": {
                 "pattern": r"(?<!\d)(1[3-9]\d{9})(?!\d)",
                 "enabled": True,
-                "description": "匹配中国大陆手机号码"
+                "description": "匹配中国大陆手机号码",
+                "mask_mode": "default",
+                "mask_keep_prefix": 3,
+                "mask_keep_suffix": 4,
+                "mask_char": "*",
             },
             "日期时间": {
                 "pattern": r"\d{4}[年\-\.]\d{1,2}[月\-\.]\d{1,2}[日]?",
-                "enabled": True,
-                "description": "匹配日期格式"
+                "enabled": False,
+                "description": "匹配日期格式。v1.1.13 起默认禁用 (用户决策: 选 B 不脱敏, 过度脱敏风险高于收益)",
+                "mask_mode": "default",
+                "mask_keep_prefix": 0,
+                "mask_keep_suffix": 0,
+                "mask_char": "*",
             },
             "电子邮箱": {
                 "pattern": r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
                 "enabled": True,
-                "description": "匹配电子邮箱地址"
+                "description": "匹配电子邮箱地址",
+                "mask_mode": "email",
+                "mask_keep_prefix": 0,
+                "mask_keep_suffix": 0,
+                "mask_char": "*",
             },
             "银行卡号": {
                 "pattern": r"(?<!\d)([1-9]\d{12,18})(?!\d)",
                 "enabled": True,
-                "description": "匹配13-19位银行卡号"
+                "description": "匹配13-19位银行卡号",
+                "mask_mode": "default",
+                "mask_keep_prefix": 4,
+                "mask_keep_suffix": 4,
+                "mask_char": "*",
             },
             "印章": {
                 "pattern": "__SEAL_DETECTION__",
@@ -78,25 +98,55 @@ DEFAULT_CONFIG = {
                 "description": "使用 OpenCV 自动检测并脱敏红色印章区域"
             },
             "地址（含门牌号）": {
-                "pattern": r"[一-龥]{2,15}(?:省|市|自治区|特别行政区)[一-龥\d\s,]{4,40}\d+号",
+                "pattern": r"(?:[一-龥]{0,15}?)(?:省|市|自治区|特别行政区)[一-龥\d\s,()（）\-\w]{4,60}?\d+\s*号",
                 "enabled": True,
-                "description": "匹配含省级行政区且末端为门牌号的地址"
+                "description": "匹配含省级行政区且末端为门牌号的地址(支持省/市开头,支持全角括号/英文字母/连字符,容忍数字与号之间空白)",
+                "mask_mode": "default",
+                "mask_keep_prefix": 8,
+                "mask_keep_suffix": 2,
+                "mask_char": "*",
             },
             "固定电话": {
                 "pattern": r"(?<!\d)0\d{2,3}[-\s]?[\d\w]{7,8}(?!\d)",
                 "enabled": True,
-                "description": "匹配 0xx-xxxxxxxx 座机/固定电话(容忍 OCR 误识)"
+                "description": "匹配 0xx-xxxxxxxx 座机/固定电话(容忍 OCR 误识)",
+                "mask_mode": "default",
+                "mask_keep_prefix": 0,
+                "mask_keep_suffix": 4,
+                "mask_char": "*",
             },
             "法定代表人": {
-                "pattern": r"法定代表人\s*[::：]?\s*[一-龥]{2,4}(?:·[一-龥]{2,4})?",
+                "pattern": r"法定代表人\s*[::：]?\s*[一-龥]{2,4}(?:·[一-龥]{2,4})?(?=[的之及与和按于在跟同向对为由被让等,，。；;）)\]】\s]|$)",
                 "enabled": True,
-                "description": "匹配'法定代表人'标签后的人名(支持半角/全角冒号)"
+                "description": "匹配'法定代表人'标签后的人名(支持半角/全角冒号)。v1.1.13: 加正向 lookahead 边界 — 防止贪婪匹配把 '继续主张' 等普通动词当人名 mask",
+                "mask_mode": "name",
+                "mask_keep_prefix": 1,
+                "mask_keep_suffix": 0,
+                "mask_char": "*",
+            },
+            "统一社会信用代码": {
+                "pattern": r"(?<![A-Z0-9])([0-9][0-9A-HJ-NPQRTUWXY]{16,17})(?![A-Za-z0-9])",
+                "enabled": True,
+                "description": "匹配 GB 32100-2015 统一社会信用代码(17-18 位数字+大写字母,首字符为数字,排除 I/O/Z/S/V)。仅作用于 Word 路径,不影响 PDF。",
+                "mask_mode": "default",
+                "mask_keep_prefix": 4,
+                "mask_keep_suffix": 4,
+                "mask_char": "*",
+            },
+            "公司名": {
+                "pattern": r"[一-龥]{2,40}(?:有限公司|股份有限公司|有限责任公司|集团公司|控股公司|合伙企业|公司|中心)",
+                "enabled": True,
+                "description": "匹配中文公司/企业名称(以有限公司/集团/公司/中心等尾缀)",
+                "mask_mode": "default",
+                "mask_keep_prefix": 0,
+                "mask_keep_suffix": 0,
+                "mask_char": "*",
             }
         },
         "replacement_text": "*",
         "custom_keywords": "",
         "blacklist": [],
-        "whitelist": [],
+        "whitelist": ["盖章", "吉铁", "丰满区", "全能王", "甲方", "乙方", "丙方", "丁方", "戊方"],
         "scan": {
             "default_level": 1.5,
             "available_levels": [1.0, 1.5, 2.0],
@@ -442,7 +492,9 @@ class ConfigManager:
             enabled_only: 是否只返回启用的规则
 
         Returns:
-            规则字典，兼容新旧两种格式
+            规则字典,兼容新旧两种格式
+
+        v1.1.12: 末尾补齐缺失的 mask_* 字段(向后兼容 v1.1.11 配置)。
         """
         with self._lock:
             rules = self._config.get("redaction", {}).get("default_rules", {})
@@ -452,15 +504,34 @@ class ConfigManager:
                 if isinstance(rule, dict):
                     if enabled_only and not rule.get("enabled", True):
                         continue
+                    # v1.1.12: 补齐 mask 字段,缺失时使用默认值(整段打码,向后兼容)
+                    rule.setdefault("mask_mode", "default")
+                    rule.setdefault("mask_keep_prefix", 0)
+                    rule.setdefault("mask_keep_suffix", 0)
+                    rule.setdefault("mask_char", "*")
                     result[name] = rule
                 elif isinstance(rule, str):
                     # 旧格式兼容
                     if not enabled_only:
-                        result[name] = {"pattern": rule, "enabled": True}
+                        result[name] = {
+                            "pattern": rule,
+                            "enabled": True,
+                            "mask_mode": "default",
+                            "mask_keep_prefix": 0,
+                            "mask_keep_suffix": 0,
+                            "mask_char": "*",
+                        }
                 else:
-                    # 其他格式，尝试转换
+                    # 其他格式,尝试转换
                     if not enabled_only:
-                        result[name] = {"pattern": str(rule), "enabled": True}
+                        result[name] = {
+                            "pattern": str(rule),
+                            "enabled": True,
+                            "mask_mode": "default",
+                            "mask_keep_prefix": 0,
+                            "mask_keep_suffix": 0,
+                            "mask_char": "*",
+                        }
 
             return result
 

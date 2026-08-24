@@ -6,10 +6,10 @@ import cv2
 import numpy as np
 import time
 import shutil
-import threading  # v36.5: 线程锁支持
-import atexit  # v36.2: 用于确保临时文件清理
-import tempfile  # v36.2: 临时文件管理
-import traceback  # v37.0.5: 异常追踪
+import threading  # v1.1.11: 线程锁支持
+import atexit  # v1.1.11: 用于确保临时文件清理
+import tempfile  # v1.1.11: 临时文件管理
+import traceback  # v1.1.11: 异常追踪
 from pathlib import Path
 from io import BytesIO
 from PIL import Image
@@ -33,17 +33,17 @@ from secureredact.workers.image_merge import ImageMergeWorker
 from secureredact.workers.word_worker import WordWorker as _ModularWordWorker
 from secureredact.workers.ocr_worker import OCRWorker as _ModularOCRWorker
 from secureredact.utils.doc_converter import convert_doc_to_docx as _shared_convert_doc_to_docx
-from secureredact.redaction.hit_ref import HitRef  # v37.8.x: 人工干预
-from secureredact.redaction.override_store import HitOverrideStore  # v37.8.x: override store 单例
-from secureredact.redaction.doc_hash import compute_doc_hash  # v37.8.x: 文档 hash
-from secureredact.redaction.black_white_list_store import BlackWhiteListStore  # v37.9.0: 黑/白名单 store
+from secureredact.redaction.hit_ref import HitRef  # v1.1.11: 人工干预
+from secureredact.redaction.override_store import HitOverrideStore  # v1.1.11: override store 单例
+from secureredact.redaction.doc_hash import compute_doc_hash  # v1.1.11: 文档 hash
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore  # v1.1.11: 黑/白名单 store
 
-# v37.0.5: 延迟导入 OCR 模块，便于错误处理
+# v1.1.11: 延迟导入 OCR 模块，便于错误处理
 RapidOCR = None
 OCR_INIT_ERROR = None
 
 def init_ocr_engine():
-    """v37.0.5: 安全初始化 OCR 引擎，捕获所有可能的错误"""
+    """v1.1.11: 安全初始化 OCR 引擎，捕获所有可能的错误"""
     global RapidOCR, OCR_INIT_ERROR
     if RapidOCR is not None:
         return True
@@ -88,7 +88,7 @@ from PyQt6 import sip
 # 导入主题系统
 from theme import Theme
 
-# v37.0.4: 简化配置系统 - 直接从 JSON 文件加载
+# v1.1.11: 简化配置系统 - 直接从 JSON 文件加载
 import json
 
 
@@ -98,7 +98,7 @@ def read_app_version():
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except OSError:
-        return "38.0.0"
+        return "1.1.12"
 
 class SimpleConfig:
     """简化配置管理器 - 直接从 config.json 读取"""
@@ -110,8 +110,27 @@ class SimpleConfig:
         self._config_path = config_path
         self.load()
 
+    @staticmethod
+    def _deep_merge(base: dict, override: dict) -> dict:
+        """v1.1.12: 深度合并 — override 中有的字段覆盖 base, base 中独有字段保留。
+
+        用于 SimpleConfig.save() 字段保护, 避免磁盘上其他版本/扩展字段被擦除。
+        对 dict 类型递归合并, 非 dict 类型(标量/列表)直接覆盖。
+        """
+        result = dict(base)  # 浅拷贝作为基线
+        for k, v in override.items():
+            if k in result and isinstance(result[k], dict) and isinstance(v, dict):
+                result[k] = SimpleConfig._deep_merge(result[k], v)
+            else:
+                result[k] = v
+        return result
+
     def load(self):
-        """加载配置文件并补齐默认键。"""
+        """加载配置文件并补齐默认键。
+
+        v1.1.12: 额外从 DEFAULT_CONFIG(代码内嵌)合并缺失的 default_rules 字段,
+        避免 disk 配置被外部操作擦除 mask_* 等扩展字段时丢失功能。
+        """
         try:
             if os.path.exists(self._config_path):
                 with open(self._config_path, 'r', encoding='utf-8') as f:
@@ -119,22 +138,85 @@ class SimpleConfig:
         except (OSError, IOError, json.JSONDecodeError) as e:
             print(f"[配置系统] 加载配置失败: {e}")
 
-        # v37.8.x: 补齐 override 相关默认键
+        # v1.1.11: 补齐 override 相关默认键
         red = self._config.setdefault("redaction", {})
         red.setdefault("enable_hit_override", True)
         overrides = red.setdefault("overrides", {})
         overrides.setdefault("permanent", [])
+
+        # v1.1.12: 字段保护 — 强制覆盖内置规则的 mask_* 字段(用代码内嵌的 DEFAULT_CONFIG)
+        # 原因:disk 上的 mask 字段可能被外部操作(测试脚本/版本控制)擦除,
+        # 但代码内嵌的 DEFAULT_CONFIG 是 v1.1.12 单一权威源, 始终以它为准。
+        try:
+            from secureredact.utils.config import DEFAULT_CONFIG as _DEFAULT_CONFIG
+            disk_rules = self._config.setdefault("redaction", {}).setdefault("default_rules", {})
+            default_rules = _DEFAULT_CONFIG.get("redaction", {}).get("default_rules", {})
+            for rule_name, default_meta in default_rules.items():
+                if rule_name not in disk_rules:
+                    # 整条规则缺失,补齐整条
+                    disk_rules[rule_name] = default_meta
+                elif isinstance(default_meta, dict) and isinstance(disk_rules[rule_name], dict):
+                    # 规则存在
+                    # 强制覆盖 mask_* 字段(代码内嵌为准) — 已被外部擦除的 mask 字段
+                    for k, v in default_meta.items():
+                        if k.startswith("mask_") and k in default_meta:
+                            disk_rules[rule_name][k] = v
+                    # 强制覆盖 pattern 字段(代码内嵌为准) — 已被外部擦除的 pattern
+                    # 关键: 若 disk pattern 字符类与 code 不一致(如缺少 - / \w / \s*),
+                    #       强制用代码内嵌的最新 pattern
+                    if "pattern" in default_meta and "pattern" in disk_rules[rule_name]:
+                        code_pat = default_meta["pattern"]
+                        disk_pat = disk_rules[rule_name]["pattern"]
+                        if code_pat != disk_pat:
+                            # 简化判断: code pattern 应比 disk 新(更长/字符类更丰富)
+                            # 若 code 含 disk 没有的字符(去掉转义后), 用 code
+                            code_normalized = code_pat.replace("\\", "").replace("\\\\", "")
+                            disk_normalized = disk_pat.replace("\\", "").replace("\\\\", "")
+                            if len(code_normalized) > len(disk_normalized):
+                                disk_rules[rule_name]["pattern"] = code_pat
+
+            # v1.1.12: whitelist 字段保护 — 强制 append 代码内嵌默认白名单缺失的项
+            # 原因:disk 上的 whitelist 可能被外部操作擦除,导致法律主体标签(甲方/乙方/丙方/丁方/戊方)
+            # 被 jieba X3 误识为人名后无法被白名单保护
+            default_whitelist = _DEFAULT_CONFIG.get("redaction", {}).get("whitelist", [])
+            disk_whitelist = self._config.setdefault("redaction", {}).setdefault("whitelist", [])
+            for item in default_whitelist:
+                if item not in disk_whitelist:
+                    disk_whitelist.append(item)
+        except Exception as _exc:
+            print(f"[配置系统] 强制覆盖 mask 字段失败: {_exc}")
 
     def _load_config(self):
         """[兼容保留] 旧版加载入口,委托给 load()."""
         self.load()
 
     def save(self):
-        """原子写回磁盘 — 先写 .tmp,再 os.replace 原子替换."""
+        """原子写回磁盘 — 先写 .tmp,再 os.replace 原子替换.
+
+        v1.1.12: 保护磁盘上 self._config 没有的字段(如 mask_* 等其他版本/扩展字段),
+        避免在 SettingsDialog 保存时把它们擦除。流程:
+          1. 从磁盘读 current_disk_config(若存在)
+          2. 深度合并:self._config 中已有的字段覆盖 disk 字段
+          3. disk 中有但 self._config 没有的字段保留
+          4. 把合并结果写回磁盘
+        这样既保证用户当前改动生效,又不会丢字段。
+        """
         tmp_path = self._config_path + ".tmp"
         try:
+            # v1.1.12: 字段保护 — 从磁盘读 + 合并
+            try:
+                if os.path.exists(self._config_path):
+                    with open(self._config_path, 'r', encoding='utf-8') as f:
+                        disk_config = json.load(f)
+                else:
+                    disk_config = {}
+            except (OSError, IOError, json.JSONDecodeError):
+                disk_config = {}
+
+            # 深度合并:self._config 覆盖 disk_config,disk_config 中有但 self._config 没有的字段保留
+            merged = self._deep_merge(disk_config, self._config)
             with open(tmp_path, 'w', encoding='utf-8') as f:
-                json.dump(self._config, f, indent=2, ensure_ascii=False)
+                json.dump(merged, f, indent=2, ensure_ascii=False)
             os.replace(tmp_path, self._config_path)
             return True
         except (OSError, IOError, TypeError) as e:
@@ -194,10 +276,10 @@ cv2.setNumThreads(0)
 os.environ["OMP_NUM_THREADS"] = "1"
 
 # === 软件配置 ===
-# v37.0: 从配置读取，失败时使用硬编码后备
+# v1.1.11: 从配置读取，失败时使用硬编码后备
 APP_NAME = config.get("app.name", "SecureRedact 信息脱敏助手") if config else "SecureRedact 信息脱敏助手"
 APP_VERSION = read_app_version()
-VERSION = f"{APP_VERSION} - Engineering Remediation"
+VERSION = APP_VERSION
 PREVIEW_FONT_STACK = '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif'
 WORD_PREVIEW_IMAGE_EXTENSION_MAP = {
     "image/png": ".png",
@@ -214,23 +296,46 @@ WORD_PREVIEW_BROKEN_IMAGE_DATA_URI = (
 )
 
 # === 常量定义 ===
-# v37.0: 从配置读取，失败时使用硬编码后备
+# v1.1.11: 从配置读取，失败时使用硬编码后备
 MIN_RECT_WIDTH = config.get("ocr.min_rect_width", 5) if config else 5
 PROGRESS_UPDATE_INTERVAL = config.get("ocr.progress_update_interval", 0.05) if config else 0.05
 ZOOM_MIN = config.get("ocr.zoom_min", 0.5) if config else 0.5
 ZOOM_MAX = config.get("ocr.zoom_max", 4.0) if config else 4.0
 DEBUG_MODE = os.getenv('PRIVACYGUARD_DEBUG', 'False').lower() == 'true' if not config else config.get("advanced.debug_mode", False)
 
-# === 默认规则库 ===
-# v37.0: 从配置读取，支持新旧两种格式
+# === 默认规则库 + Mask 元数据 ===
+# v1.1.11: 从配置读取,支持新旧两种格式
+# v1.1.12: 同时构建 DEFAULT_RULES_META,提供每条规则的 mask_mode / mask_keep_prefix / mask_keep_suffix / mask_char
+DEFAULT_RULES = {}
+DEFAULT_RULES_META = {}
 if config:
     _rules_from_config = config.get_redaction_rules()
-    DEFAULT_RULES = {}
     for name, rule in _rules_from_config.items():
         if isinstance(rule, dict):
             DEFAULT_RULES[name] = rule.get("pattern", "")
+            DEFAULT_RULES_META[name] = {
+                "mask_mode": rule.get("mask_mode", "default"),
+                "mask_keep_prefix": int(rule.get("mask_keep_prefix", 0) or 0),
+                "mask_keep_suffix": int(rule.get("mask_keep_suffix", 0) or 0),
+                "mask_char": str(rule.get("mask_char", "*") or "*"),
+            }
         else:
+            # 旧格式兼容: 仅 pattern 字符串, 无 mask 信息
             DEFAULT_RULES[name] = str(rule)
+            DEFAULT_RULES_META[name] = {}
+    # v1.1.12: 启动诊断, 帮助用户确认 mask 配置是否从 config.json 正确加载
+    _mask_diag = []
+    for _name, _meta in DEFAULT_RULES_META.items():
+        if not _meta:
+            _mask_diag.append(f"{_name}=<空>")
+        else:
+            _pf = _meta.get("mask_keep_prefix", 0)
+            _ps = _meta.get("mask_keep_suffix", 0)
+            _md = _meta.get("mask_mode", "default")
+            _mask_diag.append(f"{_name}={_md} {_pf}+{_ps}")
+    print(f"[v1.1.12 启动诊断] DEFAULT_RULES_META 加载: {len(DEFAULT_RULES_META)} 条")
+    for _line in _mask_diag:
+        print(f"  - {_line}")
 else:
     DEFAULT_RULES = {
         "身份证号": r"(?<!\d)([1-9]\d{5}(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]|\d{15})(?!\d)",
@@ -238,11 +343,29 @@ else:
         "日期时间": r"\d{4}[年\-\.]\d{1,2}[月\-\.]\d{1,2}[日]?",
         "电子邮箱": r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
         "银行卡号": r"(?<!\d)([1-9]\d{12,18})(?!\d)",
-        "印章": "__SEAL_DETECTION__",  # v37.5.0: 印章检测特殊标记
-        # v37.7.x: 扩展规则 — 起诉讼书场景下常见漏脱敏字段
-        "地址（含门牌号）": r"[一-龥]{2,15}(?:省|市|自治区|特别行政区)[一-龥\d\s,]{4,40}\d+号",
+        "印章": "__SEAL_DETECTION__",  # v1.1.11: 印章检测特殊标记
+        # v1.1.11: 扩展规则 — 起诉讼书场景下常见漏脱敏字段
+        "地址（含门牌号）": r"(?:[一-龥]{0,15}?)(?:省|市|自治区|特别行政区)[一-龥\d\s,()（）\-\w]{4,60}?\d+\s*号",
         "固定电话": r"(?<!\d)0[\w]{2,3}[-\s]?[\w]{7,8}(?!\d)",
-        "法定代表人": r"法定代表人\s*[::：]?\s*[一-龥]{2,4}(?:·[一-龥]{2,4})?",
+        "法定代表人": r"法定代表人\s*[::：]?\s*[一-龥]{2,4}(?:·[一-龥]{2,4})?(?=[的之及与和按于在跟同向对为由被让等,，。；;）)\]】\s]|$)",
+        # v1.1.12: 统一社会信用代码 - 仅 Word 路径生效,通过 pdf_excluded_rules 隔离 PDF
+        # 首字符数字,后续 16-17 位 GB 32100-2015 字符集(排除 I/O/Z/S/V)
+        "统一社会信用代码": r"(?<![A-Z0-9])([0-9][0-9A-HJ-NPQRTUWXY]{16,17})(?![A-Za-z0-9])",
+        # v1.1.12: 公司名 - 中文公司/企业名称, jieba 不能识别所有公司字号
+        "公司名": r"[一-龥]{2,40}(?:有限公司|股份有限公司|有限责任公司|集团公司|控股公司|合伙企业|公司|中心)",
+    }
+    DEFAULT_RULES_META = {
+        "身份证号": {"mask_mode": "default", "mask_keep_prefix": 6, "mask_keep_suffix": 4, "mask_char": "*"},
+        "手机号码": {"mask_mode": "default", "mask_keep_prefix": 3, "mask_keep_suffix": 4, "mask_char": "*"},
+        "日期时间": {"mask_mode": "default", "mask_keep_prefix": 0, "mask_keep_suffix": 0, "mask_char": "*"},
+        "电子邮箱": {"mask_mode": "email",   "mask_keep_prefix": 0, "mask_keep_suffix": 0, "mask_char": "*"},
+        "银行卡号": {"mask_mode": "default", "mask_keep_prefix": 4, "mask_keep_suffix": 4, "mask_char": "*"},
+        "印章":     {"mask_mode": "default", "mask_keep_prefix": 0, "mask_keep_suffix": 0, "mask_char": "*"},
+        "地址（含门牌号）": {"mask_mode": "default", "mask_keep_prefix": 8, "mask_keep_suffix": 2, "mask_char": "*"},
+        "固定电话": {"mask_mode": "default", "mask_keep_prefix": 0, "mask_keep_suffix": 4, "mask_char": "*"},
+        "法定代表人": {"mask_mode": "name",    "mask_keep_prefix": 1, "mask_keep_suffix": 0, "mask_char": "*"},
+        "统一社会信用代码": {"mask_mode": "default", "mask_keep_prefix": 4, "mask_keep_suffix": 4, "mask_char": "*"},
+        "公司名": {"mask_mode": "default", "mask_keep_prefix": 0, "mask_keep_suffix": 0, "mask_char": "*"},
     }
 
 WORD_RULE_SCHEMA_VERSION = 1
@@ -1035,7 +1158,7 @@ def replace_matches_in_paragraph(para, matches, text_offset=0, fallback_replacem
 
 # === 设置对话框 ===
 class SettingsDialog(QDialog):
-    """设置对话框 - v37.0: 支持配置持久化"""
+    """设置对话框 - v1.1.11: 支持配置持久化"""
 
     def __init__(self, parent=None, current_rules=None, use_enhance=False, custom_keywords="",
                  scan_level=2.0, offset_x=0, offset_w=0, replacement_text="[已脱敏]",
@@ -1047,7 +1170,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.config = config_manager
 
-        # v37.4.1: 修复 Windows 深色模式下对话框显示问题
+        # v1.1.11: 修复 Windows 深色模式下对话框显示问题
         # 设置窗口标志，确保对话框在深色系统主题下使用浅色样式
         self.setWindowFlags(
             Qt.WindowType.Dialog |
@@ -1055,7 +1178,7 @@ class SettingsDialog(QDialog):
             Qt.WindowType.WindowCloseButtonHint
         )
 
-        # v37.0: 从配置读取窗口尺寸，并结合当前屏幕做自适应约束
+        # v1.1.11: 从配置读取窗口尺寸，并结合当前屏幕做自适应约束
         if self.config:
             dialog_width = self.config.get("app.window.dialog_settings_width", 550)
             dialog_height = self.config.get("app.window.dialog_settings_height", 700)
@@ -1084,7 +1207,7 @@ class SettingsDialog(QDialog):
         self.setSizeGripEnabled(True)
         self._settings_bound_window_handle = None
 
-        # v37.4.1: 应用对话框主题样式
+        # v1.1.11: 应用对话框主题样式
         self._apply_dialog_theme()
 
         self.selected_rules = []
@@ -1097,13 +1220,13 @@ class SettingsDialog(QDialog):
         self.word_replace_rules = normalize_word_replace_rules(word_replace_rules or [], self.replacement_text)
         self.default_replacement_text = "[已脱敏]"
         self.recommended_rule_names = ["身份证号", "手机号码"]
-        # v37.7.x: 中文姓名启发式识别开关(默认 False,向后兼容)
+        # v1.1.11: 中文姓名启发式识别开关(默认 False,向后兼容)
         self.enable_name_recognition = bool(enable_name_recognition)
-        # v37.9.0: 黑/白名单(来自 config.json 的 redaction.blacklist/whitelist)
+        # v1.1.11: 黑/白名单(来自 config.json 的 redaction.blacklist/whitelist)
         self._initial_blacklist = list(current_blacklist or [])
         self._initial_whitelist = list(current_whitelist or [])
 
-        # v37.0: 从配置读取范围和标签
+        # v1.1.11: 从配置读取范围和标签
         if self.config:
             offset_config = self.config.get("redaction.offset", {})
             x_range = offset_config.get("x_range", [-20, 20])
@@ -1321,10 +1444,20 @@ class SettingsDialog(QDialog):
         rules_right_col = QVBoxLayout()
         rules_right_col.setSpacing(6)
         self.checks = {}
+        # v1.1.12: 读取 PDF 排除规则列表,用于在规则面板给"仅 Word"规则加标识
+        try:
+            pdf_excluded_names_ui = config.get("redaction.pdf_excluded_rules", []) if config else []
+        except Exception:
+            pdf_excluded_names_ui = []
+        if not isinstance(pdf_excluded_names_ui, list):
+            pdf_excluded_names_ui = []
+        pdf_excluded_set = set(pdf_excluded_names_ui)
         rule_items = list(DEFAULT_RULES.items())
         split_index = (len(rule_items) + 1) // 2
         for index, (name, pattern) in enumerate(rule_items):
-            cb = QCheckBox(name)
+            # v1.1.12: 若规则在 PDF 排除列表中,UI 名称追加 "📝 仅 Word" 标识
+            display_name = f"{name}  📝 仅 Word" if name in pdf_excluded_set else name
+            cb = QCheckBox(display_name)
             if current_rules and pattern in current_rules: cb.setChecked(True)
             elif not current_rules and name in ["身份证号", "手机号码", "地址（含门牌号）", "固定电话", "法定代表人"]: cb.setChecked(True)
             self.checks[name] = cb
@@ -1382,7 +1515,7 @@ class SettingsDialog(QDialog):
         custom_actions.addWidget(btn_clear_keywords)
         custom_actions.addStretch()
         left_panel.addLayout(custom_actions)
-        # v37.7.x: 中文姓名启发式识别开关
+        # v1.1.11: 中文姓名启发式识别开关
         self.cb_name_recognition = QCheckBox("启用中文姓名启发式识别 (jieba)")
         self.cb_name_recognition.setObjectName("settingsInlineCheckbox")
         self.cb_name_recognition.setChecked(self.enable_name_recognition)
@@ -1457,7 +1590,7 @@ class SettingsDialog(QDialog):
         v_custom.addLayout(custom_row)
         layout.addWidget(box_custom)
 
-        # v37.9.0: 2.5 黑名单 (强制脱敏, 优先级最低 / 实际生效低于规则)
+        # v1.1.11: 2.5 黑名单 (强制脱敏, 优先级最低 / 实际生效低于规则)
         box_black = QFrame()
         box_black.setObjectName("settingsSectionCard")
         v_black = QVBoxLayout(box_black)
@@ -1503,7 +1636,7 @@ class SettingsDialog(QDialog):
         v_black.addWidget(black_card)
         layout.addWidget(box_black)
 
-        # v37.9.0: 2.6 白名单 (永不脱敏, 优先级最高)
+        # v1.1.11: 2.6 白名单 (永不脱敏, 优先级最高)
         box_white = QFrame()
         box_white.setObjectName("settingsSectionCard")
         v_white = QVBoxLayout(box_white)
@@ -1595,7 +1728,7 @@ class SettingsDialog(QDialog):
         h_precision = QHBoxLayout()
         h_precision.addWidget(self._create_settings_form_label("当前模式:", 86))
         self.combo_precision = QComboBox()
-        # v37.0: 从配置动态添加扫描级别选项
+        # v1.1.11: 从配置动态添加扫描级别选项
         for level in self.available_levels:
             label = self.level_labels.get(str(level), f"{level}x")
             self.combo_precision.addItem(label, level)
@@ -1661,7 +1794,7 @@ class SettingsDialog(QDialog):
         v_enhance.addLayout(precision_cards)
         layout.addWidget(box_enhance)
 
-        # v37.4.0: 4. OCR 检测框调节（移除引擎选择，只保留 RapidOCR）
+        # v1.1.11: 4. OCR 检测框调节（移除引擎选择，只保留 RapidOCR）
         box_ocr = QFrame()
         box_ocr.setObjectName("settingsSectionCard")
         v_ocr = QVBoxLayout(box_ocr)
@@ -1700,7 +1833,7 @@ class SettingsDialog(QDialog):
         adjust_card_layout.addWidget(adjust_note)
         adjust_card_layout.addWidget(self._create_settings_divider())
 
-        # v37.3.5: 检测框大小调节（支持负值扩大、正值收缩）
+        # v1.1.11: 检测框大小调节（支持负值扩大、正值收缩）
         h_adjust = QHBoxLayout()
         h_adjust.addWidget(self._create_settings_form_label("检测框调节:", 96))
 
@@ -1737,7 +1870,7 @@ class SettingsDialog(QDialog):
         v_ocr.addWidget(adjust_card)
         layout.addWidget(box_ocr)
 
-        # v37.8.x: 5. 永久 override 维护
+        # v1.1.11: 5. 永久 override 维护
         box_overrides = QFrame()
         box_overrides.setObjectName("settingsSectionCard")
         v_overrides = QVBoxLayout(box_overrides)
@@ -1827,7 +1960,7 @@ class SettingsDialog(QDialog):
         self._refresh_settings_layout_density()
 
     def _on_adjust_changed(self, value):
-        """v37.3.5: 检测框调节滑块值变化回调"""
+        """v1.1.11: 检测框调节滑块值变化回调"""
         self.label_adjust_value.setText(f"{value}%")
         self._refresh_ocr_summary()
 
@@ -2617,7 +2750,7 @@ class SettingsDialog(QDialog):
         return out
 
     def _on_black_white_changed(self):
-        """v37.9.0: 黑/白名单文本变化时回写 store + config.json.
+        """v1.1.11: 黑/白名单文本变化时回写 store + config.json.
 
         通过公开 API BlackWhiteListStore.update_permanent 写入,
         会话层独立保留, 与 _initial_blacklist / _initial_whitelist 无关.
@@ -2811,7 +2944,7 @@ class SettingsDialog(QDialog):
         self._refresh_settings_overview()
 
     def _refresh_overrides_summary(self):
-        """v37.8.x: 读取 config 中的 permanent overrides 数量,刷新概述."""
+        """v1.1.11: 读取 config 中的 permanent overrides 数量,刷新概述."""
         if not self.config:
             self.lbl_overrides_summary.setText("当前未挂载配置管理器,无法统计。")
             return
@@ -2825,7 +2958,7 @@ class SettingsDialog(QDialog):
         self._refresh_settings_overview()
 
     def _on_clean_stale_overrides(self):
-        """v37.8.x: 清理 30 天前 promoted 的 permanent override."""
+        """v1.1.11: 清理 30 天前 promoted 的 permanent override."""
         if not self.config:
             QMessageBox.warning(self, "提示", "未挂载配置管理器,无法清理。")
             return
@@ -2875,7 +3008,7 @@ class SettingsDialog(QDialog):
 
     def save_settings(self):
         self.selected_rules = [DEFAULT_RULES[name] for name, cb in self.checks.items() if cb.isChecked()]
-        # v37.5.0: 添加调试输出
+        # v1.1.11: 添加调试输出
         print(f"[Settings] 保存的规则: {self.selected_rules}")
         print(f"[Settings] 勾选的规则名称: {[name for name, cb in self.checks.items() if cb.isChecked()]}")
         self.use_enhance = self.cb_enhance.isChecked()
@@ -2886,24 +3019,24 @@ class SettingsDialog(QDialog):
         self.replacement_text = self.input_replacement_text.text().strip() or "[已脱敏]"
         self.word_replace_rules = normalize_word_replace_rules(self.word_replace_rules, self.replacement_text)
 
-        # v37.4.0: 保存检测框调节比例
+        # v1.1.11: 保存检测框调节比例
         self.box_adjust_ratio = self.slider_adjust.value() / 100.0
 
-        # v37.7.x: 中文姓名启发式识别开关
+        # v1.1.11: 中文姓名启发式识别开关
         self.enable_name_recognition = self.cb_name_recognition.isChecked()
 
-        # v37.0: 保存到配置文件
+        # v1.1.11: 保存到配置文件
         if self.config:
             try:
                 self.config.set("redaction.scan.default_level", self.scan_level, persist=False)
                 self.config.set("redaction.offset.default_x", self.offset_x, persist=False)
                 self.config.set("redaction.offset.default_w", self.offset_w, persist=False)
-                # v37.4.0: 移除 OCR 引擎选择，只保留 RapidOCR
-                # v37.3.5: 保存检测框调节比例（新配置名）
+                # v1.1.11: 移除 OCR 引擎选择，只保留 RapidOCR
+                # v1.1.11: 保存检测框调节比例（新配置名）
                 self.config.set("redaction.custom_keywords", self.custom_keywords, persist=False)
                 self.config.set("redaction.replacement_text", self.replacement_text, persist=False)
                 self.config.set("ocr.box_adjust_ratio", self.box_adjust_ratio, persist=False)
-                # v37.7.x: 姓名识别开关持久化
+                # v1.1.11: 姓名识别开关持久化
                 self.config.set("redaction.enable_name_recognition",
                                 self.enable_name_recognition, persist=False)
                 self.config.save()
@@ -2913,7 +3046,7 @@ class SettingsDialog(QDialog):
         self.accept()
 
     def _apply_dialog_theme(self):
-        """应用对话框浅色主题样式（v37.4.1: 修复 Windows 深色模式显示问题）"""
+        """应用对话框浅色主题样式（v1.1.11: 修复 Windows 深色模式显示问题）"""
         from theme import Theme
         theme = Theme.LIGHT
 
@@ -3481,7 +3614,7 @@ class ImageListDialog(QDialog):
     def __init__(self, image_paths, parent=None):
         super().__init__(parent)
 
-        # v37.4.1: 修复 Windows 深色模式下对话框显示问题
+        # v1.1.11: 修复 Windows 深色模式下对话框显示问题
         self.setWindowFlags(
             Qt.WindowType.Dialog |
             Qt.WindowType.WindowTitleHint |
@@ -3489,7 +3622,7 @@ class ImageListDialog(QDialog):
         )
 
         self.setWindowTitle("调整图片顺序")
-        # v37.0: 从配置读取窗口尺寸
+        # v1.1.11: 从配置读取窗口尺寸
         if config:
             dialog_width = config.get("app.window.dialog_image_list_width", 600)
             dialog_height = config.get("app.window.dialog_image_list_height", 500)
@@ -3537,11 +3670,11 @@ class ImageListDialog(QDialog):
         btn_layout.addWidget(btn_cancel)
         layout.addLayout(btn_layout)
 
-        # v37.4.1: 应用对话框主题样式
+        # v1.1.11: 应用对话框主题样式
         self._apply_dialog_theme()
 
     def _apply_dialog_theme(self):
-        """应用对话框浅色主题样式（v37.4.1: 修复 Windows 深色模式显示问题）"""
+        """应用对话框浅色主题样式（v1.1.11: 修复 Windows 深色模式显示问题）"""
         from theme import Theme
         theme = Theme.LIGHT
 
@@ -3597,8 +3730,6 @@ class ImageListDialog(QDialog):
         return paths
 
 # === 配置常量 ===
-# v37.0: 从配置读取，失败时使用硬编码后备
-FEEDBACK_URL = config.get("app.feedback_url", "https://fcnwakmkeuz7.feishu.cn/share/base/form/shrcnEM1JEbdIKzdB400egj9lHe") if config else "https://fcnwakmkeuz7.feishu.cn/share/base/form/shrcnEM1JEbdIKzdB400egj9lHe"
 
 # === 反馈对话框 ===
 class FeedbackDialog(QDialog):
@@ -3606,7 +3737,7 @@ class FeedbackDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # v37.4.1: 修复 Windows 深色模式下对话框显示问题
+        # v1.1.11: 修复 Windows 深色模式下对话框显示问题
         self.setWindowFlags(
             Qt.WindowType.Dialog |
             Qt.WindowType.WindowTitleHint |
@@ -3614,7 +3745,7 @@ class FeedbackDialog(QDialog):
         )
 
         self.setWindowTitle("关于与反馈")
-        # v37.0: 从配置读取窗口尺寸
+        # v1.1.11: 从配置读取窗口尺寸
         if config:
             dialog_width = config.get("app.window.dialog_feedback_width", 480)
             dialog_height = config.get("app.window.dialog_feedback_height", 600)
@@ -3663,184 +3794,8 @@ class FeedbackDialog(QDialog):
         line1.setStyleSheet(f"background: {self.theme['border']}; max-height: 1px;")
         layout.addWidget(line1)
 
-        # === 社交媒体账号 ===
-        social_group = QGroupBox("关注开发者")
-        social_group.setStyleSheet(f"""
-            QGroupBox {{
-                font-weight: bold;
-                color: {self.theme['text']};
-                border: 1px solid {self.theme['border']};
-                border-radius: 8px;
-                margin-top: 8px;
-                padding-top: 8px;
-            }}
-            QGroupBox::title {{
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 4px;
-            }}
-        """)
-        social_layout = QVBoxLayout(social_group)
 
-        # 微信公众号行
-        wx_account = "池州汪律的Ai进化论"
-        row1 = QHBoxLayout()
-        wx_label = QLabel("微信公众号:")
-        wx_label.setStyleSheet(f"color: {self.theme['text_secondary']};")
-        row1.addWidget(wx_label)
 
-        wx_account_label = QLabel(wx_account)
-        wx_account_label.setStyleSheet(f"color: {self.theme['text']}; font-weight: 500;")
-        wx_account_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        row1.addWidget(wx_account_label)
-        row1.addStretch()
-
-        wx_qr_btn = QPushButton("扫码关注")
-        wx_qr_btn.setFixedSize(70, 24)
-        wx_qr_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {self.theme['primary']};
-                border: none;
-                border-radius: 4px;
-                font-size: 11px;
-                color: white;
-            }}
-            QPushButton:hover {{
-                background: #0056CC;
-            }}
-        """)
-        wx_qr_btn.clicked.connect(self._show_wx_qrcode)
-        row1.addWidget(wx_qr_btn)
-        social_layout.addLayout(row1)
-
-        # 其他平台行
-        row2 = QHBoxLayout()
-        platforms_label = QLabel("抖音/小红书/B站（同号）:")
-        platforms_label.setStyleSheet(f"color: {self.theme['text_secondary']};")
-        row2.addWidget(platforms_label)
-
-        other_account = "池州有个汪律师"
-        other_label = QLabel(other_account)
-        other_label.setStyleSheet(f"color: {self.theme['text']}; font-weight: 500;")
-        other_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        row2.addWidget(other_label)
-        row2.addStretch()
-
-        copy_btn = QPushButton("复制")
-        copy_btn.setFixedSize(50, 24)
-        copy_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {self.theme['hover']};
-                border: none;
-                border-radius: 4px;
-                font-size: 11px;
-                color: {self.theme['text']};
-            }}
-            QPushButton:hover {{
-                background: {self.theme['pressed']};
-            }}
-        """)
-        copy_btn.clicked.connect(lambda checked, a=other_account: self._copy_to_clipboard(a))
-        row2.addWidget(copy_btn)
-        social_layout.addLayout(row2)
-
-        layout.addWidget(social_group)
-
-        # === 开发者简介 ===
-        dev_group = QGroupBox("开发者简介")
-        dev_group.setStyleSheet(f"""
-            QGroupBox {{
-                font-weight: bold;
-                color: {self.theme['text']};
-                border: 1px solid {self.theme['border']};
-                border-radius: 8px;
-                margin-top: 8px;
-                padding-top: 8px;
-            }}
-            QGroupBox::title {{
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 4px;
-            }}
-        """)
-        dev_layout = QVBoxLayout(dev_group)
-        dev_intro = QLabel(
-            "<b>汪立</b><br><br>"
-            "安徽始信律师事务所执业律师<br>"
-            "全栈律师 | 前教师 | 退伍军人<br><br>"
-            "📧 邮箱: <a href='mailto:491445490@qq.com'>491445490@qq.com</a>"
-        )
-        dev_intro.setWordWrap(True)
-        dev_intro.setTextFormat(Qt.TextFormat.RichText)
-        dev_intro.setOpenExternalLinks(True)
-        dev_intro.setStyleSheet(f"""
-            color: {self.theme['text']};
-            line-height: 1.6;
-            font-size: 13px;
-        """)
-        dev_layout.addWidget(dev_intro)
-        layout.addWidget(dev_group)
-
-        # === 操作按钮 ===
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(12)
-
-        feedback_btn = QPushButton("📝 反馈建议")
-        feedback_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {self.theme['primary']};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 24px;
-                font-size: 14px;
-                font-weight: 500;
-            }}
-            QPushButton:hover {{
-                background: {Theme.adjust_color(self.theme['primary'], -20)};
-            }}
-        """)
-        feedback_btn.clicked.connect(self._open_feedback)
-        btn_layout.addWidget(feedback_btn)
-
-        # 新增：使用手册按钮
-        manual_btn = QPushButton("📖 使用手册")
-        manual_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {self.theme['info'] if 'info' in self.theme else '#17a2b8'};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 24px;
-                font-size: 14px;
-                font-weight: 500;
-            }}
-            QPushButton:hover {{
-                background: {Theme.adjust_color(self.theme['info'] if 'info' in self.theme else '#17a2b8', -20)};
-            }}
-        """)
-        manual_btn.clicked.connect(self._open_manual)
-        btn_layout.addWidget(manual_btn)
-
-        donate_btn = QPushButton("☕ 打赏支持")
-        donate_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {self.theme['success']};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 24px;
-                font-size: 14px;
-                font-weight: 500;
-            }}
-            QPushButton:hover {{
-                background: {Theme.adjust_color(self.theme['success'], -20)};
-            }}
-        """)
-        donate_btn.clicked.connect(self._show_donate)
-        btn_layout.addWidget(donate_btn)
-
-        layout.addLayout(btn_layout)
 
         # === 分隔线 ===
         line2 = QFrame()
@@ -3869,7 +3824,7 @@ class FeedbackDialog(QDialog):
                 <li>使用本软件进行文档脱敏处理后，用户需自行核实脱敏结果。</li>
                 <li>开发者不对因使用本软件而产生的任何直接或间接损失承担责任。</li>
                 <li>本软件不收集任何用户数据，所有处理均在本地完成。</li>
-                <li>请勿将本软件用于任何违法用途，最终解释、修改权归汪立律师所有。</li>
+                <li>请勿将本软件用于任何违法用途。</li>
             </ol>
         """)
         layout.addWidget(disclaimer)
@@ -3900,189 +3855,6 @@ class FeedbackDialog(QDialog):
         if self.parent():
             QMessageBox.information(self.parent(), "复制成功", f"已复制: {text}")
 
-    def _show_wx_qrcode(self):
-        """显示微信公众号二维码对话框"""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("关注微信公众号")
-        dialog.setFixedSize(400, 480)
-        dialog.setStyleSheet(f"""
-            QDialog {{
-                background: {self.theme['background']}
-            }}
-        """)
-
-        layout = QVBoxLayout(dialog)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # 标题
-        title = QLabel("扫码关注微信公众号")
-        title.setStyleSheet(f"""
-            color: {self.theme['text']};
-            font-size: 16px;
-            font-weight: bold;
-            padding: 10px;
-        """)
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
-
-        # 公众号名称
-        name_label = QLabel("池州汪律的Ai进化论")
-        name_label.setStyleSheet(f"""
-            color: {self.theme['primary']};
-            font-size: 18px;
-            font-weight: bold;
-            padding: 5px;
-        """)
-        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(name_label)
-
-        # 二维码图片
-        qr_path = resource_path(os.path.join("assets", "wx_qrcode.png"))
-        if os.path.exists(qr_path):
-            qr_label = QLabel()
-            pixmap = QPixmap(qr_path)
-            if not pixmap.isNull():
-                scaled_pixmap = pixmap.scaled(280, 280, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                qr_label.setPixmap(scaled_pixmap)
-                qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                layout.addWidget(qr_label)
-            else:
-                qr_label.setText("二维码加载失败")
-                qr_label.setStyleSheet(f"color: {self.theme['text']};")
-                layout.addWidget(qr_label)
-        else:
-            qr_label = QLabel("请添加微信公众号二维码图片至\nassets/wx_qrcode.png")
-            qr_label.setStyleSheet(f"color: {self.theme['text']};")
-            qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            layout.addWidget(qr_label)
-
-        # 提示文字
-        hint = QLabel("微信扫一扫，关注公众号获取更多AI工具")
-        hint.setStyleSheet(f"""
-            color: {self.theme['text_secondary']};
-            font-size: 12px;
-            padding: 10px;
-        """)
-        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
-
-        # 关闭按钮
-        close_btn = QPushButton("关闭")
-        close_btn.setFixedSize(100, 32)
-        close_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {self.theme['primary']};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 13px;
-            }}
-            QPushButton:hover {{
-                background: #0056CC;
-            }}
-        """)
-        close_btn.clicked.connect(dialog.close)
-        layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        dialog.exec()
-
-    def _open_feedback(self):
-        """打开反馈问卷链接"""
-        import webbrowser
-        webbrowser.open(FEEDBACK_URL)
-
-    def _open_manual(self):
-        """打开使用手册链接"""
-        import webbrowser
-        webbrowser.open("https://fcnwakmkeuz7.feishu.cn/docx/M9ojdaGUAoRVv7x3NCAcxkxenUe?from=from_copylink")
-
-    def _show_donate(self):
-        """显示打赏二维码对话框"""
-        dialog = DonateDialog(self)
-        dialog.exec()
-
-
-# === 打赏对话框 ===
-class DonateDialog(QDialog):
-    """打赏二维码对话框"""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("打赏支持")
-        self.resize(360, 440)
-        self.setWindowModality(Qt.WindowModality.ApplicationModal)
-
-        # 获取当前主题
-        self.theme = Theme.LIGHT if not parent or not hasattr(parent, 'is_dark') or not parent.is_dark else Theme.DARK
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(24, 24, 24, 24)
-
-        # 感谢文字
-        thanks_label = QLabel("感谢您的支持！")
-        thanks_label.setStyleSheet(f"""
-            font-size: 18px;
-            font-weight: bold;
-            color: {self.theme['text']};
-        """)
-        thanks_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(thanks_label)
-
-        subtitle = QLabel("您的支持是我持续更新的动力 ❤️")
-        subtitle.setStyleSheet(f"font-size: 13px; color: {self.theme['text_secondary']};")
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(subtitle)
-
-        # 二维码图片
-        qr_label = QLabel()
-        qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        qr_label.setFixedSize(260, 260)
-
-        # 尝试加载二维码图片
-        qr_path = resource_path(os.path.join("assets", "donate_qrcode.png"))
-        if os.path.exists(qr_path):
-            pixmap = QPixmap(qr_path)
-            if not pixmap.isNull():
-                qr_label.setPixmap(pixmap.scaled(240, 240, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-            else:
-                qr_label.setText("二维码加载失败")
-                qr_label.setStyleSheet(f"color: {self.theme['danger']}; font-size: 14px;")
-        else:
-            qr_label.setText("请添加二维码图片至\nassets/donate_qrcode.png")
-            qr_label.setStyleSheet(f"""
-                color: {self.theme['text_secondary']};
-                font-size: 12px;
-                background: {self.theme['hover']};
-                border: 2px dashed {self.theme['border']};
-                border-radius: 8px;
-            """)
-
-        layout.addWidget(qr_label, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # 提示文字
-        tip_label = QLabel("微信扫码打赏")
-        tip_label.setStyleSheet(f"font-size: 13px; color: {self.theme['text_secondary']};")
-        tip_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(tip_label)
-
-        # 关闭按钮
-        close_btn = QPushButton("关闭")
-        close_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {self.theme['primary']};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px;
-                font-size: 14px;
-            }}
-            QPushButton:hover {{
-                background: {Theme.adjust_color(self.theme['primary'], -20)};
-            }}
-        """)
-        close_btn.clicked.connect(self.accept)
-        layout.addWidget(close_btn)
 
 class WordBatchReplaceWorker(QThread):
     """Word 批量替换线程（同一套规则应用全部文件）。"""
@@ -4265,7 +4037,7 @@ class WordBatchReplaceWorker(QThread):
             suffix += 1
 
     def _convert_doc_to_docx(self, doc_path):
-        """v37.7.6: 委托给共享转换模块。"""
+        """v1.1.11: 委托给共享转换模块。"""
         docx_path, temp_dir = _shared_convert_doc_to_docx(doc_path)
         self._temp_dirs.append(temp_dir)
         return docx_path
@@ -4279,7 +4051,7 @@ class WordBatchReplaceWorker(QThread):
                 pass
         self._temp_dirs.clear()
 
-# === 单页画布 (完全复制 v7.0 的 PDFCanvas 实现) ===
+# === 单页画布 (完全复制 v1.1.11 的 PDFCanvas 实现) ===
 class SinglePageCanvas(QLabel):
     # 保留信号以兼容双页模式
     rect_added = pyqtSignal(int, QRectF)
@@ -4289,7 +4061,7 @@ class SinglePageCanvas(QLabel):
 
     def __init__(self, page_index=0, parent=None):
         super().__init__(parent)
-        # 完全复制 v7.0 的初始化
+        # 完全复制 v1.1.11 的初始化
         self.setMouseTracking(True)
         self.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         self.setAutoFillBackground(True)
@@ -4303,21 +4075,21 @@ class SinglePageCanvas(QLabel):
         self.drawing = False
         self.start_point = QPointF()
         self.current_rect = QRectF()
-        # v37.8.x: 注入 main_window 引用,供右键菜单读写 HitOverrideStore。
+        # v1.1.11: 注入 main_window 引用,供右键菜单读写 HitOverrideStore。
         # 由 MainWindow.setup_ui 在创建后调用 set_main_window 注入,避免循环依赖。
         self.main_window = None
 
     def set_mask_color(self, color):
-        """v7.0 方法"""
+        """v1.1.11 方法"""
         self.mask_color = color
         self.update()
 
     def set_main_window(self, main_window):
-        """v37.8.x: 注入 MainWindow 引用,供右键菜单读写 override store."""
+        """v1.1.11: 注入 MainWindow 引用,供右键菜单读写 override store."""
         self.main_window = main_window
 
     def _locate_hit(self, click_pos, *, prefer_manual: bool):
-        """v37.8.x: 定位点击位置对应的 HitRef。
+        """v1.1.11: 定位点击位置对应的 HitRef。
 
         返回 (HitRef, scope_marker) 或 None。
         scope_marker: 'manual' 或 'ocr' — 用于区分 hit 来自手动框还是 OCR 框。
@@ -4340,16 +4112,16 @@ class SinglePageCanvas(QLabel):
         return None
 
     def update_content(self, pixmap, scale, ocr_rects, manual_rects):
-        """v7.0 方法 - 直接引用列表，不复制！"""
+        """v1.1.11 方法 - 直接引用列表，不复制！"""
         self.setPixmap(pixmap)
         self.zoom_scale = scale
-        self.rects_ocr = ocr_rects  # ← v7.0 直接引用，不复制
-        self.rects_manual = manual_rects  # ← v7.0 直接引用，不复制
+        self.rects_ocr = ocr_rects  # ← v1.1.11 直接引用，不复制
+        self.rects_manual = manual_rects  # ← v1.1.11 直接引用，不复制
         self.update()
 
-    # === v22.7: 完全回归 v7.0 - mousePressEvent 处理左右键 ===
+    # === v1.1.11: 完全回归 v1.1.11 - mousePressEvent 处理左右键 ===
     def mousePressEvent(self, event):
-        """v7.0 风格：左键画框，右键删除"""
+        """v1.1.11 风格：左键画框，右键删除"""
         if not self.pixmap():
             return
 
@@ -4360,7 +4132,7 @@ class SinglePageCanvas(QLabel):
             self.current_rect = QRectF(self.start_point, self.start_point)
             self.update()
 
-        # 右键弹 QMenu (v37.8.x)
+        # 右键弹 QMenu (v1.1.11)
         elif event.button() == Qt.MouseButton.RightButton:
             click_pos = event.position()
             if DEBUG_MODE:
@@ -4370,7 +4142,7 @@ class SinglePageCanvas(QLabel):
             if self.main_window is None:
                 return
 
-            # v37.8.x: 优先找手动框 — 命中则 v7.0 行为:直接删除
+            # v1.1.11: 优先找手动框 — 命中则 v1.1.11 行为:直接删除
             manual_hit_index = None
             for i, r in enumerate(self.rects_manual):
                 if self.pdf_to_screen(r).contains(click_pos):
@@ -4378,7 +4150,7 @@ class SinglePageCanvas(QLabel):
                     break
 
             if manual_hit_index is not None:
-                # v7.0 行为:右键手动框直接删除,不做 store 操作
+                # v1.1.11 行为:右键手动框直接删除,不做 store 操作
                 del self.rects_manual[manual_hit_index]
                 self.update()
                 if hasattr(self.main_window, "render_view"):
@@ -4427,14 +4199,14 @@ class SinglePageCanvas(QLabel):
                 self.main_window.render_view()
 
     def pdf_to_screen(self, rect):
-        """v7.0 实现 - 带小的容错范围"""
+        """v1.1.11 实现 - 带小的容错范围"""
         base_rect = QRectF(rect.x()*self.zoom_scale, rect.y()*self.zoom_scale,
                            rect.width()*self.zoom_scale, rect.height()*self.zoom_scale)
         # 扩展 2 像素容错范围，处理点击边界的情况
         return base_rect.adjusted(-2, -2, 2, 2)
 
     def paintEvent(self, event):
-        """v7.0 实现"""
+        """v1.1.11 实现"""
         super().paintEvent(event)
         if not self.pixmap(): return
 
@@ -4462,14 +4234,14 @@ class SinglePageCanvas(QLabel):
             painter.drawRect(self.current_rect)
 
     def mouseMoveEvent(self, event):
-        """v7.0 实现"""
+        """v1.1.11 实现"""
         if self.drawing and not self.start_point.isNull():
             current_pos = QPointF(event.position())
             self.current_rect = QRectF(self.start_point, current_pos).normalized()
             self.update()
 
     def mouseReleaseEvent(self, event):
-        """v7.0 实现"""
+        """v1.1.11 实现"""
         if event.button() == Qt.MouseButton.LeftButton and self.drawing:
             self.drawing = False
             if self.current_rect.width() > 5 and self.current_rect.height() > 5:
@@ -4479,20 +4251,20 @@ class SinglePageCanvas(QLabel):
                     self.current_rect.width()/self.zoom_scale,
                     self.current_rect.height()/self.zoom_scale
                 )
-                # v7.0 直接添加到列表（列表是共享引用）
+                # v1.1.11 直接添加到列表（列表是共享引用）
                 self.rects_manual.append(real_rect)
             self.current_rect = QRectF()
             self.update()
 
-    # v35.1: 增强滚轮事件 - 支持缩放和翻页
-    # v37.3.6: 添加滚动阈值，防止 macOS 双指轻触误触发翻页
+    # v1.1.11: 增强滚轮事件 - 支持缩放和翻页
+    # v1.1.11: 添加滚动阈值，防止 macOS 双指轻触误触发翻页
     SCROLL_THRESHOLD = 10  # 滚动阈值（像素），忽略小于此值的小幅滚动
 
     def wheelEvent(self, event: QWheelEvent):
         modifiers = QApplication.keyboardModifiers()
         delta = event.angleDelta().y()
 
-        # v37.3.6: 忽略非常小的滚动量（macOS 双指轻触产生的噪声）
+        # v1.1.11: 忽略非常小的滚动量（macOS 双指轻触产生的噪声）
         if abs(delta) < self.SCROLL_THRESHOLD:
             # 小幅滚动只传递给父类处理正常滚动，不触发翻页
             super().wheelEvent(event)
@@ -4524,7 +4296,7 @@ class SinglePageCanvas(QLabel):
 
 
 # === OCR 线程 ===
-# v37.7.6: 改为使用模块化 OCRWorker，自动注入 box_adjust_ratio
+# v1.1.11: 改为使用模块化 OCRWorker，自动注入 box_adjust_ratio
 class OCRWorker(_ModularOCRWorker):
     """OCR 处理线程（兼容层：自动注入 config 中的 box_adjust_ratio + enable_name_recognition）"""
 
@@ -4665,7 +4437,7 @@ class WebViewBridge(QObject):
             print(f"[撤销] 删除了 {count} 个全局脱敏: {text}")
             self.main_window.render_word_preview()
 
-    # === v37.8.x: HitOverrideStore 4 槽 + contextmenu 入口 ===
+    # === v1.1.11: HitOverrideStore 4 槽 + contextmenu 入口 ===
     @pyqtSlot(str, str, str, str)
     def ignore_ocr_hit(self, key, source, text, hit_id):
         """JS 调用:忽略某条 OCR / jieba hit (session 级别)."""
@@ -4702,14 +4474,14 @@ class WebViewBridge(QObject):
         """JS 调用:把已记录的 session override 提升为 permanent."""
         store = self.main_window._override_store
         store.promote(hit_id)
-        # v37.8.x: 提升后立即落盘
+        # v1.1.11: 提升后立即落盘
         store.save_permanent()
 
     @pyqtSlot(str)
     def revert_override(self, hit_id):
         """JS 调用:撤销某条已记录的 override."""
         self.main_window._override_store.revert(hit_id)
-        # v37.8.x: 若该 hit 是 permanent, 撤销后需落盘
+        # v1.1.11: 若该 hit 是 permanent, 撤销后需落盘
         self.main_window._override_store.save_permanent()
         self.main_window.render_word_preview()
 
@@ -4762,18 +4534,27 @@ class WebViewBridge(QObject):
         self.main_window._sync_word_compare_scroll(panel, ratio_value)
 
 # === Word 文档处理线程 ===
-# v37.7.6: 改为使用模块化 WordWorker，补充 default_rules 参数
+# v1.1.11: 改为使用模块化 WordWorker,补充 default_rules 参数
+# v1.1.12: 兼容层透传 default_rules + default_rules_meta,支持 partial masking
 class WordWorker(_ModularWordWorker):
-    """Word 文档智能脱敏线程（兼容层：自动注入 DEFAULT_RULES + enable_name_recognition）"""
+    """Word 文档智能脱敏线程(兼容层: 自动注入 DEFAULT_RULES + enable_name_recognition)
+
+    v1.1.12: 透传 default_rules_meta 到模块化 WordWorker,让 mask 配置生效。
+    兼容层对外仍然只暴露原始 6 个参数,新增 kwargs 默认值与模块化层一致。
+    """
 
     def __init__(self, word_doc, word_data, rules, custom_keywords, replacement_text,
-                 enable_name_recognition: bool = False):
+                 enable_name_recognition: bool = False,
+                 default_rules=None,
+                 default_rules_meta=None):
         super().__init__(word_doc, word_data, rules, custom_keywords,
-                         replacement_text, default_rules=DEFAULT_RULES,
-                         enable_name_recognition=enable_name_recognition)
+                         replacement_text,
+                         default_rules=default_rules if default_rules is not None else DEFAULT_RULES,
+                         enable_name_recognition=enable_name_recognition,
+                         default_rules_meta=default_rules_meta if default_rules_meta is not None else DEFAULT_RULES_META)
 
 # === Word 预览交互式 JavaScript 代码常量 ===
-# v36.4: 提取为常量，避免 _inject_interactive_html 函数过长
+# v1.1.11: 提取为常量，避免 _inject_interactive_html 函数过长
 _INTERACTIVE_JS_CODE = r"""
 <script>
     let pyBridge = null;
@@ -4796,11 +4577,11 @@ _INTERACTIVE_JS_CODE = r"""
         setupContextMenu();
     });
 
-    // v35.1: 备用右键位置（用于复杂 DOM 结构中 getSelection() 返回空值的情况）
+    // v1.1.11: 备用右键位置（用于复杂 DOM 结构中 getSelection() 返回空值的情况）
     let lastContextMenuEvent = null;
 
     function setupContextMenu() {
-        // v35.1: 使用捕获阶段监听（更可靠，在事件冒泡前捕获）
+        // v1.1.11: 使用捕获阶段监听（更可靠，在事件冒泡前捕获）
         document.addEventListener('contextmenu', function(e) {
             e.preventDefault();
             lastContextMenuEvent = {
@@ -4811,7 +4592,7 @@ _INTERACTIVE_JS_CODE = r"""
             handleContextMenu(e);
         }, true);  // true = 捕获阶段
 
-        // v35.1: mousedown 事件预先保存右键位置（备用方案）
+        // v1.1.11: mousedown 事件预先保存右键位置（备用方案）
         document.addEventListener('mousedown', function(e) {
             if (e.button === 2) {  // 右键
                 lastContextMenuEvent = {
@@ -4829,13 +4610,13 @@ _INTERACTIVE_JS_CODE = r"""
         });
     }
 
-    // v35.1: 增强的右键菜单处理函数
+    // v1.1.11: 增强的右键菜单处理函数
     function handleContextMenu(e) {
         const target = e.target;
         let selection = window.getSelection();
         let selectedText = selection.toString().trim();
 
-        // v37.8.x: OCR / jieba hit 命中 — 弹出 HitOverrideStore 操作菜单
+        // v1.1.11: OCR / jieba hit 命中 — 弹出 HitOverrideStore 操作菜单
         // 仅当 mark 上有 data-hit-id 时触发;manual-highlight 仍走旧路径。
         let ocrHitElement = target.closest('mark[data-hit-id]');
         if (ocrHitElement) {
@@ -4869,7 +4650,7 @@ _INTERACTIVE_JS_CODE = r"""
 
         // 选择了文本（主要路径）
         if (selectedText.length > 0) {
-            // v36.5: 移除敏感信息日志，仅记录操作类型
+            // v1.1.11: 移除敏感信息日志，仅记录操作类型
             console.log('[ContextMenu] 选择了文本（已隐藏内容）');
             try {
                 const range = selection.getRangeAt(0);
@@ -4884,12 +4665,12 @@ _INTERACTIVE_JS_CODE = r"""
             return;
         }
 
-        // v35.1: 备用方案 - 尝试从点击位置获取文本
+        // v1.1.11: 备用方案 - 尝试从点击位置获取文本
         console.log('[ContextMenu] getSelection() 为空，尝试备用检测');
         tryFallbackTextDetection(e, target);
     }
 
-    // v35.1: 备用文本检测（当 window.getSelection() 失败时）
+    // v1.1.11: 备用文本检测（当 window.getSelection() 失败时）
     function tryFallbackTextDetection(e, target) {
         // 方案1: 检查目标元素是否包含文本
         let textElement = target;
@@ -4898,7 +4679,7 @@ _INTERACTIVE_JS_CODE = r"""
         for (let i = 0; i < 10 && textElement; i++) {
             if (textElement.dataset && textElement.dataset.key) {
                 console.log('[tryFallbackTextDetection] 找到 data-key 元素:', textElement.dataset.key);
-                // 显示一个提示菜单（v36.1 安全修复：使用配置对象）
+                // 显示一个提示菜单（v1.1.11 安全修复：使用配置对象）
                 const menu = createMenu([
                     { text: '请在文本上拖动选择后再右键', disabled: true }
                 ]);
@@ -4920,7 +4701,7 @@ _INTERACTIVE_JS_CODE = r"""
 
         console.log('[showRemoveMenu] key:', key, 'start:', start, 'end:', end);
 
-        // v36.1 安全修复：使用配置对象替代 HTML 字符串
+        // v1.1.11 安全修复：使用配置对象替代 HTML 字符串
         const menu = createMenu([
             { text: '❌ 撤销脱敏', action: 'remove', key: key, start: start, end: end }
         ]);
@@ -4938,7 +4719,7 @@ _INTERACTIVE_JS_CODE = r"""
         if (!textInfo || textInfo.mode === 'global' || textInfo.key === '__GLOBAL__') {
             // 降级到全局模式：只显示全文脱敏选项
             console.log('[showAddMenu] 使用全局降级模式');
-            // v36.1 安全修复：使用配置对象替代 HTML 字符串
+            // v1.1.11 安全修复：使用配置对象替代 HTML 字符串
             buttonConfigs = [
                 { text: '📄 全文脱敏此内容', action: 'add-global-only', textData: selectedText }
             ];
@@ -5009,7 +4790,7 @@ _INTERACTIVE_JS_CODE = r"""
     }
 
     function callAddGlobal(key, text) {
-        // v36.5: 移除敏感信息日志
+        // v1.1.11: 移除敏感信息日志
         console.log('[callAddGlobal] 调用全局脱敏（文本已隐藏）');
         if (pyBridge && webChannelReady) {
             // key 为 null 时表示纯全局模式
@@ -5022,7 +4803,7 @@ _INTERACTIVE_JS_CODE = r"""
 
     function findTextPosition(selectedText, range) {
         try {
-            // v36.5: 移除敏感信息日志
+            // v1.1.11: 移除敏感信息日志
             console.log('[findTextPosition] ========== 开始查找 ==========');
             console.log('[findTextPosition] 选中文本（已隐藏内容）');
             console.log('[findTextPosition] Range:', {
@@ -5260,7 +5041,7 @@ _INTERACTIVE_JS_CODE = r"""
         return null;
     }
 
-    // v36.1 安全修复：使用 DOM 方法替代 innerHTML，防止 XSS
+    // v1.1.11 安全修复：使用 DOM 方法替代 innerHTML，防止 XSS
     function createMenu(buttonConfigs) {
         hideContextMenu();
         const menu = document.createElement('div');
@@ -5317,10 +5098,10 @@ _INTERACTIVE_JS_CODE = r"""
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"{APP_NAME} v{VERSION} - Powered by li (汪立律师)")
+        self.setWindowTitle(f"{APP_NAME} {APP_VERSION}")
 
-        # v37.0: 从配置读取窗口尺寸，失败时使用硬编码后备
-        # v37.2.0: 读取 OCR 引擎配置
+        # v1.1.11: 从配置读取窗口尺寸，失败时使用硬编码后备
+        # v1.1.11: 读取 OCR 引擎配置
         if config:
             min_width = config.get("app.window.min_width", 900)
             min_height = config.get("app.window.min_height", 600)
@@ -5331,13 +5112,13 @@ class MainWindow(QMainWindow):
             self.offset_x = config.get("redaction.offset.default_x", 0)
             self.offset_w = config.get("redaction.offset.default_w", 0)
             self.custom_keywords = config.get("redaction.custom_keywords", "")
-            # v37.7.x: 中文姓名启发式识别开关(默认 False,向后兼容)
+            # v1.1.11: 中文姓名启发式识别开关(默认 False,向后兼容)
             self.enable_name_recognition = config.get(
                 "redaction.enable_name_recognition", False)
-            # v37.9.0: 黑/白名单(用于设置中心初始化)
+            # v1.1.11: 黑/白名单(用于设置中心初始化)
             self.current_blacklist = config.get("redaction.blacklist", []) or []
             self.current_whitelist = config.get("redaction.whitelist", []) or []
-            # v37.4.0: 移除 OCR 引擎配置，只使用 RapidOCR
+            # v1.1.11: 移除 OCR 引擎配置，只使用 RapidOCR
         else:
             min_width, min_height = 900, 600
             default_width, default_height = 1300, 900
@@ -5365,14 +5146,14 @@ class MainWindow(QMainWindow):
         self.zoom_level = 1.0
         self.page_data = {}
         self._ocr_processed_pages = set()  # OCR 实际处理过的页（用于准确完成状态提示）
-        # v37.8.x: 人工干预 override store + 当前文档 hash
+        # v1.1.11: 人工干预 override store + 当前文档 hash
         self._override_store = HitOverrideStore.instance()
         self._current_doc_hash = ""
         self.word_data = {}  # Word 文档数据结构
         self.word_replace_rules = []  # 会话级多字段替换规则
         self.word_compare_mode = False  # Word 预览是否开启原文/替换后对比
         self.word_compare_user_hidden = False  # 用户主动隐藏右侧对比预览
-        self._word_data_lock = QMutex()  # v36.5: 保护 word_data 线程安全
+        self._word_data_lock = QMutex()  # v1.1.11: 保护 word_data 线程安全
         self.doc_type = None  # 'pdf', 'docx', 'doc'
         self.current_ui_mode = "idle"  # idle / pdf / word / batch / image_merge
         self.batch_stage = "idle"  # idle / rule_setup / running / finished / stopped
@@ -5390,14 +5171,25 @@ class MainWindow(QMainWindow):
         self.toolbar_density_mode = "wide"
         self._bound_window_handle = None
         self._button_density_metrics = {}
+        # v1.1.12: 动态构造 active_rules — 遍历 DEFAULT_RULES 包含所有内置规则
+        # 这样新增规则(如公司名)无需手动添加到这里
+        # 但保留历史硬编码顺序作为 fallback, 避免回归
         self.active_rules = [
             DEFAULT_RULES.get("身份证号", ""),
             DEFAULT_RULES.get("手机号码", ""),
-            # v37.7.x: 起诉讼书场景常用字段
+            # v1.1.11: 起诉讼书场景常用字段
             DEFAULT_RULES.get("地址（含门牌号）", ""),
             DEFAULT_RULES.get("固定电话", ""),
             DEFAULT_RULES.get("法定代表人", ""),
+            # v1.1.12: 统一社会信用代码 - Word 命中,PDF 通过派发过滤隔离
+            DEFAULT_RULES.get("统一社会信用代码", ""),
+            # v1.1.12: 公司名 - 命中"有限公司/集团/公司"等尾缀, 智能 mask 保留省/市+公司尾缀
+            DEFAULT_RULES.get("公司名", ""),
         ]
+        # 兜底:遍历 DEFAULT_RULES,把上面列表中缺失的 pattern 补齐,确保新规则不漏
+        for _name, _pat in DEFAULT_RULES.items():
+            if _pat and _pat not in self.active_rules and _pat != "__SEAL_DETECTION__":
+                self.active_rules.append(_pat)
         self.use_enhance = False
         self.current_color = QColor(0, 0, 0)
         self.dual_view = False
@@ -5432,27 +5224,27 @@ class MainWindow(QMainWindow):
 
         self.setup_ui()
 
-        # v37.8.x: 干预 override store (右键菜单 + 永久 override)
+        # v1.1.11: 干预 override store (右键菜单 + 永久 override)
         self._override_store.bind_config(config)
         # 启动时加载 config.json 中的 permanent overrides
         perms = config.get("redaction.overrides.permanent", []) if config else []
         if perms:
             self._override_store.load_permanent(perms)
 
-        # v37.9.0: 黑/白名单 store 引导 (bind_config + load_permanent)
+        # v1.1.11: 黑/白名单 store 引导 (bind_config + load_permanent)
         BlackWhiteListStore.instance().bind_config(config)
         BlackWhiteListStore.instance().load_permanent(
             config.get("redaction.blacklist", []) if config else [],
             config.get("redaction.whitelist", []) if config else [],
         )
 
-        # v37.6.0: 启用拖拽支持
+        # v1.1.11: 启用拖拽支持
         self.setAcceptDrops(True)
         self._drag_active = False  # 拖拽状态标记
         self._drag_valid = False   # 拖拽文件是否有效
 
     def _detect_system_theme(self):
-        """检测系统主题（v35.1 新增）
+        """检测系统主题（v1.1.11 新增）
 
         Returns:
             str: 'light' 或 'dark'
@@ -5502,7 +5294,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """保存窗口状态并清理临时文件"""
-        # v37.8.x: 关闭前把 permanent overrides 落盘
+        # v1.1.11: 关闭前把 permanent overrides 落盘
         if hasattr(self, "_override_store"):
             try:
                 self._override_store.save_permanent()
@@ -5649,7 +5441,7 @@ class MainWindow(QMainWindow):
                 print(f"[Word预览] Mammoth: {message}")
         return result.value
 
-    # ============== v37.6.0: 拖拽打开文件功能 ==============
+    # ============== v1.1.11: 拖拽打开文件功能 ==============
 
     def dragEnterEvent(self, event):
         """拖拽进入事件 - 验证文件类型并提供视觉反馈"""
@@ -5847,7 +5639,7 @@ class MainWindow(QMainWindow):
     # ============== 拖拽功能结束 ==============
 
     def _cleanup_before_open(self):
-        """v37.0.6: 打开新文档前的完整资源清理
+        """v1.1.11: 打开新文档前的完整资源清理
 
         解决问题：
         - 打开新文档时卡顿/未响应
@@ -5905,10 +5697,10 @@ class MainWindow(QMainWindow):
         self._reset_batch_session_state()
         self._clear_info_bar_message()
 
-        # 5. v37.0.8: 重置 canvas 显示状态（不删除固定实例）
+        # 5. v1.1.11: 重置 canvas 显示状态（不删除固定实例）
         # canvas_left 和 canvas_right 是固定实例，在 setup_ui() 中创建
         # 只需清除显示内容，不需要删除
-        # v37.0.9: 修复属性名错误 - 使用正确的 rects_manual 和 rects_ocr
+        # v1.1.11: 修复属性名错误 - 使用正确的 rects_manual 和 rects_ocr
         if hasattr(self, 'canvas_left') and self.canvas_left:
             try:
                 # 检查 C++ 对象是否仍然有效
@@ -5956,7 +5748,7 @@ class MainWindow(QMainWindow):
         )
 
     def _is_canvas_valid(self, canvas):
-        """v37.0.9: 检查 canvas 的 C++ 对象是否仍然有效"""
+        """v1.1.11: 检查 canvas 的 C++ 对象是否仍然有效"""
         if canvas is None:
             return False
         try:
@@ -5968,7 +5760,7 @@ class MainWindow(QMainWindow):
             return False
 
     def _safe_canvas_update(self, canvas, pixmap, scale, ocr_rects, manual_rects):
-        """v37.0.9: 安全地更新 canvas 内容"""
+        """v1.1.11: 安全地更新 canvas 内容"""
         if not self._is_canvas_valid(canvas):
             print(f"[警告] canvas 无效，跳过更新")
             return False
@@ -5980,7 +5772,7 @@ class MainWindow(QMainWindow):
             return False
 
     def _safe_canvas_set_mask_color(self, canvas, color):
-        """v37.0.9: 安全地设置 canvas 遮罩颜色"""
+        """v1.1.11: 安全地设置 canvas 遮罩颜色"""
         if not self._is_canvas_valid(canvas):
             return False
         try:
@@ -6031,7 +5823,7 @@ class MainWindow(QMainWindow):
         # 清理旧版临时文件
         self._cleanup_temp_file()
 
-    # v22.4: 移除 eventFilter，直接在 SinglePageCanvas.mousePressEvent 中处理
+    # v1.1.11: 移除 eventFilter，直接在 SinglePageCanvas.mousePressEvent 中处理
 
     def setup_ui(self):
         # 统一上下文条：文档上下文 + 临时任务提示
@@ -6209,10 +6001,10 @@ class MainWindow(QMainWindow):
             f"border: none;"
         )
 
-        # v22.9: 使用固定的 canvas_container，通过隐藏/显示实现单/双页切换
+        # v1.1.11: 使用固定的 canvas_container，通过隐藏/显示实现单/双页切换
         self.canvas_left = SinglePageCanvas(0)
         self.canvas_right = SinglePageCanvas(1)
-        # v37.8.x: 注入 main_window 引用,供 canvas 右键菜单访问 override store
+        # v1.1.11: 注入 main_window 引用,供 canvas 右键菜单访问 override store
         self.canvas_left.set_main_window(self)
         self.canvas_right.set_main_window(self)
 
@@ -6346,14 +6138,6 @@ class MainWindow(QMainWindow):
         self.idle_action_panel = idle_action_panel
         self.idle_action_panel_layout = idle_action_panel_layout
 
-        idle_action_buttons_layout = QGridLayout()
-        idle_action_buttons_layout.setContentsMargins(0, 0, 0, 0)
-        idle_action_buttons_layout.setHorizontalSpacing(16)
-        idle_action_buttons_layout.setVerticalSpacing(12)
-        idle_action_buttons_layout.setColumnStretch(0, 1)
-        idle_action_buttons_layout.setColumnStretch(1, 1)
-        self.idle_action_buttons_layout = idle_action_buttons_layout
-
         self.idle_start_card = QFrame()
         self.idle_start_card.setObjectName("idleStartCard")
         idle_start_layout = QVBoxLayout(self.idle_start_card)
@@ -6383,55 +6167,7 @@ class MainWindow(QMainWindow):
         idle_start_layout.addStretch(1)
         idle_start_layout.addWidget(self.idle_start_footer)
 
-        self.idle_support_card = QFrame()
-        self.idle_support_card.setObjectName("idleSupportCard")
-        idle_support_layout = QVBoxLayout(self.idle_support_card)
-        idle_support_layout.setContentsMargins(18, 16, 18, 16)
-        idle_support_layout.setSpacing(8)
-        self.lbl_idle_support_title = QLabel("开发者与支持")
-        self.lbl_idle_support_title.setObjectName("idleSupportTitle")
-        self.lbl_idle_support_text = QLabel("汪立 · 安徽始信律师事务所执业律师")
-        self.lbl_idle_support_text.setObjectName("idleSupportText")
-        self.lbl_idle_support_text.setWordWrap(True)
-        self.lbl_idle_support_meta = QLabel("全栈律师｜前教师｜退伍军人")
-        self.lbl_idle_support_meta.setObjectName("idleSupportMeta")
-        self.lbl_idle_support_email = QLabel("<a href='mailto:491445490@qq.com'>491445490@qq.com</a>")
-        self.lbl_idle_support_email.setObjectName("idleSupportEmail")
-        self.lbl_idle_support_email.setTextFormat(Qt.TextFormat.RichText)
-        self.lbl_idle_support_email.setOpenExternalLinks(True)
-        self.lbl_idle_support_note = QLabel("遇到问题、想看手册或支持更新，都可以直接从这里进入。")
-        self.lbl_idle_support_note.setObjectName("idleSupportNote")
-        self.lbl_idle_support_note.setWordWrap(True)
-        idle_support_actions_layout = QGridLayout()
-        idle_support_actions_layout.setContentsMargins(0, 0, 0, 0)
-        idle_support_actions_layout.setHorizontalSpacing(10)
-        idle_support_actions_layout.setVerticalSpacing(10)
-        idle_support_actions_layout.setColumnStretch(0, 1)
-        idle_support_actions_layout.setColumnStretch(1, 1)
-        idle_support_actions_layout.setColumnStretch(2, 1)
-        self.idle_support_actions_layout = idle_support_actions_layout
-        self.btn_idle_feedback = self.create_btn("反馈建议", self._open_feedback, style="primary")
-        self.btn_idle_feedback.setObjectName("idleFeedbackActionButton")
-        self.btn_idle_feedback.setProperty("btn_style", "primary")
-        self.btn_idle_feedback.setStyleSheet(self._get_button_style("primary"))
-        self.btn_idle_manual = self.create_btn("使用手册", self._open_manual, style="secondary")
-        self.btn_idle_manual.setObjectName("idleManualActionButton")
-        self.btn_idle_manual.setProperty("btn_style", "secondary")
-        self.btn_idle_manual.setStyleSheet(self._get_button_style("secondary"))
-        self.btn_idle_donate = self.create_btn("打赏支持", self._show_donate, style="success")
-        self.btn_idle_donate.setObjectName("idleDonateActionButton")
-        self.btn_idle_donate.setProperty("btn_style", "success")
-        self.btn_idle_donate.setStyleSheet(self._get_button_style("success"))
-        idle_support_layout.addWidget(self.lbl_idle_support_title)
-        idle_support_layout.addWidget(self.lbl_idle_support_text)
-        idle_support_layout.addWidget(self.lbl_idle_support_meta)
-        idle_support_layout.addWidget(self.lbl_idle_support_email)
-        idle_support_layout.addWidget(self.lbl_idle_support_note)
-        idle_support_layout.addStretch(1)
-        idle_support_layout.addLayout(idle_support_actions_layout)
-        idle_action_buttons_layout.addWidget(self.idle_start_card, 0, 0)
-        idle_action_buttons_layout.addWidget(self.idle_support_card, 0, 1)
-        idle_action_panel_layout.addLayout(idle_action_buttons_layout)
+        idle_action_panel_layout.addWidget(self.idle_start_card)
         idle_hero_layout.addWidget(idle_action_panel)
         idle_card_layout.addWidget(idle_hero_panel)
 
@@ -6989,7 +6725,7 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(self.scroll)
 
-        # 进度条和取消按钮区域（v36.3: 添加取消按钮）
+        # 进度条和取消按钮区域（v1.1.11: 添加取消按钮）
         self.progress_shell = QWidget()
         progress_layout = QHBoxLayout(self.progress_shell)
         progress_layout.setContentsMargins(0, 0, 0, 0)
@@ -7016,7 +6752,7 @@ class MainWindow(QMainWindow):
         self._sync_ui_mode()
 
     def _apply_light_theme(self):
-        """应用浅色主题样式（v35.1: Windows 强制浅色主题）"""
+        """应用浅色主题样式（v1.1.11: Windows 强制浅色主题）"""
         import platform
 
         theme = Theme.LIGHT
@@ -7037,7 +6773,7 @@ class MainWindow(QMainWindow):
                 background-color: transparent;
                 color: {theme["text"]};
             }}
-            /* v37.8.x: 强制 QMenu 浅色 — 避免深色系统主题下 popup 菜单白底白字 */
+            /* v1.1.11: 强制 QMenu 浅色 — 避免深色系统主题下 popup 菜单白底白字 */
             QMenu {{
                 background-color: {theme["surface"]};
                 color: {theme["text"]};
@@ -10392,7 +10128,7 @@ class MainWindow(QMainWindow):
 
     def toggle_dual_view(self, checked):
         """
-        v22.9: 简化的单/双页切换 - 保持 canvas_container 为固定 widget
+        v1.1.11: 简化的单/双页切换 - 保持 canvas_container 为固定 widget
         只隐藏/显示内部的 canvas
         """
         self.dual_view = checked
@@ -10412,8 +10148,8 @@ class MainWindow(QMainWindow):
         self.render_view()
 
     def open_settings(self):
-        # v37.0: 传递配置管理器以支持配置持久化
-        # v37.4.0: 移除 OCR 引擎选择，只保留 RapidOCR
+        # v1.1.11: 传递配置管理器以支持配置持久化
+        # v1.1.11: 移除 OCR 引擎选择，只保留 RapidOCR
 
         dlg = SettingsDialog(self, self.active_rules, self.use_enhance, self.custom_keywords,
                             self.scan_level, self.offset_x, self.offset_w, self.replacement_text,
@@ -10431,9 +10167,9 @@ class MainWindow(QMainWindow):
             self.offset_w = dlg.offset_w
             self.replacement_text = dlg.replacement_text
             self.word_replace_rules = dlg.word_replace_rules
-            # v37.7.x: 同步姓名识别开关
+            # v1.1.11: 同步姓名识别开关
             self.enable_name_recognition = dlg.enable_name_recognition
-            # v37.9.0: 同步黑/白名单(已在文本变化时实时落盘,此处再拉一次 store 的最终值)
+            # v1.1.11: 同步黑/白名单(已在文本变化时实时落盘,此处再拉一次 store 的最终值)
             self.current_blacklist = list(BlackWhiteListStore.instance().effective_blacklist())
             self.current_whitelist = list(BlackWhiteListStore.instance().effective_whitelist())
             if self.word_doc:
@@ -10451,24 +10187,9 @@ class MainWindow(QMainWindow):
         dlg = FeedbackDialog(self)
         dlg.exec()
 
-    def _open_feedback(self):
-        """从主窗口直接打开反馈问卷链接。"""
-        import webbrowser
-        webbrowser.open(FEEDBACK_URL)
-
-    def _open_manual(self):
-        """从主窗口直接打开使用手册链接。"""
-        import webbrowser
-        webbrowser.open("https://fcnwakmkeuz7.feishu.cn/docx/M9ojdaGUAoRVv7x3NCAcxkxenUe?from=from_copylink")
-
-    def _show_donate(self):
-        """从主窗口直接打开打赏支持对话框。"""
-        dialog = DonateDialog(self)
-        dialog.exec()
-
     @staticmethod
     def create_message_box(parent, icon, title, text, buttons=QMessageBox.StandardButton.Ok, default_button=QMessageBox.StandardButton.Ok):
-        """创建带有浅色主题样式的消息框（v37.4.1: 修复 Windows 深色模式显示问题）
+        """创建带有浅色主题样式的消息框（v1.1.11: 修复 Windows 深色模式显示问题）
 
         Args:
             parent: 父窗口
@@ -10922,7 +10643,7 @@ class MainWindow(QMainWindow):
             return 'unknown'
 
     def _get_file_dialog_style(self):
-        """获取文件对话框样式（v36.2: 使用系统默认按钮样式确保跨平台可读性）"""
+        """获取文件对话框样式（v1.1.11: 使用系统默认按钮样式确保跨平台可读性）"""
         return f"""
             QFileDialog {{
                 background-color: #FFFFFF;
@@ -10966,7 +10687,7 @@ class MainWindow(QMainWindow):
                 self._cleanup_before_open()
                 self._cleanup_temp_file()
 
-            # v37.0.6: 使用原生文件对话框，更稳定
+            # v1.1.11: 使用原生文件对话框，更稳定
             # 不使用 DontUseNativeDialog，让系统处理渲染
             fnames, _ = QFileDialog.getOpenFileNames(
                 self, "选择文件", "",
@@ -11029,7 +10750,7 @@ class MainWindow(QMainWindow):
         self.doc_type = 'pdf'
         total = len(self.doc)
         self.page_data = {i: {'ocr': [], 'manual': []} for i in range(total)}
-        # v37.8.x: 计算当前文档 hash,用于 HitOverrideStore 关联 override
+        # v1.1.11: 计算当前文档 hash,用于 HitOverrideStore 关联 override
         try:
             self._current_doc_hash = compute_doc_hash(fname)
         except OSError:
@@ -11117,7 +10838,7 @@ class MainWindow(QMainWindow):
         import subprocess
         import tempfile
 
-        # 检查系统支持（v35.1: 使用增强的跨平台检测）
+        # 检查系统支持（v1.1.11: 使用增强的跨平台检测）
         support_info = self._check_doc_support()
         method = support_info['recommended']
 
@@ -11156,7 +10877,7 @@ class MainWindow(QMainWindow):
             QApplication.restoreOverrideCursor()
 
     def _check_doc_support(self):
-        """检查系统是否支持 .doc 格式（v35.1: 增强跨平台检测）"""
+        """检查系统是否支持 .doc 格式（v1.1.11: 增强跨平台检测）"""
         import shutil
         import platform
 
@@ -11205,7 +10926,7 @@ class MainWindow(QMainWindow):
         return result
 
     def _show_doc_install_guide(self):
-        """显示 .doc 转换工具安装指南（v35.1 新增）"""
+        """显示 .doc 转换工具安装指南（v1.1.11 新增）"""
         import platform
         system = platform.system()
 
@@ -11271,7 +10992,7 @@ sudo dnf install antiword
         msg.exec()
 
     def _convert_doc_to_docx(self, doc_path, method='libreoffice'):
-        """v37.7.6: 委托给共享转换模块。"""
+        """v1.1.11: 委托给共享转换模块。"""
         from secureredact.utils.doc_converter import (
             convert_with_libreoffice, convert_with_antiword,
         )
@@ -11357,7 +11078,7 @@ sudo dnf install antiword
         QMessageBox.critical(self, "合并失败", error_msg)
 
     def _cleanup_temp_file(self):
-        """清理转换产生的临时文件（v36.1 安全修复：跨平台安全清理）"""
+        """清理转换产生的临时文件（v1.1.11 安全修复：跨平台安全清理）"""
         import tempfile
 
         if hasattr(self, 'converted_temp_file') and self.converted_temp_file:
@@ -11398,7 +11119,7 @@ sudo dnf install antiword
 
     def clamp_zoom(self, zoom, allow_below_min=False):
         """
-        将缩放值限制在有效范围内 (v33.2)
+        将缩放值限制在有效范围内 (v1.1.11)
 
         Args:
             zoom: 缩放值
@@ -11433,7 +11154,7 @@ sudo dnf install antiword
         # 取较小值确保页面完整显示在窗口中
         self.zoom_level = min(zoom_w, zoom_h)
 
-        # 限制在最大最小范围内 (v33.2: 允许突破 ZOOM_MIN 以完整显示)
+        # 限制在最大最小范围内 (v1.1.11: 允许突破 ZOOM_MIN 以完整显示)
         self.zoom_level = self.clamp_zoom(self.zoom_level, allow_below_min=True)
 
         # 重新渲染
@@ -11441,7 +11162,7 @@ sudo dnf install antiword
 
     def render_view(self):
         if not self.doc: return
-        # v37.0.9: 添加 canvas 有效性检查
+        # v1.1.11: 添加 canvas 有效性检查
         if not self._is_canvas_valid(self.canvas_left):
             print("[警告] canvas_left 无效，跳过渲染")
             return
@@ -11465,9 +11186,9 @@ sudo dnf install antiword
         self._refresh_workbench_context()
 
     def _render_single_page(self, canvas, page_idx):
-        """v7.0 风格渲染 - 直接传递列表引用
-        v37.0.9: 添加异常处理防止 canvas 被删除后崩溃
-        v37.8.x: 同步 canvas.page_index — 保证 PDFCanvas.mousePressEvent 中
+        """v1.1.11 风格渲染 - 直接传递列表引用
+        v1.1.11: 添加异常处理防止 canvas 被删除后崩溃
+        v1.1.11: 同步 canvas.page_index — 保证 PDFCanvas.mousePressEvent 中
         _locate_hit 用 f"page_{page_index}" 与 _rects_for_page 命中同一 hit_id
         """
         # 检查 canvas 有效性
@@ -11480,12 +11201,12 @@ sudo dnf install antiword
             img_fmt = QImage.Format.Format_RGB888
             qimg = QImage(pix.samples, pix.width, pix.height, pix.stride, img_fmt).copy()
             data = self.page_data[page_idx]
-            # v37.8.x: 用 _rects_for_page 走 store 过滤后再喂 canvas
+            # v1.1.11: 用 _rects_for_page 走 store 过滤后再喂 canvas
             ocr_rects = self._rects_for_page(page_idx)
             self._safe_canvas_update(canvas, QPixmap.fromImage(qimg), self.zoom_level,
                                      ocr_rects, data['manual'])
             self._safe_canvas_set_mask_color(canvas, self.current_color)
-            # v37.8.x: 关键修复 — canvas.page_index 必须随渲染同步,否则
+            # v1.1.11: 关键修复 — canvas.page_index 必须随渲染同步,否则
             # PDFCanvas.mousePressEvent 中 _locate_hit 构造 HitRef 用错 location,
             # 与 _rects_for_page 过滤时的 hit_id 不匹配 → 黑块无法消失
             canvas.page_index = page_idx
@@ -11529,7 +11250,7 @@ sudo dnf install antiword
         self.scroll.verticalScrollBar().setValue(0)
 
     def handle_page_change_request(self, delta):
-        """处理滚轮翻页请求（v35.1 新增）
+        """处理滚轮翻页请求（v1.1.11 新增）
 
         Args:
             delta: 翻页数量，正值=向后翻页，负值=向前翻页
@@ -11562,7 +11283,7 @@ sudo dnf install antiword
             scroll_bar.setValue(0)
 
     def keyPressEvent(self, event):
-        """键盘快捷键处理（v35.1 新增）
+        """键盘快捷键处理（v1.1.11 新增）
 
         快捷键列表：
         - PageUp: 上一页
@@ -11629,7 +11350,7 @@ sudo dnf install antiword
         self.handle_zoom_request(-0.25)
 
     def start_ocr(self):
-        """智能扫描 - 支持 PDF 和 Word（v37.0.5: 增强错误处理）"""
+        """智能扫描 - 支持 PDF 和 Word（v1.1.11: 增强错误处理）"""
         # 线程安全检查：防止重复启动
         if self.active_worker is not None:
             if self.active_worker.isRunning():
@@ -11638,28 +11359,47 @@ sudo dnf install antiword
 
         self._set_info_bar_message("🔍 正在扫描敏感信息...")
         self.btn_scan.setEnabled(False)
-        self.btn_cancel_scan.setVisible(True)  # 显示取消按钮（v36.3）
+        self.btn_cancel_scan.setVisible(True)  # 显示取消按钮（v1.1.11）
         self.btn_cancel_scan.setEnabled(True)
         self.active_task_type = "scan"
 
+        # v1.1.12: 按 doc_type 过滤规则(USCC 等仅作用于 Word 路径,完全隔离 PDF)
+        # region USCC_ISO_FILTER
+        try:
+            pdf_excluded_names = config.get("redaction.pdf_excluded_rules", []) if config else []
+        except Exception:
+            pdf_excluded_names = []
+        if isinstance(pdf_excluded_names, list) and pdf_excluded_names:
+            excluded_patterns = set()
+            for rule_name in pdf_excluded_names:
+                pat = DEFAULT_RULES.get(rule_name, "")
+                if pat:
+                    excluded_patterns.add(pat)
+            pdf_rules = [r for r in self.active_rules if r not in excluded_patterns]
+        else:
+            pdf_rules = self.active_rules
+        # endregion USCC_ISO_FILTER
+
         # PDF 处理
         if self.doc:
-            # v37.5.0: 检测是否启用印章检测
+            # v1.1.11: 检测是否启用印章检测(用原始 self.active_rules,不被 pdf_rules 过滤影响)
             seal_detection_enabled = "__SEAL_DETECTION__" in self.active_rules
             print(f"[OCR] active_rules: {self.active_rules}")
+            print(f"[OCR] pdf_rules: {pdf_rules}")
             print(f"[OCR] 印章检测启用: {seal_detection_enabled}")
             self._ocr_processed_pages = set()
-            # v37.4.0: 只使用 RapidOCR，移除 use_char_level_ocr 参数
-            self.worker = OCRWorker(self.file_path, self.active_rules, self.use_enhance, self.custom_keywords,
+            # v1.1.11: 只使用 RapidOCR，移除 use_char_level_ocr 参数
+            # v1.1.12: PDF 路径使用过滤后的 pdf_rules,排除仅 Word 规则
+            self.worker = OCRWorker(self.file_path, pdf_rules, self.use_enhance, self.custom_keywords,
                                     self.scan_level, self.offset_x, self.offset_w,
                                     seal_detection_enabled=seal_detection_enabled,
                                     enable_name_recognition=self.enable_name_recognition)
             self.active_worker = self.worker  # 追踪线程
             self.worker.progress_signal.connect(self.progress.setValue)
-            # v37.8.x: connect 到 _receive_page_hits(新签名,接 list[dict])
+            # v1.1.11: connect 到 _receive_page_hits(新签名,接 list[dict])
             # 旧 _on_ocr_page_result 仍存在但已废弃,仅作 QRectF 路径的 fallback
             self.worker.page_result_signal.connect(self._receive_page_hits)
-            # v37.0.5: 连接错误信号
+            # v1.1.11: 连接错误信号
             self.worker.error_signal.connect(self._on_ocr_error)
             # 先连接原有的完成处理，再连接清理
             self.worker.finished_signal.connect(self._on_ocr_finished_safe)
@@ -11667,9 +11407,12 @@ sudo dnf install antiword
             self.worker.start()
         # Word 处理
         elif self.word_doc:
+            # v1.1.12: Word 路径使用完整 self.active_rules(包含 USCC 等)
             self.worker = WordWorker(self.word_doc, self.word_data, self.active_rules,
                                      self.custom_keywords, self.replacement_text,
-                                     enable_name_recognition=self.enable_name_recognition)
+                                     enable_name_recognition=self.enable_name_recognition,
+                                     default_rules=DEFAULT_RULES,
+                                     default_rules_meta=DEFAULT_RULES_META)
             self.active_worker = self.worker  # 追踪线程
             self.worker.progress_signal.connect(self.progress.setValue)
             # 先连接原有的完成处理，再连接清理
@@ -11678,7 +11421,7 @@ sudo dnf install antiword
             self.worker.start()
 
     def cancel_ocr_scan(self):
-        """取消智能脱敏扫描（v36.3）"""
+        """取消智能脱敏扫描（v1.1.11）"""
         if self.active_worker and self.active_worker.isRunning():
             if self.active_task_type == "batch_replace":
                 title = "确认停止"
@@ -11707,8 +11450,8 @@ sudo dnf install antiword
                 # Worker会在完成后通过finished_signal通知主线程
 
     def _on_worker_finished(self):
-        """v37.0.6: 工作线程完成后的清理 + 延迟错误显示"""
-        # v37.0.6: 等待线程完全终止，防止死锁
+        """v1.1.11: 工作线程完成后的清理 + 延迟错误显示"""
+        # v1.1.11: 等待线程完全终止，防止死锁
         if self.active_worker and self.active_worker.isRunning():
             self.active_worker.wait(3000)  # 最多等待 3 秒
 
@@ -11725,14 +11468,14 @@ sudo dnf install antiword
         else:
             self._set_info_bar_message("✅ 扫描完成！")
 
-        # v37.0.6: 线程清理完成后，延迟显示错误对话框（非阻塞）
+        # v1.1.11: 线程清理完成后，延迟显示错误对话框（非阻塞）
         if hasattr(self, '_pending_error_msg') and self._pending_error_msg:
             error_msg = self._pending_error_msg
             self._pending_error_msg = None
             QTimer.singleShot(100, lambda: self._show_deferred_error(error_msg))
 
     def _show_deferred_error(self, error_msg: str):
-        """v37.0.6: 安全显示错误对话框（在线程清理完成后调用）"""
+        """v1.1.11: 安全显示错误对话框（在线程清理完成后调用）"""
         QMessageBox.critical(
             self,
             "OCR 错误",
@@ -11744,7 +11487,7 @@ sudo dnf install antiword
         )
 
     def ocr_finished(self, results):
-        """v23.1: 添加去重逻辑，解决重复矩形导致的点击2次问题；v36.3: 支持部分结果"""
+        """v1.1.11: 添加去重逻辑，解决重复矩形导致的点击2次问题；v1.1.11: 支持部分结果"""
         total_pages = len(self.page_data)
         scanned_pages = len(results)
 
@@ -11758,7 +11501,7 @@ sudo dnf install antiword
         self.render_view()
         self.progress.setValue(0)
 
-        # 判断是部分结果还是完整结果（v36.3）
+        # 判断是部分结果还是完整结果（v1.1.11）
         if scanned_pages < total_pages:
             QMessageBox.information(
                 self,
@@ -11768,17 +11511,17 @@ sudo dnf install antiword
         else:
             QMessageBox.information(self, "完成", "智能扫描已完成！")
 
-    # v37.0.6: 非阻塞 OCR 错误处理
+    # v1.1.11: 非阻塞 OCR 错误处理
     def _on_ocr_error(self, error_msg: str):
-        """v37.0.6: 非阻塞处理 OCR 错误（存储错误，延迟到线程清理后显示）"""
+        """v1.1.11: 非阻塞处理 OCR 错误（存储错误，延迟到线程清理后显示）"""
         print(f"[OCR ERROR] {error_msg}")
         self._set_info_bar_message(f"❌ OCR 错误: {error_msg[:50]}...")
-        # v37.0.6: 存储错误消息，延迟到线程清理完成后显示
+        # v1.1.11: 存储错误消息，延迟到线程清理完成后显示
         # 避免在模态对话框阻塞主线程时形成死锁
         self._pending_error_msg = error_msg
 
     def _receive_page_hits(self, page_idx: int, hits: list) -> None:
-        """v37.8.x: 接收 OCRWorker 逐页 hit dict 列表,过滤后存 page_data + 渲染。
+        """v1.1.11: 接收 OCRWorker 逐页 hit dict 列表,过滤后存 page_data + 渲染。
 
         参数:
             page_idx: 页码(0-based)
@@ -11804,7 +11547,7 @@ sudo dnf install antiword
             self.render_view()
 
     def _rects_for_page(self, page_idx: int) -> list:
-        """v37.8.x: 返回过滤后的 QRectF 列表,供 canvas 渲染与 PDF 导出共用。
+        """v1.1.11: 返回过滤后的 QRectF 列表,供 canvas 渲染与 PDF 导出共用。
 
         filtered_hits:
           - manual 永远保留
@@ -11822,7 +11565,7 @@ sudo dnf install antiword
 
     @staticmethod
     def _filter_hits_to_rects(hits: list, *, store, location: str, doc_hash: str) -> list:
-        """v37.8.x: 模块级纯函数 — store 过滤 + 抽 QRectF.
+        """v1.1.11: 模块级纯函数 — store 过滤 + 抽 QRectF.
 
         抽到这里便于直接单测,无需启动 QMainWindow 实例。
         语义: manual 永远保留;ignore 命中剔除;confirm / 未操作保留。
@@ -11831,7 +11574,7 @@ sudo dnf install antiword
         return [h["rect"] for h in kept]
 
     def _on_ocr_finished_safe(self, _):
-        """v36.4: 线程安全 - OCR 完成处理（在主线程执行）
+        """v1.1.11: 线程安全 - OCR 完成处理（在主线程执行）
 
         参数 _ 是空字典，保留以兼容信号签名
         """
@@ -11905,11 +11648,11 @@ sudo dnf install antiword
         return iou > threshold or distance < 5
 
     def word_scan_finished(self, results):
-        """Word 文档扫描完成（v36.5: 线程安全）"""
+        """Word 文档扫描完成（v1.1.11: 线程安全）"""
         results_copy = dict(results)
         scan_meta = results_copy.pop('__scan_meta__', None)
 
-        # v36.5: 使用锁保护 word_data 访问
+        # v1.1.11: 使用锁保护 word_data 访问
         with QMutexLocker(self._word_data_lock):
             total_items = len(self.word_data)
             if scan_meta:
@@ -11967,7 +11710,7 @@ sudo dnf install antiword
             self._refresh_word_compare_toggle()
             self.word_preview.show()
 
-            # v37.6.1: 禁用 Word 预览的拖拽接受，让事件传递到 MainWindow
+            # v1.1.11: 禁用 Word 预览的拖拽接受，让事件传递到 MainWindow
             # 解决 Word 打开后无法拖拽打开新文件的问题
             self.word_preview.setAcceptDrops(False)
             self.word_preview_replaced.setAcceptDrops(False)
@@ -12266,7 +12009,7 @@ sudo dnf install antiword
         from html import escape as html_escape
 
         segments = build_highlight_preview_segments(source_text, merged_matches)
-        # v37.8.x: HitOverrideStore 过滤 — ignored 命中整段不渲染为 <mark>;
+        # v1.1.11: HitOverrideStore 过滤 — ignored 命中整段不渲染为 <mark>;
         # confirmed 命中打 ocr-hit--confirmed 类以便 CSS 加深背景。
         store = getattr(self, "_override_store", None)
         doc_hash = getattr(self, "_current_doc_hash", "") or ""
@@ -12288,7 +12031,7 @@ sudo dnf install antiword
             seg_end = int(segment.get("end", 0))
             seg_text = str(segment.get("value", ""))
 
-            # v37.8.x: 构造 HitRef 走 store 过滤;manual 永远保留。
+            # v1.1.11: 构造 HitRef 走 store 过滤;manual 永远保留。
             if source != "manual" and store is not None and doc_hash:
                 ref = HitRef(
                     doc_hash=doc_hash,
@@ -12336,7 +12079,7 @@ sudo dnf install antiword
 
     def _build_word_replaced_panel_updates(self):
         updates = {}
-        # v37.8.x: HitOverrideStore 过滤 — ignored OCR hit 不进入 merge
+        # v1.1.11: HitOverrideStore 过滤 — ignored OCR hit 不进入 merge
         # (manual 永远保留;confirm 保留)。与 _save_word / _rects_for_page 保持一致。
         store = getattr(self, "_override_store", None)
         doc_hash = getattr(self, "_current_doc_hash", "") or ""
@@ -12902,7 +12645,7 @@ sudo dnf install antiword
     def _inject_interactive_html(self, html, scroll_restore=''):
         """注入 JavaScript 交互逻辑用于右键菜单和脱敏操作
 
-        v36.4: 重构为使用模块级常量 _INTERACTIVE_JS_CODE，简化函数逻辑
+        v1.1.11: 重构为使用模块级常量 _INTERACTIVE_JS_CODE，简化函数逻辑
 
         Args:
             html: 要注入的 HTML
@@ -12952,9 +12695,9 @@ sudo dnf install antiword
 </html>'''
 
     def save_pdf(self):
-        """保存脱敏后的文档 - 支持 PDF 和 Word - v37.3: 安全加固，脱敏区域永久化"""
+        """保存脱敏后的文档 - 支持 PDF 和 Word - v1.1.11: 安全加固，脱敏区域永久化"""
         # v36: 应用文件对话框样式
-        # v37.3: PDF 脱敏安全加固 - 脱敏区域永久嵌入，不可编辑
+        # v1.1.11: PDF 脱敏安全加固 - 脱敏区域永久嵌入，不可编辑
         app = QApplication.instance()
         original_style = app.styleSheet()
 
@@ -12976,14 +12719,14 @@ sudo dnf install antiword
                     for i in range(len(doc_save)):
                         page = doc_save[i]
 
-                        # v37.3.1: 修复内部编辑功能 - 使用副本避免修改原始数据
+                        # v1.1.11: 修复内部编辑功能 - 使用副本避免修改原始数据
                         # 从 page_data 中获取脱敏区域列表
-                        # v37.8.x: 走 _rects_for_page 应用 store 过滤(已 ignore 剔除)
+                        # v1.1.11: 走 _rects_for_page 应用 store 过滤(已 ignore 剔除)
                         ocr_list = self._rects_for_page(i)
                         manual_list = self.page_data[i].get('manual', [])
 
                         # 1. 添加脱敏注释
-                        # v37.3.1: 重建 QRectF 确保不修改原始对象
+                        # v1.1.11: 重建 QRectF 确保不修改原始对象
                         for r in ocr_list + manual_list:
                             # 从 QRectF 提取坐标并重建，避免引用问题
                             x, y, w, h = r.x(), r.y(), r.width(), r.height()
@@ -12992,14 +12735,14 @@ sudo dnf install antiword
                             annot.set_colors(stroke=fill_col, fill=fill_col)
                             annot.update()
 
-                        # v37.3: 安全加固 - 修改图像像素，彻底销毁原始内容
+                        # v1.1.11: 安全加固 - 修改图像像素，彻底销毁原始内容
                         page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_PIXELS)
 
-                        # v37.3: 安全加固 - 删除所有注释对象，防止被 PDF 编辑器修改
+                        # v1.1.11: 安全加固 - 删除所有注释对象，防止被 PDF 编辑器修改
                         for annot in page.annots():
                             page.delete_annot(annot)
 
-                    # v37.3: 安全加固 - 使用垃圾回收和压缩彻底删除未引用对象
+                    # v1.1.11: 安全加固 - 使用垃圾回收和压缩彻底删除未引用对象
                     doc_save.save(
                         fname,
                         garbage=4,        # 最大垃圾回收级别
@@ -13013,7 +12756,7 @@ sudo dnf install antiword
                     QApplication.restoreOverrideCursor()
                     QMessageBox.critical(self, "失败", str(e))
                 except Exception as e:
-                    # v37.7.x: 兜底捕获所有异常 (含 pymupdf.mupdf.FzErrorSystem 等非标准异常)
+                    # v1.1.11: 兜底捕获所有异常 (含 pymupdf.mupdf.FzErrorSystem 等非标准异常)
                     QApplication.restoreOverrideCursor()
                     err_msg = str(e)
                     if "Permission denied" in err_msg or "cannot remove" in err_msg:
@@ -13036,7 +12779,7 @@ sudo dnf install antiword
     def _save_word(self, fname):
         """保存 Word 文档 - v24 改进版：详细错误处理 + 使用 TempFileManager + 合并 OCR 和 Manual 脱敏
 
-        v37.8.x: 导出前先走 HitOverrideStore.filtered_hits 把 ignored OCR hit
+        v1.1.11: 导出前先走 HitOverrideStore.filtered_hits 把 ignored OCR hit
         从 ocr_matches 中剔除(manual 永远保留;confirm 保留)。
         """
         try:
@@ -13061,7 +12804,7 @@ sudo dnf install antiword
                 if key in self.word_data:
                     data = self.word_data[key]
                     source_text = data.get("text", "")
-                    # v37.8.x: 导出前 store 过滤 (manual 永远保留)
+                    # v1.1.11: 导出前 store 过滤 (manual 永远保留)
                     filtered_ocr = store.filtered_hits(
                         list(data.get("ocr", [])),
                         location=key,
@@ -13090,7 +12833,7 @@ sudo dnf install antiword
                         if key in self.word_data:
                             data = self.word_data[key]
                             source_text = data.get("text", "")
-                            # v37.8.x: 导出前 store 过滤 (manual 永远保留)
+                            # v1.1.11: 导出前 store 过滤 (manual 永远保留)
                             filtered_ocr = store.filtered_hits(
                                 list(data.get("ocr", [])),
                                 location=key,
@@ -13209,7 +12952,7 @@ sudo dnf install antiword
             target_run.font.superscript = True
 
 if __name__ == "__main__":
-    # v37.0.5: 全局异常钩子，防止未捕获异常导致崩溃
+    # v1.1.11: 全局异常钩子，防止未捕获异常导致崩溃
     def exception_hook(exc_type, exc_value, exc_traceback):
         """全局异常处理器"""
         error_msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
@@ -13232,7 +12975,7 @@ if __name__ == "__main__":
 
     sys.excepthook = exception_hook
 
-    # v37.0.5: 线程异常钩子
+    # v1.1.11: 线程异常钩子
     def thread_exception_hook(args):
         """线程异常处理器"""
         error_msg = ''.join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback))
@@ -13240,7 +12983,7 @@ if __name__ == "__main__":
 
     threading.excepthook = thread_exception_hook
 
-    # v37.0.5: 启动时预加载 OCR 引擎（可选，用于早期检测问题）
+    # v1.1.11: 启动时预加载 OCR 引擎（可选，用于早期检测问题）
     if os.getenv('PRIVACYGUARD_PRELOAD_OCR', '').lower() == 'true':
         print("[INFO] 预加载 OCR 引擎...")
         init_ocr_engine()
