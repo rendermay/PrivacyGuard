@@ -154,7 +154,7 @@ class OCRWorkerPayloadTest(unittest.TestCase):
             patch("secureredact.workers.ocr_worker.collect_image_block_ocr_hits",
                   return_value=[]), \
             patch("secureredact.pii.name_recognizer.extract_person_names",
-                  return_value=["周强"]):
+                  side_effect=lambda *a, **kw: ["周强"]):
             worker = OCRWorker(
                 pdf_path="/dev/null",
                 rules=[],

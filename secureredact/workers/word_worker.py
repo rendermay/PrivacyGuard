@@ -1,16 +1,20 @@
 """
 Word 文档处理 Worker
 
-v36.5: 模块化拆分，从 main.py 提取
+v1.1.11: 模块化拆分,从 main.py 提取
+v1.1.12: 命中字段 `replacement` 支持 partial masking(按 rule_name 查 DEFAULT_RULES_META)
 """
 
 import time
 import copy
 import re
+from typing import Dict, Optional
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from secureredact.redaction.black_white_list_store import BlackWhiteListStore
 from secureredact.redaction.whitelist_split import _split_text_by_whitelist
+from secureredact.utils.masking import apply_mask_for_rule, apply_name_mask
+from secureredact.utils.masking import apply_mask_for_rule
 
 # 常量定义
 PROGRESS_UPDATE_INTERVAL = 0.05
@@ -19,13 +23,15 @@ PROGRESS_UPDATE_INTERVAL = 0.05
 class WordWorker(QThread):
     """Word 文档智能脱敏线程
 
-    v36.5: 模块化拆分
+    v1.1.11: 模块化拆分
+    v1.1.12: partial masking 支持 — `default_rules_meta` 传入规则名 → mask 配置表
     """
     finished_signal = pyqtSignal(dict)
     progress_signal = pyqtSignal(int)
 
     def __init__(self, word_doc, word_data, rules, custom_keywords, replacement_text, default_rules=None,
-                 enable_name_recognition: bool = False):
+                 enable_name_recognition: bool = False,
+                 default_rules_meta: Optional[Dict[str, Dict]] = None):
         super().__init__()
         self.word_doc = word_doc
         self.word_data = word_data
@@ -34,12 +40,14 @@ class WordWorker(QThread):
         self.custom_keywords = [re.escape(k.strip()) for k in raw_keywords if k.strip()]
         self.replacement_text = replacement_text
         self.default_rules = default_rules or {}
+        # v1.1.12: mask 元数据(可空 → 全部走 replacement_text,向后兼容)
+        self.default_rules_meta = default_rules_meta or {}
 
-        # v37.7.x: 中文姓名启发式识别开关 (默认 False,向后兼容)
+        # v1.1.11: 中文姓名启发式识别开关 (默认 False,向后兼容)
         self.enable_name_recognition = enable_name_recognition
 
     def run(self):
-        """主处理流程 - 支持取消并保存进度（v36.3）"""
+        """主处理流程 - 支持取消并保存进度（v1.1.11）"""
         processed = 0
         total = 0
         try:
@@ -59,7 +67,7 @@ class WordWorker(QThread):
                 if key in self.word_data:
                     text = self.word_data[key]['text']
                     matches = self._find_matches(text)
-                    # v37.9.0: whiteList 过滤 + blackList 注入
+                    # v1.1.11: whiteList 过滤 + blackList 注入
                     matches = self._filter_whitelist(matches)
                     blacklist = BlackWhiteListStore.instance().effective_blacklist()
                     if blacklist:
@@ -85,7 +93,7 @@ class WordWorker(QThread):
                             if key in self.word_data:
                                 text = self.word_data[key]['text']
                                 matches = self._find_matches(text)
-                                # v37.9.0: whiteList 过滤 + blackList 注入
+                                # v1.1.11: whiteList 过滤 + blackList 注入
                                 matches = self._filter_whitelist(matches)
                                 blacklist = BlackWhiteListStore.instance().effective_blacklist()
                                 if blacklist:
@@ -100,7 +108,7 @@ class WordWorker(QThread):
                             last_emit_time = time.time()
 
             # 发射已扫描的结果（无论完成与否）
-            # v36.5: 发送深拷贝避免数据竞争
+            # v1.1.11: 发送深拷贝避免数据竞争
             output = copy.deepcopy(self.word_data)
             output['__scan_meta__'] = {
                 'processed_items': processed,
@@ -133,13 +141,20 @@ class WordWorker(QThread):
         matches = []
         all_patterns = self.rules + self.custom_keywords
 
-        # v37.7.x: 中文姓名启发式识别 (默认 OFF)
+        # v1.1.11: 中文姓名启发式识别 (默认 OFF)
         if self.enable_name_recognition and text:
             try:
                 from secureredact.pii.name_recognizer import (
                     extract_person_names,
                 )
-                _names = extract_person_names(text)
+                # v1.1.11 fix: 传入当前生效白名单,识别器据此豁免
+                # '丁方经' / '戊方经' 等合同角色词粘连伪人名,避免白名单邻接误报.
+                # v1.1.12: 启用 require_context=True, 仅注入在原文中具有强上下文
+                # (原告: / 经理 / 审判员 / 先生...) 的人名, 大幅降低 jieba nr 误报.
+                _whitelist = BlackWhiteListStore.instance().effective_whitelist()
+                _names = extract_person_names(
+                    text, whitelist=_whitelist, require_context=True,
+                )
                 if _names:
                     _existing = set(self.rules) | set(self.custom_keywords)
                     _extra = [
@@ -154,18 +169,47 @@ class WordWorker(QThread):
         for pattern in all_patterns:
             try:
                 for match in re.finditer(pattern, text, re.IGNORECASE):
+                    matched_text = match.group()
+                    rule_name = self._get_rule_name(pattern)
+                    source = self._source_for_pattern(pattern)
+                    # v1.1.12: rule 来源(命中 self.rules) + rule_name 在 META 中 → 应用 partial mask
+                    # custom_keywords / jieba 来源 → 保留 replacement_text(向后兼容)
+                    #   但 jieba 路径为了让 2 字姓名变 2 个 * 而不是 1 个 *,
+                    #   修复为 replacement = '*' * len(matched_text)
+                    replacement_value = self.replacement_text
+                    if pattern in self.rules:
+                        masked = apply_mask_for_rule(
+                            matched_text, rule_name, self.default_rules_meta
+                        )
+                        if masked is not None:
+                            replacement_value = masked
+                    elif source == "jieba":
+                        # v1.1.12: jieba 路径(自定义人名识别)
+                        # 用 apply_name_mask 保留姓(只 mask 名), 例 "李秋实" → "李**", "张三" → "张*"
+                        # 而非简单的 "*" * len 整段打码(丢失姓)
+                        replacement_value = apply_name_mask(matched_text)
                     matches.append({
                         'pattern': pattern,
-                        'rule_name': self._get_rule_name(pattern),
+                        'rule_name': rule_name,
                         'start': match.start(),
                         'end': match.end(),
-                        'text': match.group(),
-                        'replacement': self.replacement_text,
-                        'source': self._source_for_pattern(pattern),
+                        'text': matched_text,
+                        'replacement': replacement_value,
+                        'source': source,
                     })
             except re.error:
                 # 忽略无效的正则表达式
                 pass
+
+        # v1.1.12: 去重 — 如果 jieba 路径的 hit 完全在 rule 路径 hit 范围内, 剥除 jieba hit
+        # 避免"公司名"整段 mask + jieba 命中中间 2 字 重复打码造成输出错乱
+        rule_ranges = [(m['start'], m['end']) for m in matches if m['source'] == 'rule']
+        if rule_ranges:
+            matches = [
+                m for m in matches
+                if m['source'] != 'jieba' or
+                not any(rs <= m['start'] and m['end'] <= re_ for rs, re_ in rule_ranges)
+            ]
 
         return matches
 
@@ -189,7 +233,7 @@ class WordWorker(QThread):
                 return name
         return "自定义"
 
-    # ---- v37.9.0: 黑/白名单串联 ----
+    # ---- v1.1.11: 黑/白名单串联 ----
 
     def _filter_whitelist(self, hits: list) -> list:
         """v38: 剥掉包含白名单子串的 hit; trim_only=True 时只剥白名单片段."""
@@ -214,7 +258,7 @@ class WordWorker(QThread):
             if no_split:
                 kept.append(hit)
                 continue
-            # 旧行为 (v37.9.0): 整条剥掉
+            # 旧行为 (v1.1.11): 整条剥掉
             if not trim_only:
                 continue
             # 新行为 (v38): 每段保留片段生成新 hit

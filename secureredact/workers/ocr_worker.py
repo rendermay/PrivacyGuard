@@ -1,8 +1,8 @@
 """
 OCR 处理 Worker
 
-v36.5: 模块化拆分，从 main.py 提取
-v37.7.6: 全面上行 main.py 的高级特性：
+v1.1.11: 模块化拆分，从 main.py 提取
+v1.1.11: 全面上行 main.py 的高级特性：
   - 印章检测 (_detect_seals)
   - 像素级文本边界 (_detect_text_boundaries)
   - CJK 智能字符权重 (_calculate_from_line)
@@ -40,16 +40,16 @@ PROGRESS_UPDATE_INTERVAL = 0.05
 class OCRWorker(QThread):
     """OCR 处理线程
 
-    v36.4: 使用信号槽机制替代共享字典，解决线程安全问题
-    v36.5: 模块化拆分
-    v37.7.6: 全面上行高级特性
+    v1.1.11: 使用信号槽机制替代共享字典，解决线程安全问题
+    v1.1.11: 模块化拆分
+    v1.1.11: 全面上行高级特性
     """
     finished_signal = pyqtSignal(dict)
     progress_signal = pyqtSignal(int)
-    page_result_signal = pyqtSignal(int, list)  # v36.4: 逐页发送结果 (页码, 矩形列表)
+    page_result_signal = pyqtSignal(int, list)  # v1.1.11: 逐页发送结果 (页码, 矩形列表)
     # Wave 2.1 (Task 3): 矩形列表元素升级为 dict {rect: QRectF, source: str, text: str, rule_name: str}
     # Task 4 (MainWindow) 消费者依赖 source 字段区分 manual/ocr/jieba/seal.
-    error_signal = pyqtSignal(str)  # v37.0.5: 错误信号
+    error_signal = pyqtSignal(str)  # v1.1.11: 错误信号
 
     def __init__(self, pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
                  use_char_level_ocr: bool = False, seal_detection_enabled: bool = False,
@@ -64,20 +64,20 @@ class OCRWorker(QThread):
         self.off_x = off_x
         self.off_w = off_w
 
-        # v37.7.x: 中文姓名启发式识别开关 (默认 False,向后兼容)
+        # v1.1.11: 中文姓名启发式识别开关 (默认 False,向后兼容)
         # 启用后从整页文本提取候选姓名,经 re.escape 后追加到 custom_keywords 列表
         self.enable_name_recognition = enable_name_recognition
 
-        # v37.4.0: 只使用 RapidOCR，不再使用字符级 OCR
+        # v1.1.11: 只使用 RapidOCR，不再使用字符级 OCR
         self.use_char_level_ocr = False
 
-        # v37.3.5: 检测框调节比例（支持负值扩大、正值收缩）
+        # v1.1.11: 检测框调节比例（支持负值扩大、正值收缩）
         self.box_adjust_ratio = box_adjust_ratio
 
-        # v37.5.0: 印章检测功能
+        # v1.1.11: 印章检测功能
         self.seal_detection_enabled = seal_detection_enabled
         self._seal_detector = None  # 延迟加载
-        # v37.9.0: 黑/白名单注入/过滤用. _process_page 开头会覆盖, 此处先建空槽.
+        # v1.1.11: 黑/白名单注入/过滤用. _process_page 开头会覆盖, 此处先建空槽.
         self._ocr_engine = None  # type: ignore[assignment]
         print(f"[OCRWorker] 初始化, seal_detection_enabled={seal_detection_enabled}")
 
@@ -106,7 +106,7 @@ class OCRWorker(QThread):
             return img_np
 
     def _render_full_page_bgr(self, page, scan_scale):
-        """v37.7.x: 把整页 PDF 渲染为 BGR 图像 (供全页 OCR 用).
+        """v1.1.11: 把整页 PDF 渲染为 BGR 图像 (供全页 OCR 用).
 
         与 render_pdf_clip_to_bgr 的区别: 不带 clip, 整页 0..width 0..height.
 
@@ -124,14 +124,14 @@ class OCRWorker(QThread):
         return cv2.imdecode(img_data, cv2.IMREAD_COLOR)
 
     def _get_seal_detector(self):
-        """v37.5.0: 印章检测器（使用 OpenCV，无需额外依赖）"""
+        """v1.1.11: 印章检测器（使用 OpenCV，无需额外依赖）"""
         if self._seal_detector is not None:
             return self._seal_detector
         self._seal_detector = True
         return self._seal_detector
 
     def _detect_seals(self, img_np, scan_scale):
-        """v37.5.0: 使用 OpenCV 检测印章区域
+        """v1.1.11: 使用 OpenCV 检测印章区域
 
         检测策略：
         1. 颜色过滤：检测红色区域
@@ -148,7 +148,7 @@ class OCRWorker(QThread):
         ┌────────────────────────────────────────────────────────────────────┐
         │ ⚠️  HSV 阈值 (H 0-20 + 160-180, S/V 30-255), 面积上下限            │
         │ (100×100 < area < 50%×image), red_ratio/solidity/aspect/          │
-        │ circularity 阈值 都是 v37.5.0 反复调参后的实测值, 不能凭直觉       │
+        │ circularity 阈值 都是 v1.1.11 反复调参后的实测值, 不能凭直觉       │
         │ "优化". 放宽任一阈值 → 红色印刷字被误判为印章 (覆盖过大);           │
         │ 收紧任一阈值 → 真印章漏检.                                         │
         │                                                                    │
@@ -233,7 +233,7 @@ class OCRWorker(QThread):
         return seal_rects
 
     def _shrink_box(self, box, x_ratio=0.15, y_ratio=0.1):
-        """v37.3.3: 收缩检测框边距
+        """v1.1.11: 收缩检测框边距
 
         Args:
             box: OCR 检测框 [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
@@ -270,7 +270,7 @@ class OCRWorker(QThread):
                 [new_x_max, new_y_max], [new_x_min, new_y_max]]
 
     def _detect_text_boundaries(self, img_region, box):
-        """v37.3.7: 像素级文本边界检测
+        """v1.1.11: 像素级文本边界检测
 
         通过水平投影分析找到检测框内实际文字的左右边界。
 
@@ -317,7 +317,7 @@ class OCRWorker(QThread):
             return int(min(x_coords)), int(max(x_coords))
 
     def calculate_sub_rect(self, box, text, match_span, img_region=None):
-        """v37.4.0: 计算子字符串的矩形区域（行级计算 + 像素边界检测）
+        """v1.1.11: 计算子字符串的矩形区域（行级计算 + 像素边界检测）
 
         Args:
             box: 整行文本的检测框
@@ -342,7 +342,7 @@ class OCRWorker(QThread):
         manual 来源豁免 (人工框选是显式意图).
 
         ┌────────────────────────────────────────────────────────────────────┐
-        │ ⚠️  v38.0.1 hotfix — DO NOT REMOVE the original_text_was_empty    │
+        │ ⚠️  v1.1.11 hotfix — DO NOT REMOVE the original_text_was_empty    │
         │ branch below without first implementing proper matched-text      │
         │ propagation for image-channel hits.                               │
         │                                                                    │
@@ -352,7 +352,7 @@ class OCRWorker(QThread):
         │ trim + _sub_rect_for_text_span 用原小 rect 做权重切分会把          │
         │ 「签名或者」画到「盖章」位置, 导致错误脱敏.                       │
         │                                                                    │
-        │ 当前修复: image-channel / seal hit (原 text 为空) 走 v37.9.0 行为  │
+        │ 当前修复: image-channel / seal hit (原 text 为空) 走 v1.1.11 行为  │
         │ (整条剥掉), 不做 trim. text-channel hit (原 text 非空) 继续走 trim. │
         │                                                                    │
         │ 锁定测试: tests/unit/test_whitelist_trim_only.py::                 │
@@ -361,7 +361,7 @@ class OCRWorker(QThread):
         │ 完整修复路径 (让 image-channel 也能 trim) 需要让                    │
         │ collect_image_block_ocr_hits 返回 matched 子串, 让 hit.text         │
         │ 携带精确 keyword, 避免 resolve 反查歧义. 见                        │
-        │ CHANGELOG.md v38.0.0 「已知限制」段.                               │
+        │ CHANGELOG.md v1.1.11 「已知限制」段.                               │
         └────────────────────────────────────────────────────────────────────┘
         """
         store = BlackWhiteListStore.instance()
@@ -384,8 +384,8 @@ class OCRWorker(QThread):
                 kept.append(hit)
                 continue
             # ┌────────────────────────────────────────────────────────────┐
-            # │ ⚠️  v38.0.1 hotfix — DO NOT REMOVE / SKIP THIS BRANCH.       │
-            # │ image-channel / seal hit (原 text 为空): 必须走 v37.9.0       │
+            # │ ⚠️  v1.1.11 hotfix — DO NOT REMOVE / SKIP THIS BRANCH.       │
+            # │ image-channel / seal hit (原 text 为空): 必须走 v1.1.11       │
             # │ 整条剥掉, 不做 trim. 原因见上方 docstring 与 CHANGELOG.       │
             # │ 任何放宽此约束的修改都必须先实现 matched 子串传递到 hit.text.   │
             # └────────────────────────────────────────────────────────────┘
@@ -404,7 +404,7 @@ class OCRWorker(QThread):
             if no_split:
                 kept.append(hit)
                 continue
-            # 旧行为 (v37.9.0): 整条剥掉
+            # 旧行为 (v1.1.11): 整条剥掉
             if not trim_only:
                 continue
             # 新行为 (v38): 每个保留片段生成子 hit
@@ -469,7 +469,7 @@ class OCRWorker(QThread):
         │ ⚠️  注意 — 返回的 text 可能是完整的 OCR token (而非 rect 实际       │
         │ 覆盖范围的子串). 调用方必须理解此特性, 不能直接拿返回值做精确     │
         │ 字符级 sub-rect 切分. 具体案例与处理见 _apply_whitelist_filter     │
-        │ 中 `original_text_was_empty` 分支 (v38.0.1 hotfix).               │
+        │ 中 `original_text_was_empty` 分支 (v1.1.11 hotfix).               │
         └────────────────────────────────────────────────────────────────────┘
         """
         if rect is None:
@@ -485,7 +485,7 @@ class OCRWorker(QThread):
         return ""
 
     def _warm_rect_text_cache(self, page, page_idx: int, scan_scale: float) -> None:
-        """v37.9.0-hotfix2: 把整页 OCR token 的 (bbox → text) 填进缓存.
+        """v1.1.11-hotfix2: 把整页 OCR token 的 (bbox → text) 填进缓存.
 
         上下文: OCR 通道 hit.text 默认空字符串, _apply_whitelist_filter 无法做子串匹配.
         本方法做一次整页 OCR, 把每个 token 的 QRectF + 原文 存到 _rect_tokens_per_page,
@@ -609,7 +609,7 @@ class OCRWorker(QThread):
             clip_rects = [(rect.x0, rect.y0, rect.x1, rect.y1)]
 
         # OCR 一次, 收集 (text, box) tokens
-        # v37.9.0-hotfix: 统一走 _ocr_full_page_tokens (worker 实际只有 full-page OCR fast path).
+        # v1.1.11-hotfix: 统一走 _ocr_full_page_tokens (worker 实际只有 full-page OCR fast path).
         # 早期版本这里分支调用 self._ocr_clip(...), 但 _ocr_clip 从未实现, 实际生产中
         # AttributeError 被 try/except 吞掉 → 黑名单注入静默失效. 现统一, 简单且与 _ocr_full_page_tokens 一致.
         ocr_engine = getattr(self, "_ocr_engine", None)
@@ -658,14 +658,14 @@ class OCRWorker(QThread):
         return self._dedupe_overlapping(hits)
 
     def _calculate_from_line(self, box, text, start_idx, end_idx, img_region=None):
-        """v37.3.7: 行级坐标估算 + 像素边界检测 + CJK 智能字符权重
+        """v1.1.11: 行级坐标估算 + 像素边界检测 + CJK 智能字符权重
 
         Returns:
             QRectF: 子字符串矩形区域（PDF坐标系）
 
         ┌────────────────────────────────────────────────────────────────────┐
         │ ⚠️  get_char_weight() 内嵌的 CJK 权重 1.0 vs 数字/英文 0.55 是    │
-        │ v37.7.x 反复调参的结果, 与 mixed_pdf.DEFAULT_HIT_MERGE_GAP_PX     │
+        │ v1.1.11 反复调参的结果, 与 mixed_pdf.DEFAULT_HIT_MERGE_GAP_PX     │
         │ (30px) 联合调过 — 任一侧变动都会让"汉字 + 数字"同行场景出现         │
         │ rect 间隙 (例 "刘妹 034-62407159"). 调整前必须跑                  │
         │ tests/unit/test_mixed_pdf_ocr.py 全量回归.                         │
@@ -750,19 +750,19 @@ class OCRWorker(QThread):
 
         同时通过 page_result_signal.emit(page_idx, rects) 通知消费者.
         """
-        # v37.9.0: 把 ocr_engine 挂到 self, 供 _collect_blacklist_hits 等用
+        # v1.1.11: 把 ocr_engine 挂到 self, 供 _collect_blacklist_hits 等用
         self._ocr_engine = ocr_engine
         rects = []
         page_text = page.get_text()
         page_dict = page.get_text("dict")
         image_clip_rects = collect_embedded_image_clip_rects(page_dict)
 
-        # v37.7.x 修订: 中文姓名启发式识别同时覆盖 文本通道 和 图片通道.
+        # v1.1.11 修订: 中文姓名启发式识别同时覆盖 文本通道 和 图片通道.
         # 原实现 (page_text 非空才注入) 在扫描型 PDF (page_text="") 上完全失效.
         # 修复: 即使 page_text 为空, 也先用 RapidOCR 全页扫一次,把行级文本拼起来
         # 喂给 jieba 抽取人名,然后 re.escape 追加到 all_patterns (image 通道后续会用到).
         #
-        # v37.x 修订: 阈值化触发条件. CamScanner/intsig 等扫描型 PDF 的 page_text
+        # v1.1.11 修订: 阈值化触发条件. CamScanner/intsig 等扫描型 PDF 的 page_text
         # 几乎为空但非空 — 通常仅含页码水印 (如 "1\n", 长度 < 10). 原 `not jieba_source_text`
         # 在此场景下判 False, 兜底 OCR 永远不触发, jieba 拿到 "1" → 0 个人名 →
         # 整页姓名脱敏静默失效. 阈值 JIEBA_MIN_TEXT_LEN 用于判定"文本太短, 走 OCR 兜底".
@@ -793,7 +793,16 @@ class OCRWorker(QThread):
                     from secureredact.pii.name_recognizer import (
                         extract_person_names,
                     )
-                    _names = extract_person_names(jieba_source_text)
+                    # v1.1.11 fix: 传入当前生效白名单,识别器据此豁免
+                    # '丁方经' / '戊方经' 等合同角色词粘连伪人名,避免白名单邻接误报.
+                    # v1.1.12: 启用 require_context=True, 仅注入在原文中具有强上下文
+                    # (原告: / 经理 / 审判员 / 先生...) 的人名, 大幅降低 jieba nr 误报.
+                    _whitelist = BlackWhiteListStore.instance().effective_whitelist()
+                    _names = extract_person_names(
+                        jieba_source_text,
+                        whitelist=_whitelist,
+                        require_context=True,
+                    )
                     if _names:
                         _existing = set(self.rules) | set(self.custom_keywords)
                         jieba_extra = [
@@ -874,22 +883,22 @@ class OCRWorker(QThread):
             rects.extend({
                 "rect": qr,
                 "source": "ocr",
-                # ⚠️  v38.0.1: 故意保持 text="" 不要改. 改为非空需先实现
+                # ⚠️  v1.1.11: 故意保持 text="" 不要改. 改为非空需先实现
                 # collect_image_block_ocr_hits 返回 matched 子串 (而非仅 rect),
                 # 否则 _apply_whitelist_filter 的 image-channel 分支会错位涂黑.
-                # 详见 _apply_whitelist_filter 顶部 docstring + CHANGELOG v38.0.0.
+                # 详见 _apply_whitelist_filter 顶部 docstring + CHANGELOG v1.1.11.
                 "text": "",
                 "rule_name": "OCR图像通道",
             } for qr in image_hit_rects)
             image_hit_count = len(image_hit_rects)
 
-        # v37.9.0-hotfix2: OCR 通道 hit.text 默认为空,
+        # v1.1.11-hotfix2: OCR 通道 hit.text 默认为空,
         # whitelist 过滤需要从 (page_idx, rect_center) 反查原文.
         # warm cache 让 _resolve_text_from_rect 能查回 OCR token 文本.
         if BlackWhiteListStore.instance().effective_whitelist():
             self._warm_rect_text_cache(page, page_idx, scan_scale)
 
-        # v37.9.0: 黑/白名单串联. 先 whitelist 过滤剥掉已有命中, 再 blacklist 注入.
+        # v1.1.11: 黑/白名单串联. 先 whitelist 过滤剥掉已有命中, 再 blacklist 注入.
         rects = self._apply_whitelist_filter(rects, page_idx)
 
         blacklist = BlackWhiteListStore.instance().effective_blacklist()
@@ -909,7 +918,7 @@ class OCRWorker(QThread):
                 f"图片块 {len(image_clip_rects)}, 图片OCR命中 {image_hit_count}"
             )
 
-        # v37.5.0: 印章检测 -> source='seal'
+        # v1.1.11: 印章检测 -> source='seal'
         if self.seal_detection_enabled and "__SEAL_DETECTION__" in self.rules:
             try:
                 pix = page.get_pixmap(matrix=fitz.Matrix(scan_scale, scan_scale))
@@ -920,9 +929,9 @@ class OCRWorker(QThread):
                 rects.extend({
                     "rect": sr,
                     "source": "seal",
-                    # ⚠️  v38.0.1: seal hit text 故意保持 "" 不要改.
+                    # ⚠️  v1.1.11: seal hit text 故意保持 "" 不要改.
                     # _apply_whitelist_filter 中 `original_text_was_empty` 分支
-                    # 会让 seal hit 走 v37.9.0 整条剥掉行为 (不 trim), 避免 sub-rect
+                    # 会让 seal hit 走 v1.1.11 整条剥掉行为 (不 trim), 避免 sub-rect
                     # 错位. 详见 _apply_whitelist_filter 顶部 docstring.
                     "text": "",
                     "rule_name": "印章检测",
@@ -939,15 +948,15 @@ class OCRWorker(QThread):
     def run(self):
         """执行 OCR 扫描
 
-        v37.0.6: 重构信号发送顺序，确保资源清理后再发送信号
-        v37.0.5: 增强异常处理
-        v36.4: 使用信号槽机制替代共享字典
+        v1.1.11: 重构信号发送顺序，确保资源清理后再发送信号
+        v1.1.11: 增强异常处理
+        v1.1.11: 使用信号槽机制替代共享字典
         Wave 2.1 (Task 3): 单页处理提取到 _process_page, payload 升级 list[dict]
         """
         error_msg = None
         doc = None
         try:
-            # v37.4.0: 直接使用 RapidOCR
+            # v1.1.11: 直接使用 RapidOCR
             from secureredact.ocr.rapidocr import RapidOCREngine
             ocr_engine = RapidOCREngine()
 

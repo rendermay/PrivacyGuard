@@ -7,9 +7,9 @@ This file is the primary development guide for Claude Code and other coding agen
 ## Project Overview
 
 **Project**: SecureRedact 信息脱敏助手  
-**Current Version**: v37.8.0 (`37.8.0 - Manual Redaction Intervention`)  
-**Last Updated**: 2026-08-17  
-**Status**: v37.8.0 自动脱敏人工干预机制完成；Wave 1-5 全部完成；全量回归 162 项 / 160 通过（2 项为 v37.7.6 起既有失败）
+**Current Version**: v1.1.13 (`1.1.13 - Name Context Injection`)  
+**Last Updated**: 2026-08-24  
+**Status**: v1.1.13 姓名上下文注入 + 三层防护收口完成；WordWorker/OCRWorker 默认严格模式 (require_context=True)
 
 SecureRedact is a Python + PyQt6 desktop application for intelligent redaction of PDF and Word documents.
 
@@ -30,7 +30,7 @@ SecureRedact is a Python + PyQt6 desktop application for intelligent redaction o
   - right: merged replaced preview (`rule > manual > ocr`)
 - 白名单片段级豁免 (Whitelist Span Trim, v38):
   - 白名单条目仅豁免自身所在片段，同区间内其他敏感内容仍脱敏
-  - 通过 `redaction.whitelist_trim_only`（默认 True）控制；设为 False 回退到 v37.9.0 行为
+  - 通过 `redaction.whitelist_trim_only`（默认 True）控制；设为 False 回退到 v1.1.11 行为
   - 覆盖 Word matches、PDF 文本通道、PDF 图片通道 OCR
 - Drag & drop open
 - 人工干预 (Manual Redaction Intervention):
@@ -48,14 +48,9 @@ When resuming work, read these files in order:
 
 1. `docs/current/STATUS.md`
 2. `docs/current/DEV_LOG.md`
-3. `docs/current/PHASE_HIT_OVERRIDE.md`
-4. `docs/current/V38_UI_REFACTOR_PLAN.md`
-5. `CHANGELOG.md`
-6. `rollback_journal.md`
-7. `docs/superpowers/specs/2026-08-19-whitelist-trim-only-design.md`
-8. `docs/current/PRIORITY_REMEDIATION_PLAN.md`
-9. `docs/diary/20260309_2338_release_sync_diary.md`
-10. `docs/diary/20260311_pyinstaller_packaging_fix_diary.md`
+3. `CHANGELOG.md`
+4. `docs/guides/QUICK_START_FOR_CLAUDE_CODE.md`
+5. `docs/current/PROJECT_STRUCTURE.md`
 
 ---
 
@@ -78,8 +73,8 @@ When resuming work, read these files in order:
 - Runtime currently uses `SimpleConfig` in `main.py`
 - Shared config utilities also exist in `secureredact/utils/config.py`
 - Do not assume `ConfigManager` is the active runtime path unless you have explicitly switched the app over
-- **v37.7.x 中文姓名启发式识别 (jieba X3)**：新增 `redaction.enable_name_recognition` 键，默认 False；详见 `docs/current/PHASE_NAME_RECOGNITION.md`
-- **v37.8.0 人工干预 (Hit Override)**：新增 `redaction.enable_hit_override`（默认 True）与 `redaction.overrides.permanent`；详见 `docs/current/PHASE_HIT_OVERRIDE.md`
+- **v1.1.11 中文姓名启发式识别 (jieba X3)**：新增 `redaction.enable_name_recognition` 键，默认 False
+- **v1.1.11 人工干预 (Hit Override)**：新增 `redaction.enable_hit_override`（默认 True）与 `redaction.overrides.permanent`
 
 ### Hit override store (人工干预)
 
@@ -92,7 +87,7 @@ When resuming work, read these files in order:
 - `manual` 来源命中永不被过滤（人工框选是显式意图）
 - `OCRWorker.page_result_signal` payload 是 `list[dict]`（含 `rect` / `source` / `text` / `start` / `end`），**不再是** `list[QRectF]`
 - 永久 override 存于 `config.json` 的 `redaction.overrides.permanent`，写入走 tmp + rename 原子替换
-- 默认空 override 时行为与 v37.7.6 完全一致
+- 默认空 override 时行为与 v1.1.11 完全一致
 
 ### OCR dependency behavior
 
@@ -218,7 +213,7 @@ python3 -m unittest \
 
 共 38 例，全部 PASS。
 
-### Full regression (v37.8.0 基线)
+### Full regression (v1.1.11 基线)
 
 ```bash
 python3 -m compileall -q main.py secureredact tests
@@ -255,7 +250,7 @@ python3 -m unittest \
 
 结果：`Ran 162 tests` / `FAILED (failures=2)`。
 
-**已知既有失败（非回归，自 v37.7.6 起存在）**：
+**已知既有失败（非回归，自 v1.1.11 起存在）**：
 `tests.unit.test_config_alignment.test_scan_default_level_matches` 与
 `test_simple_config_reads_config_json_values` —— `config.json` 中
 `redaction.scan.default_level` 为 `2.0`，测试期望 `1.5`。修复前请勿把它当成新引入的回归。
@@ -314,22 +309,7 @@ packaging/windows/scripts/build_complete.bat
 
 ## Current Checkpoints
 
-- `20260309_runtime_remediation_cp18_verified`
-- `20260309_word_compare_bugfix_cp20_verified`
-- `20260309_mixed_pdf_ocr_cp23_verified`
-- `20260309_release_sync_cp25_verified`
-- `20260310_word_preview_highlight_cp27_verified`
-- `20260310_release_sync_cp29_verified`
-- `20260311_pyinstaller_packaging_fix_cp30_verified`
-- `v38_ui_refactor_cp31_20260313_140645`
-- `v37.7.x_name_recognition_x3_cp32_20260816`
-- `v37_8_manual_intervention_cp33_20260817_121549`
-
-Rollback references:
-
-- `rollback_journal.md`
-- `ROLLBACK_GUIDE.md`
-- `restore_checkpoint.sh`
+（无 — 历史 checkpoint 已随 rollback 工具链一同清理；项目以 `version.txt` 为单一版本源。）
 
 ---
 
