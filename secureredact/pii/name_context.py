@@ -164,10 +164,15 @@ _ENUM_SEPS: Tuple[str, ...] = ("、", "，", ",", ";", "；")
 _ENUM_SEPS_SET = frozenset(_ENUM_SEPS)
 
 
-# 枚举式前缀连接的连接词 (prefix + 连接词 + list + 收尾词)
+# 枚举式前缀连接的连接词 (prefix + 连接词 + list + 终止词)
 _ENUM_CONNECTORS: Tuple[str, ...] = ("与", "和", "跟", "同", "及")
+
+# 枚举式前缀的终止词 (list 末尾的强边界). 注意: '和'/'跟'/'与'/'同'/'及'
+# 仅作为 list 内部连接词, 不能作为终止符 — 否则 '甲方与 A 与 B 之间借款合同'
+# 这种对抗性文本会在中段 '与' 错误早终止, 漏掉 B. 实际语料不会出现中段
+# 再插连接词的并列名单, 故收紧是安全且更精确的.
 _ENUM_TERMINATORS: Tuple[str, ...] = (
-    "之间", "于", "跟", "和", "与", "的", "，", ",", "。", ";", "；", "$",
+    "之间", "于", "的", "，", ",", "。", ";", "；", "$",
 )
 
 
@@ -233,9 +238,10 @@ def _name_has_enumeration_prefix_context(
         for item in items:
             if item == name:
                 return True
-            # OCR 容差: '李某某'/'徐十三' 等模糊匹配
+            # OCR 容差: item 与 name 长度差 ≤ 2 字 且前缀/后缀匹配
+            # (处理 '李某某'/'徐十三'/'周强' 等常见 OCR 误差, 不会误吞 '周强有限公司')
             if (len(item) >= len(name)
-                    and len(item) <= len(name) + 4
+                    and len(item) <= len(name) + 2
                     and (item.startswith(name) or item.endswith(name))):
                 return True
     return False

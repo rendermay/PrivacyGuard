@@ -1,3 +1,17 @@
+# ⚠️ v1.1.13+ (PR-B0) deprecation notice
+# ====================================================================
+# 本文件已转为 thin shim,真正的运行时入口在 `secureredact/main.py`。
+#
+# 禁止继续往本文件添加新业务代码。所有新功能请写到 `secureredact/` 对应子包。
+# 阶段 B 重构路线图:详见 `frontend-refactor-plan.md`(OpenDesign 工作目录)
+#                   与 `docs/refactor/b0-report.md`(项目内)。
+# PR-B5 收口时本文件将被彻底移除,所有打包入口同步切换到 `secureredact.main:main`。
+#
+# 过渡期启动方式:
+#     python -m secureredact.main    # 新入口(推荐)
+#     python main.py                  # 兼容 shim(过渡期,PR-B5 后停用)
+# ====================================================================
+
 import sys
 import os
 import fitz  # PyMuPDF
@@ -11418,7 +11432,7 @@ sudo dnf install antiword
             # '甲方/乙方/原告/... 与 A、B、C 之间' 类并列名单中的姓名也能被识别.
             _name_ctx_extra = self.config.get(
                 "redaction.name_context.extra_tokens", [],
-            ) or []
+            ) or []  # JSON 值为 null 时 SimpleConfig.get 返回 None → 归一化为 []
             self.worker = OCRWorker(self.file_path, pdf_rules, self.use_enhance, self.custom_keywords,
                                     self.scan_level, self.offset_x, self.offset_w,
                                     seal_detection_enabled=seal_detection_enabled,
@@ -11441,14 +11455,15 @@ sudo dnf install antiword
             # v1.1.14: 注入 name_context_extra_tokens (config.json →
             # redaction.name_context.extra_tokens),让 '甲方/乙方/原告/... 与 A、B、C 之间'
             # 类并列名单中的姓名也能被识别.
+            _name_ctx_extra = self.config.get(
+                "redaction.name_context.extra_tokens", [],
+            ) or []  # JSON 值为 null 时 SimpleConfig.get 返回 None → 归一化为 []
             self.worker = WordWorker(self.word_doc, self.word_data, self.active_rules,
                                      self.custom_keywords, self.replacement_text,
                                      enable_name_recognition=self.enable_name_recognition,
                                      default_rules=DEFAULT_RULES,
                                      default_rules_meta=DEFAULT_RULES_META,
-                                     name_context_extra_tokens=self.config.get(
-                                         "redaction.name_context.extra_tokens", [],
-                                     ) or [])
+                                     name_context_extra_tokens=_name_ctx_extra)
             self.active_worker = self.worker  # 追踪线程
             self.worker.progress_signal.connect(self.progress.setValue)
             # 先连接原有的完成处理，再连接清理

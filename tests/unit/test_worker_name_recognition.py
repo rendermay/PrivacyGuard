@@ -136,8 +136,22 @@ class TestWorkerNameContextExtraTokens(unittest.TestCase):
 
     注意: 复用同文件前序测试的 patch 模式 (patch 小写子模块路径),
     依赖套件中前序测试已触发子模块 import (走 sys.modules 缓存).
-    单跑时会 AttributeError, 跑全量套件无影响。
+    为单文件 / 单测命令下也能运行, setUp 显式尝试 import 并在
+    PyQt6 缺失时 skip 整个 class。
     """
+
+    @classmethod
+    def setUpClass(cls):
+        # 子模块 eager-import: 触发 secureredact.workers.__init__ 的 lazy __getattr__
+        # 只暴露 OCRWorker/WordWorker 大写名, 小写 ocr_worker/word_worker 走 patch
+        # 解析会 AttributeError。导入失败 (PyQt6 DLL 缺失) 时整体 skip。
+        try:
+            import secureredact.workers.ocr_worker  # noqa: F401
+            import secureredact.workers.word_worker  # noqa: F401
+        except ImportError as _exc:
+            raise unittest.SkipTest(
+                f"PyQt6 unavailable, skip Worker extra_tokens 集成测试: {_exc}"
+            )
 
     def test_word_worker_stores_extra_tokens(self):
         with patch("secureredact.workers.word_worker.QThread.__init__",

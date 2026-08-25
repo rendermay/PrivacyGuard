@@ -17,7 +17,7 @@ import time
 import traceback
 import gc
 import logging
-from typing import Optional
+from typing import List, Optional
 import numpy as np
 import cv2
 import fitz
@@ -55,7 +55,7 @@ class OCRWorker(QThread):
     def __init__(self, pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
                  use_char_level_ocr: bool = False, seal_detection_enabled: bool = False,
                  box_adjust_ratio: float = 0.0, enable_name_recognition: bool = False,
-                 name_context_extra_tokens: Optional[list] = None):
+                 name_context_extra_tokens: Optional[List[str]] = None):
         super().__init__()
         self.pdf_path = pdf_path
         self.rules = rules

@@ -268,9 +268,12 @@ class TestPartyRolePrefix(unittest.TestCase):
         self.assertEqual(names, ["王五", "赵六"])
 
     def test_ding_fang_prefix(self):
-        """丁方前缀不应被 whitelist 邻接过滤吞掉."""
-        # 注: '丁方' 与 whitelist '丁方' 是同字 — 预期上下文识别先生效
-        # 然后再经 whitelist 过滤豁免。这里只验证上下文识别能命中。
+        """丁方前缀命中, 不受 whitelist 邻接过滤影响.
+
+        注: whitelist 邻接过滤发生在 name_recognizer 层 (filter_names 阶段),
+        本测试只验证 context 层能命中 — whitelist 与 prefix 同字 ('丁方') 的
+        覆盖交互在 tests/unit/test_name_recognizer.py。
+        """
         text = "丁方周强、吴九签署本协议。"
         names = filter_names_by_context(text, ["周强", "吴九"])
         self.assertEqual(names, ["周强", "吴九"])

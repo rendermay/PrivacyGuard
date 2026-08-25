@@ -8,7 +8,7 @@ v1.1.12: 命中字段 `replacement` 支持 partial masking(按 rule_name 查 DEF
 import time
 import copy
 import re
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from secureredact.redaction.black_white_list_store import BlackWhiteListStore
@@ -32,7 +32,7 @@ class WordWorker(QThread):
     def __init__(self, word_doc, word_data, rules, custom_keywords, replacement_text, default_rules=None,
                  enable_name_recognition: bool = False,
                  default_rules_meta: Optional[Dict[str, Dict]] = None,
-                 name_context_extra_tokens: Optional[list] = None):
+                 name_context_extra_tokens: Optional[List[str]] = None):
         super().__init__()
         self.word_doc = word_doc
         self.word_data = word_data
