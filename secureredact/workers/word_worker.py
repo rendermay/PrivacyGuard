@@ -31,7 +31,8 @@ class WordWorker(QThread):
 
     def __init__(self, word_doc, word_data, rules, custom_keywords, replacement_text, default_rules=None,
                  enable_name_recognition: bool = False,
-                 default_rules_meta: Optional[Dict[str, Dict]] = None):
+                 default_rules_meta: Optional[Dict[str, Dict]] = None,
+                 name_context_extra_tokens: Optional[list] = None):
         super().__init__()
         self.word_doc = word_doc
         self.word_data = word_data
@@ -45,6 +46,13 @@ class WordWorker(QThread):
 
         # v1.1.11: 中文姓名启发式识别开关 (默认 False,向后兼容)
         self.enable_name_recognition = enable_name_recognition
+
+        # v1.1.14: 姓名上下文额外词表 (默认 None → 透传 None, 走 STRONG_PREFIX_TOKENS 默认集合)
+        # 来源: main.py 从 config.json 的 redaction.name_context.extra_tokens 读取并注入
+        # 用途: 让 '甲方与李秋实、孙毅之间' 类并列名单中的姓名也能被识别
+        self.name_context_extra_tokens = (
+            list(name_context_extra_tokens) if name_context_extra_tokens else []
+        )
 
     def run(self):
         """主处理流程 - 支持取消并保存进度（v1.1.11）"""
@@ -152,8 +160,14 @@ class WordWorker(QThread):
                 # v1.1.12: 启用 require_context=True, 仅注入在原文中具有强上下文
                 # (原告: / 经理 / 审判员 / 先生...) 的人名, 大幅降低 jieba nr 误报.
                 _whitelist = BlackWhiteListStore.instance().effective_whitelist()
+                # v1.1.14: 透传 name_context_extra_tokens 给上下文识别器, 接通
+                # config.json 的 redaction.name_context.extra_tokens 配置项,
+                # 让 '甲方与李秋实、孙毅之间' 类并列名单中的姓名也能被识别.
                 _names = extract_person_names(
-                    text, whitelist=_whitelist, require_context=True,
+                    text,
+                    whitelist=_whitelist,
+                    require_context=True,
+                    extra_prefix_tokens=self.name_context_extra_tokens or None,
                 )
                 if _names:
                     _existing = set(self.rules) | set(self.custom_keywords)

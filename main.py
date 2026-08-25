@@ -11413,10 +11413,17 @@ sudo dnf install antiword
             self._ocr_processed_pages = set()
             # v1.1.11: 只使用 RapidOCR，移除 use_char_level_ocr 参数
             # v1.1.12: PDF 路径使用过滤后的 pdf_rules,排除仅 Word 规则
+            # v1.1.14: 注入 name_context_extra_tokens (config.json →
+            # redaction.name_context.extra_tokens),让 PDF 图片通道 OCR 出来的
+            # '甲方/乙方/原告/... 与 A、B、C 之间' 类并列名单中的姓名也能被识别.
+            _name_ctx_extra = self.config.get(
+                "redaction.name_context.extra_tokens", [],
+            ) or []
             self.worker = OCRWorker(self.file_path, pdf_rules, self.use_enhance, self.custom_keywords,
                                     self.scan_level, self.offset_x, self.offset_w,
                                     seal_detection_enabled=seal_detection_enabled,
-                                    enable_name_recognition=self.enable_name_recognition)
+                                    enable_name_recognition=self.enable_name_recognition,
+                                    name_context_extra_tokens=_name_ctx_extra)
             self.active_worker = self.worker  # 追踪线程
             self.worker.progress_signal.connect(self.progress.setValue)
             # v1.1.11: connect 到 _receive_page_hits(新签名,接 list[dict])
@@ -11431,11 +11438,17 @@ sudo dnf install antiword
         # Word 处理
         elif self.word_doc:
             # v1.1.12: Word 路径使用完整 self.active_rules(包含 USCC 等)
+            # v1.1.14: 注入 name_context_extra_tokens (config.json →
+            # redaction.name_context.extra_tokens),让 '甲方/乙方/原告/... 与 A、B、C 之间'
+            # 类并列名单中的姓名也能被识别.
             self.worker = WordWorker(self.word_doc, self.word_data, self.active_rules,
                                      self.custom_keywords, self.replacement_text,
                                      enable_name_recognition=self.enable_name_recognition,
                                      default_rules=DEFAULT_RULES,
-                                     default_rules_meta=DEFAULT_RULES_META)
+                                     default_rules_meta=DEFAULT_RULES_META,
+                                     name_context_extra_tokens=self.config.get(
+                                         "redaction.name_context.extra_tokens", [],
+                                     ) or [])
             self.active_worker = self.worker  # 追踪线程
             self.worker.progress_signal.connect(self.progress.setValue)
             # 先连接原有的完成处理，再连接清理
@@ -12975,52 +12988,9 @@ sudo dnf install antiword
             target_run.font.superscript = True
 
 if __name__ == "__main__":
-    # v1.1.11: 全局异常钩子，防止未捕获异常导致崩溃
-    def exception_hook(exc_type, exc_value, exc_traceback):
-        """全局异常处理器"""
-        error_msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-        print(f"[FATAL ERROR] 未捕获的异常:\n{error_msg}")
-
-        # 尝试显示错误对话框
-        try:
-            if QApplication.instance():
-                QMessageBox.critical(
-                    None,
-                    "程序错误",
-                    f"程序遇到未预期的错误：\n\n{exc_type.__name__}: {exc_value}\n\n"
-                    "请将此错误信息反馈给开发者。"
-                )
-        except Exception:
-            pass
-
-        # 调用默认异常处理器
-        sys.__excepthook__(exc_type, exc_value, exc_traceback)
-
-    sys.excepthook = exception_hook
-
-    # v1.1.11: 线程异常钩子
-    def thread_exception_hook(args):
-        """线程异常处理器"""
-        error_msg = ''.join(traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback))
-        print(f"[THREAD ERROR] 线程异常:\n{error_msg}")
-
-    threading.excepthook = thread_exception_hook
-
-    # v1.1.11: 启动时预加载 OCR 引擎（可选，用于早期检测问题）
-    if os.getenv('PRIVACYGUARD_PRELOAD_OCR', '').lower() == 'true':
-        print("[INFO] 预加载 OCR 引擎...")
-        init_ocr_engine()
-
-    app = QApplication(sys.argv)
-    
-    # 设置应用图标
-    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'logo', 'export', '256', 'logo_default_256.png')
-    if os.path.exists(icon_path):
-        app.setWindowIcon(QIcon(icon_path))
-        print(f"[INFO] 应用图标已加载: {icon_path}")
-    else:
-        print(f"[WARN] 应用图标未找到: {icon_path}")
-    
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+    # v1.1.13 (PR-B0): 入口迁移过渡期 shim。
+    # 真实入口已迁至 `secureredact.main:main`;本块保留仅为阶段 B5 收口前的兼容。
+    # PR-B5 时移除本块,统一走 `python -m secureredact.main`。
+    import sys as _sys
+    from secureredact.main import main as _entry_main
+    _sys.exit(_entry_main())

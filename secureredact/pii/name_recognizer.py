@@ -147,6 +147,7 @@ class ChineseNameRecognizer:
         text: Optional[str],
         whitelist: Optional[List[str]] = None,
         require_context: bool = False,
+        extra_prefix_tokens: Optional[List[str]] = None,
     ) -> List[str]:
         """从文本中抽取候选姓名,返回去重后保序的列表.
 
@@ -163,6 +164,12 @@ class ChineseNameRecognizer:
           真实姓名会漏识. 默认 False (向后兼容, 三层过滤保留全部). 详见
           tests.unit.test_name_recognizer.TestRecognizerContextFiltering 与
           tests.unit.test_name_context.filter_names_by_context.
+        - extra_prefix_tokens (v1.1.14): 当 require_context=True 时生效, 注入额外
+          强前缀词到上下文识别器 (通常来自 config.json 的
+          redaction.name_context.extra_tokens). 接通 CHANGELOG v1.1.12 引入但一直
+          未读取的配置项, 让 '甲方/乙方/原告/... 与 A、B、C 之间' 类并列名单中的
+          姓名也能被识别. 详见 tests.unit.test_name_context.TestPartyRolePrefix
+          与 TestExtraPrefixTokensInjection.
         """
         if not isinstance(text, str) or not text:
             return []
@@ -237,10 +244,14 @@ class ChineseNameRecognizer:
         # v1.1.12: 上下文过滤 (方案 B 双轨制的实际语义)
         # 仅当 require_context=True 时, 进一步收紧为 '在原文中有上下文' 的候选.
         # 注意: 此步骤不感知 whitelist; whitelist 邻接过滤已在更早阶段执行.
+        # v1.1.14: extra_prefix_tokens 透传到 filter_names_by_context, 接通
+        # config.json 的 redaction.name_context.extra_tokens.
         if require_context and unique:
             # 局部 import 避免循环依赖 + 启动开销
             from secureredact.pii.name_context import filter_names_by_context
-            unique = filter_names_by_context(text, unique)
+            unique = filter_names_by_context(
+                text, unique, extra_prefix_tokens=extra_prefix_tokens,
+            )
 
         return unique
 
@@ -263,11 +274,16 @@ def extract_person_names(
     text: Optional[str],
     whitelist: Optional[List[str]] = None,
     require_context: bool = False,
+    extra_prefix_tokens: Optional[List[str]] = None,
 ) -> List[str]:
     """便捷函数: 调用默认单例识别.
 
-    whitelist / require_context 语义与 ChineseNameRecognizer.extract 完全一致 — 向后兼容, 默认 None / False.
+    whitelist / require_context / extra_prefix_tokens 语义与 ChineseNameRecognizer.extract
+    完全一致 — 向后兼容, 默认 None / False / None.
     """
     return _get_default_recognizer().extract(
-        text, whitelist=whitelist, require_context=require_context,
+        text,
+        whitelist=whitelist,
+        require_context=require_context,
+        extra_prefix_tokens=extra_prefix_tokens,
     )

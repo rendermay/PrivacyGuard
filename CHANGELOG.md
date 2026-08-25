@@ -45,6 +45,50 @@
 
 ---
 
+## [1.1.14] - 2026-08-25 — 并列名单上下文 + extra_tokens 接通
+
+### Fixed
+- **`甲方与李秋实、孙毅、李洪赢…之间借款合同纠纷` 类并列名单漏识**:
+  v1.1.13 默认严格模式 (`require_context=True`) 在「前缀词到第一个人名中间隔着公司名/汉字」时失效 (前缀紧邻路径与列表传递路径都不覆盖)。本版本补两层修复:
+  - **枚举式前缀上下文**: `prefix + 与/和/跟/同/及 + list + 之间/于/…` 整体正则匹配, 列表内所有姓名视同有上下文。
+    适用场景: `甲方与 A、B、C 之间…` / `原告张三、李四、王五另案…` / `借款人孙十、钱十一未按期偿还…`。
+  - **列举式传递 (迭代到不动点)**: 已识别的 candidate 后续用 `顿号/逗号/分号` 直接相邻的名字也视同有上下文。
+    适用场景: 多元素列表 (`甲方与 A、B、C、D 之间…`)。
+- **`_INSIDE_CHARS` 加顿号 `、` 等**: 原集合不含顿号, 导致 `_name_has_prefix_context` 在「prefix + 顿号 + name」结构中断。本版本补 `、·/／—–-&＆`。
+
+### Changed
+- **`STRONG_PREFIX_TOKENS` 扩词 (v1.1.14)**:
+  - 合同/债权角色: `甲方 / 乙方 / 丙方 / 丁方 / 戊方 / 己方 / 庚方 / 辛方 / 壬方 / 癸方` / `借款人 / 出借人 / 贷款人 / 债务人 / 债权人` / `保证人 / 连带保证人 / 一般保证人 / 担保人 / 反担保人` / `抵押人 / 抵押权人 / 出质人 / 质权人`。
+  - 动机: 抵账协议/债权转让/借款合同等场景中, 当事人常以「甲方与 xxx、xxx 之间」格式并列出现。
+- **`redaction.name_context.extra_tokens` 接通运行时**:
+  CHANGELOG v1.1.12 引入但代码一直未读取的配置项, 本版本打通:
+  - `name_context.py`: `filter_names_by_context()` / `_name_has_prefix_context()` 接收 `extra_prefix_tokens` 参数, 与默认词集合并。
+  - `name_recognizer.py`: `ChineseNameRecognizer.extract()` / `extract_person_names()` 新增 `extra_prefix_tokens: Optional[List[str]]` 参数 (向后兼容, 默认 None)。
+  - `WordWorker.__init__` / `OCRWorker.__init__` 新增 `name_context_extra_tokens` 参数, 默认 `[]` (向后兼容)。
+  - `main.py`: WordWorker (11434) / OCRWorker (11416) 实例化点从 `self.config.get("redaction.name_context.extra_tokens", [])` 读取并注入。
+  - 作用: 用户可在 `config.json` 自定义行业专属前缀词 (例: 信托合同加 `受托人 / 委托人`, 数据合同加 `数据处理者 / 数据控制者`), 无需改代码。
+
+### Added (测试)
+- `tests/unit/test_name_context.py` 新增 `TestPartyRolePrefix` (8 例): 甲方/乙方/丙方/丁方/借款人/债务人/债权人/保证人 前缀识别 + 并列名单识别。
+- `tests/unit/test_name_context.py` 新增 `TestExtraPrefixTokensInjection` (5 例): extra_prefix_tokens 注入 / None fallback / 空 frozenset / list iterable / 不影响强标签模式。
+- `tests/unit/test_worker_name_recognition.py` 新增 `TestWorkerNameContextExtraTokens` (4 例): WordWorker / OCRWorker 接收 `name_context_extra_tokens` 参数并存到 `self.name_context_extra_tokens`。
+
+### 兼容性
+- `extract_person_names()` 新参数 `extra_prefix_tokens` 默认 None — 旧调用零影响。
+- WordWorker / OCRWorker 新参数 `name_context_extra_tokens` 默认 `[]` — 旧调用零影响。
+- `STRONG_PREFIX_TOKENS` 扩词不破坏现有 42 例上下文测试 (全部 PASS)。
+- `name_context` 配置项 (`extra_tokens`) 即使为空 list / 缺失, 行为与 v1.1.13 完全一致。
+
+### 解决的具体漏识案例
+| 案例 | 修复点 |
+|---|---|
+| `甲方与李秋实、孙毅…之间` → 全部 `**` | 枚举式前缀上下文 + 列举式传递 |
+| `乙方张磊、李四共同出资` → `乙方张**`/`李**` | `乙方` 加进 STRONG_PREFIX_TOKENS |
+| `借款人孙十、钱十一未按期偿还` → `**十`/`**十一` | `借款人` 加进 STRONG_PREFIX_TOKENS |
+| `数据处理者周强在协议中签字` → `**强` (用户配置 extra_token) | extra_prefix_tokens 注入 |
+
+---
+
 ## [1.1.12] - 2026-08-22 — 部分遮蔽 (Partial Masking) + USCC Word-Only 隔离
 
 ### Added

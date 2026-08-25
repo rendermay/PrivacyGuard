@@ -230,6 +230,123 @@ class TestEdgeCases(unittest.TestCase):
         self.assertEqual(names, ["周强"])
 
 
+class TestPartyRolePrefix(unittest.TestCase):
+    """v1.1.14: 扩展 STRONG_PREFIX_TOKENS — 法律文书高频合同角色词.
+
+    动机: '甲方与xxx、xxx...之间借款合同纠纷' 格式在抵账协议/判决书/
+    调解书中极常见;这些并列名单中的姓名属于当事人,理应被识别.
+    """
+
+    def test_jia_fang_prefix(self):
+        """甲方前缀 + 列举名单.例:'甲方与李秋实、孙毅之间借款合同纠纷一案'."""
+        text = (
+            "甲方与吉林省甲公司、吉林市乙公司、吉林市丙公司、"
+            "李秋实、孙毅、李洪赢、王勇、柏艳波、吕阳、"
+            "孙英楠、孙颖之间借款合同纠纷一案。"
+        )
+        names = filter_names_by_context(
+            text,
+            ["李秋实", "孙毅", "李洪赢", "王勇", "柏艳波",
+             "吕阳", "孙英楠", "孙颖"],
+        )
+        self.assertEqual(
+            names,
+            ["李秋实", "孙毅", "李洪赢", "王勇", "柏艳波",
+             "吕阳", "孙英楠", "孙颖"],
+            f"甲方前缀应识别全部名单中姓名, 实得 {names}",
+        )
+
+    def test_yi_fang_prefix(self):
+        """乙方前缀: '乙方xxx、xxx...'."""
+        text = "乙方张磊、李四共同出资设立丙公司。"
+        names = filter_names_by_context(text, ["张磊", "李四"])
+        self.assertEqual(names, ["张磊", "李四"])
+
+    def test_bing_fang_prefix(self):
+        text = "丙方王五、赵六作为担保人承担责任。"
+        names = filter_names_by_context(text, ["王五", "赵六"])
+        self.assertEqual(names, ["王五", "赵六"])
+
+    def test_ding_fang_prefix(self):
+        """丁方前缀不应被 whitelist 邻接过滤吞掉."""
+        # 注: '丁方' 与 whitelist '丁方' 是同字 — 预期上下文识别先生效
+        # 然后再经 whitelist 过滤豁免。这里只验证上下文识别能命中。
+        text = "丁方周强、吴九签署本协议。"
+        names = filter_names_by_context(text, ["周强", "吴九"])
+        self.assertEqual(names, ["周强", "吴九"])
+
+    def test_jie_kuan_ren_prefix(self):
+        text = "借款人孙十、钱十一未按期偿还本金。"
+        names = filter_names_by_context(text, ["孙十", "钱十一"])
+        self.assertEqual(names, ["孙十", "钱十一"])
+
+    def test_zhai_wu_ren_prefix(self):
+        text = "债务人周十二、徐十三合计欠款三百万元。"
+        names = filter_names_by_context(text, ["周十二", "徐十三"])
+        self.assertEqual(names, ["周十二", "徐十三"])
+
+    def test_zhai_quan_ren_prefix(self):
+        text = "债权人郑十四、刘十五依法向本院起诉。"
+        names = filter_names_by_context(text, ["郑十四", "刘十五"])
+        self.assertEqual(names, ["郑十四", "刘十五"])
+
+    def test_dan_bao_ren_prefix(self):
+        text = "保证人陈十六、杨十七对上述债务承担连带责任。"
+        names = filter_names_by_context(text, ["陈十六", "杨十七"])
+        self.assertEqual(names, ["陈十六", "杨十七"])
+
+
+class TestExtraPrefixTokensInjection(unittest.TestCase):
+    """v1.1.14: extra_prefix_tokens 参数注入 — 接通 config.json 的
+    redaction.name_context.extra_tokens 配置项。
+
+    动机: CHANGELOG v1.1.12 引入 extra_tokens 配置,但代码一直没读取;
+    通过显式参数注入打通配置-实现链路。
+    """
+
+    def test_extra_tokens_recognize_names(self):
+        """通过 extra_prefix_tokens 注入 '数据处理者', 应能识别."""
+        text = "数据处理者周强在协议中签字确认。"
+        names = filter_names_by_context(
+            text, ["周强"], extra_prefix_tokens=frozenset({"数据处理者"}),
+        )
+        self.assertEqual(names, ["周强"])
+
+    def test_extra_tokens_none_falls_back_to_default(self):
+        """extra_prefix_tokens=None → 退回到 STRONG_PREFIX_TOKENS 默认集合."""
+        text = "原告：周强，男，汉族。"
+        names = filter_names_by_context(text, ["周强"], extra_prefix_tokens=None)
+        self.assertEqual(names, ["周强"])
+
+    def test_extra_tokens_empty_does_not_break(self):
+        """extra_prefix_tokens=空 frozenset → 不报错, 仅依赖默认集合."""
+        text = "原告：周强。"
+        names = filter_names_by_context(
+            text, ["周强"], extra_prefix_tokens=frozenset(),
+        )
+        self.assertEqual(names, ["周强"])
+
+    def test_extra_tokens_iterable_accepted(self):
+        """extra_prefix_tokens 也接受 list/iterable(便于从 config.json 直接传入 list)."""
+        text = "数据控制者李四向本院提交证据。"
+        names = filter_names_by_context(
+            text, ["李四"], extra_prefix_tokens=["数据控制者"],
+        )
+        self.assertEqual(names, ["李四"])
+
+    def test_extra_tokens_does_not_affect_label_pattern(self):
+        """强标签模式 (原告:xxx) 走 _LABEL_PATTERN,与 prefix 无关; extra_tokens
+        不应改变该路径行为."""
+        text = "许可证：周强持有此证。"
+        # 即使注入 '数据处理者' 等, '许可证：' 不是强标签角色词
+        names = filter_names_by_context(
+            text, ["周强"],
+            extra_prefix_tokens=frozenset({"数据处理者", "数据控制者"}),
+        )
+        self.assertEqual(names, [],
+            "强标签模式仅识别 role_token + 冒号, 不被 extra_tokens 干扰")
+
+
 class TestWordSets(unittest.TestCase):
     """词表自身完整性保护 (regression)."""
 

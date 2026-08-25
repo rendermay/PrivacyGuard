@@ -17,6 +17,7 @@ import time
 import traceback
 import gc
 import logging
+from typing import Optional
 import numpy as np
 import cv2
 import fitz
@@ -53,7 +54,8 @@ class OCRWorker(QThread):
 
     def __init__(self, pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
                  use_char_level_ocr: bool = False, seal_detection_enabled: bool = False,
-                 box_adjust_ratio: float = 0.0, enable_name_recognition: bool = False):
+                 box_adjust_ratio: float = 0.0, enable_name_recognition: bool = False,
+                 name_context_extra_tokens: Optional[list] = None):
         super().__init__()
         self.pdf_path = pdf_path
         self.rules = rules
@@ -67,6 +69,14 @@ class OCRWorker(QThread):
         # v1.1.11: 中文姓名启发式识别开关 (默认 False,向后兼容)
         # 启用后从整页文本提取候选姓名,经 re.escape 后追加到 custom_keywords 列表
         self.enable_name_recognition = enable_name_recognition
+
+        # v1.1.14: 姓名上下文额外词表 (默认 None → 透传 None, 走 STRONG_PREFIX_TOKENS 默认集合)
+        # 来源: main.py 从 config.json 的 redaction.name_context.extra_tokens 读取并注入
+        # 用途: 让 PDF 图片通道 OCR 出来的 '甲方/乙方/原告/... 与 A、B、C 之间' 类
+        # 并列名单中的姓名也能被识别.
+        self.name_context_extra_tokens = (
+            list(name_context_extra_tokens) if name_context_extra_tokens else []
+        )
 
         # v1.1.11: 只使用 RapidOCR，不再使用字符级 OCR
         self.use_char_level_ocr = False
@@ -798,10 +808,15 @@ class OCRWorker(QThread):
                     # v1.1.12: 启用 require_context=True, 仅注入在原文中具有强上下文
                     # (原告: / 经理 / 审判员 / 先生...) 的人名, 大幅降低 jieba nr 误报.
                     _whitelist = BlackWhiteListStore.instance().effective_whitelist()
+                    # v1.1.14: 透传 name_context_extra_tokens 给上下文识别器, 接通
+                    # config.json 的 redaction.name_context.extra_tokens 配置项.
+                    # 让 PDF 图片通道 OCR 出来的 '甲方/乙方/原告/... 与 A、B、C 之间'
+                    # 类并列名单中的姓名也能被识别.
                     _names = extract_person_names(
                         jieba_source_text,
                         whitelist=_whitelist,
                         require_context=True,
+                        extra_prefix_tokens=self.name_context_extra_tokens or None,
                     )
                     if _names:
                         _existing = set(self.rules) | set(self.custom_keywords)
