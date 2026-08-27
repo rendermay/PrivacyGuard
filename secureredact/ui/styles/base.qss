@@ -1,0 +1,20 @@
+/* base.qss — 通用基底样式(QMainWindow / QWidget#appRoot / QLabel)
+   来自 main.py:6799-6812(原 _apply_light_theme 函数内)
+   v1.1.13 基线,严禁视觉漂移 */
+
+QMainWindow {
+    background-color: {background};
+    color: {text};
+    font-family: {font_family};
+}
+
+QWidget#appRoot {
+    background-color: {background};
+    color: {text};
+    font-family: {font_family};
+}
+
+QLabel {
+    background-color: transparent;
+    color: {text};
+}

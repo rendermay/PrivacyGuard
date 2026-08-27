@@ -1,0 +1,392 @@
+/* workspace.qss — 主工作区容器样式(main_container 全部 widget)
+   来自 main.py:6932-7319(原 main_container.setStyleSheet)
+   v1.1.13 基线,严禁视觉漂移 */
+
+                QFrame#workspaceCard {{
+                    background-color: {surface};
+                    border: 1px solid {border};
+                    border-radius: 18px;
+                }}
+                QFrame#batchWorkspaceCard, QFrame#mergeWorkspaceCard {{
+                    background-color: {surface};
+                    border: 1px solid {border};
+                    border-radius: 18px;
+                }}
+                QFrame#batchDetailSection {{
+                    background-color: #FBFCFE;
+                    border: 1px solid {border};
+                    border-radius: 16px;
+                }}
+                QFrame#previewWorkspaceCard {{
+                    background-color: #FBFCFE;
+                    border: none;
+                    border-radius: 18px;
+                }}
+                QWidget#previewStage {{
+                    background-color: transparent;
+                    border: none;
+                }}
+                QWidget#wordPreviewShell {{
+                    background-color: #FFFFFF;
+                    border: 1px solid {border};
+                    border-radius: 15px;
+                }}
+                QLabel#pdfPageCanvas {{
+                    background-color: transparent;
+                    border: none;
+                    border-radius: 0px;
+                }}
+                QLabel#workspaceTitle, QLabel#batchTitle {{
+                    color: {text};
+                    font-size: 20px;
+                    font-weight: 700;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#workspaceSubtitle, QLabel#batchSubtitle {{
+                    color: {text_secondary};
+                    font-size: 12px;
+                    line-height: 1.7;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#workspaceLead {{
+                    color: {text_secondary};
+                    font-size: 12px;
+                    font-weight: 600;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#workspaceHint, QLabel#batchMeta, QLabel#batchCurrentFile {{
+                    color: {text};
+                    font-size: 12px;
+                    line-height: 1.7;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#idleSectionLabel {{
+                    color: {text};
+                    font-size: 13px;
+                    font-weight: 700;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#idleSectionHint {{
+                    color: {text_secondary};
+                    font-size: 11px;
+                    font-weight: 600;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#idleHeroBadge {{
+                    color: {primary};
+                    background-color: #E9F1FB;
+                    border: 1px solid {border};
+                    border-radius: 9px;
+                    padding: 4px 9px;
+                    font-size: 10px;
+                    font-weight: 700;
+                }}
+                QFrame#idleHeroPanel {{
+                    background-color: transparent;
+                    border: none;
+                }}
+                QFrame#idleSectionPanel {{
+                    background-color: transparent;
+                    border: none;
+                }}
+                QFrame#idleFlowPanel {{
+                    background-color: transparent;
+                    border: none;
+                }}
+                QLabel#idleFlowTitle {{
+                    color: {text_secondary};
+                    font-size: 11px;
+                    font-weight: 700;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QFrame#idleActionPanel {{
+                    background-color: transparent;
+                    border: none;
+                }}
+                QFrame#idleStartCard, QFrame#idleSupportCard {{
+                    background-color: #F9FBFE;
+                    border: 1px solid {border};
+                    border-radius: 18px;
+                }}
+                QLabel#idleStartTitle {{
+                    color: {text};
+                    font-size: 13px;
+                    font-weight: 700;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#idleStartText {{
+                    color: {text_secondary};
+                    font-size: 11px;
+                    line-height: 1.6;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#idleDropHint {{
+                    color: {text_secondary};
+                    font-size: 11px;
+                    font-weight: 600;
+                    line-height: 1.6;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#idleSupportTitle {{
+                    color: {text};
+                    font-size: 13px;
+                    font-weight: 700;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#idleSupportText {{
+                    color: {text};
+                    font-size: 12px;
+                    font-weight: 600;
+                    line-height: 1.5;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#idleSupportMeta {{
+                    color: {text_secondary};
+                    font-size: 11px;
+                    font-weight: 600;
+                    line-height: 1.5;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#idleSupportEmail {{
+                    color: {primary};
+                    font-size: 11px;
+                    font-weight: 600;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#idleSupportNote {{
+                    color: {text_secondary};
+                    font-size: 11px;
+                    line-height: 1.6;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QFrame#batchStepCard, QFrame#batchMetricCard {{
+                    background-color: #FCFDFF;
+                    border: 1px solid {border};
+                    border-radius: 15px;
+                }}
+                QLabel#batchStepTitle {{
+                    color: {text};
+                    font-size: 12px;
+                    font-weight: 700;
+                    background-color: transparent;
+                }}
+                QLabel#batchStepNote, QLabel#batchMetricNote {{
+                    color: {text_secondary};
+                    font-size: 11px;
+                    line-height: 1.6;
+                    background-color: transparent;
+                }}
+                QLabel#batchMetricTitle {{
+                    color: {text_secondary};
+                    font-size: 11px;
+                    font-weight: 700;
+                    background-color: transparent;
+                }}
+                QLabel#batchMetricValue {{
+                    color: {text};
+                    font-size: 18px;
+                    font-weight: 700;
+                    background-color: transparent;
+                }}
+                QFrame#routeCard {{
+                    background-color: #FCFDFF;
+                    border: 1px solid {border};
+                    border-radius: 16px;
+                }}
+                QFrame#routeCard[routeTone="pdf"] {{
+                    background-color: #F7FBFF;
+                    border-color: #D7E8F8;
+                }}
+                QFrame#routeCard[routeTone="word"] {{
+                    background-color: #F6FBF8;
+                    border-color: #D9EEE3;
+                }}
+                QFrame#routeCard[routeTone="batch"] {{
+                    background-color: #FFF9F2;
+                    border-color: #F1E1C7;
+                }}
+                QFrame#routeCard[routeTone="image"] {{
+                    background-color: #F8FAFC;
+                    border-color: #E0E7EF;
+                }}
+                QFrame#routeCardAccent {{
+                    border: none;
+                    border-radius: 2px;
+                    background-color: {primary};
+                    min-height: 4px;
+                    max-height: 4px;
+                }}
+                QFrame#routeCardAccent[routeAccent="pdf"] {{
+                    background-color: #1177CC;
+                }}
+                QFrame#routeCardAccent[routeAccent="word"] {{
+                    background-color: #1FA971;
+                }}
+                QFrame#routeCardAccent[routeAccent="batch"] {{
+                    background-color: #D9822B;
+                }}
+                QFrame#routeCardAccent[routeAccent="image"] {{
+                    background-color: #5B6B7A;
+                }}
+                QLabel#routeCardTitle {{
+                    color: {text};
+                    font-size: 13px;
+                    font-weight: 700;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#routeCardMeta {{
+                    color: {text_secondary};
+                    background-color: {hover};
+                    border: 1px solid {border};
+                    border-radius: 9px;
+                    padding: 3px 8px;
+                    min-width: 56px;
+                    font-size: 10px;
+                    font-weight: 700;
+                }}
+                QLabel#routeCardMeta[routeTone="pdf"] {{
+                    color: #1177CC;
+                    background-color: #E9F3FD;
+                    border-color: #D5E8FA;
+                }}
+                QLabel#routeCardMeta[routeTone="word"] {{
+                    color: #1B9263;
+                    background-color: #EAF6F0;
+                    border-color: #D8EDE2;
+                }}
+                QLabel#routeCardMeta[routeTone="batch"] {{
+                    color: #B56A1C;
+                    background-color: #FFF2E3;
+                    border-color: #F1DEC3;
+                }}
+                QLabel#routeCardMeta[routeTone="image"] {{
+                    color: #5B6B7A;
+                    background-color: #EEF3F8;
+                    border-color: #DEE7F0;
+                }}
+                QLabel#routeCardText {{
+                    color: {text_secondary};
+                    font-size: 10px;
+                    line-height: 1.6;
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                }}
+                QLabel#workspaceTag {{
+                    background-color: {hover};
+                    color: {text};
+                    border: 1px solid {border};
+                    border-radius: 10px;
+                    padding: 6px 12px;
+                    font-size: 11px;
+                    font-weight: 700;
+                }}
+                QLabel#batchStageBadge {{
+                    background-color: #FFF6EA;
+                    color: {warning};
+                    border: 1px solid #F0DFC4;
+                    border-radius: 14px;
+                    padding: 6px 12px;
+                    font-size: 12px;
+                    font-weight: 700;
+                }}
+                QLabel#batchLogHint, QLabel#batchSectionLabel {{
+                    color: {text_secondary};
+                    font-size: 12px;
+                    font-weight: 700;
+                    background-color: transparent;
+                }}
+                QLabel#batchResultMeta {{
+                    color: {text_secondary};
+                    font-size: 12px;
+                    font-weight: 600;
+                    background-color: transparent;
+                }}
+                QTableWidget#batchResultTable {{
+                    background-color: #FFFFFF;
+                    color: {text};
+                    border: 1px solid {border};
+                    border-radius: 15px;
+                    gridline-color: transparent;
+                    padding: 6px;
+                }}
+                QTableWidget#batchResultTable::item {{
+                    padding: 10px 12px;
+                    border-bottom: 1px solid #E9EEF5;
+                }}
+                QTableWidget#batchResultTable QHeaderView::section {{
+                    background-color: #F7FAFD;
+                    color: {text_secondary};
+                    border: none;
+                    border-bottom: 1px solid {border};
+                    padding: 8px 10px;
+                    font-size: 11px;
+                    font-weight: 700;
+                }}
+                QListWidget#batchLogList {{
+                    background-color: #FFFFFF;
+                    border: 1px solid {border};
+                    border-radius: 15px;
+                    padding: 6px;
+                    outline: none;
+                }}
+                QListWidget#batchLogList::item {{
+                    padding: 10px 12px;
+                    border-bottom: 1px solid #E9EEF5;
+                    color: {text};
+                }}
+                QListWidget#batchLogList::item:selected {{
+                    background-color: transparent;
+                    color: {text};
+                }}
+                QTextBrowser#batchSummaryBrowser {{
+                    background-color: #FFFFFF;
+                    color: {text};
+                    border: 1px solid {border};
+                    border-radius: 15px;
+                    padding: 12px;
+                    font-size: 12px;
+                    line-height: 1.7;
+                }}
+                QLabel#workflowStep {{
+                    color: {text_secondary};
+                    background-color: {hover};
+                    border: 1px solid {border};
+                    border-radius: 10px;
+                    padding: 5px 10px;
+                    font-size: 11px;
+                    font-weight: 700;
+                }}
+                """
