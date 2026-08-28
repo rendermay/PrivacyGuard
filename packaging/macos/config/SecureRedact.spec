@@ -32,7 +32,7 @@ secureredact_hiddenimports = collect_submodules('secureredact')
 print(f"[INFO] Collected {len(secureredact_hiddenimports)} secureredact submodules")
 
 a = Analysis(
-    [os.path.join(project_root, 'main.py')],
+    [os.path.join(project_root, 'secureredact/main.py')],
     pathex=[project_root, current_dir],
     binaries=onnx_binaries + rapid_binaries + bs4_binaries + soupsieve_binaries + lxml_binaries,
     datas=[

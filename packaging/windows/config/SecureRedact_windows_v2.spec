@@ -164,7 +164,7 @@ print(f"  - numpy datas: {len(numpy_datas)}")
 
 # ========== Analysis ==========
 a = Analysis(
-    [os.path.join(project_root, 'main.py')],
+    [os.path.join(project_root, 'secureredact/main.py')],
     pathex=[
         project_root,
         current_dir,

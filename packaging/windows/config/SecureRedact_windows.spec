@@ -172,7 +172,7 @@ print(f"[INFO] Collected {len(lxml_hiddenimports)} lxml hiddenimports")
 print(f"[INFO] Collected {len(secureredact_hiddenimports)} secureredact submodules")
 
 a = Analysis(
-    [os.path.join(project_root, 'main.py')],  # main.py 在项目根目录
+    [os.path.join(project_root, 'secureredact/main.py')],  # main.py 在项目根目录
     pathex=[project_root, current_dir, os.path.join(project_root, 'secureredact'), os.path.join(project_root, 'secureredact', 'utils'), os.path.join(project_root, 'secureredact', 'ocr'), os.path.join(project_root, 'secureredact', 'workers')],
     binaries=onnx_binaries + rapid_binaries + extra_onnx_binaries + vcrt_binaries + pyqt6_binaries + numpy_binaries + bs4_binaries,
     datas=[
