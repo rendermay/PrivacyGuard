@@ -16,6 +16,7 @@ Word 双栏预览 mixin — MainWindow Word 双栏预览逻辑 (PR-B2.3 迁出)
 from __future__ import annotations
 
 from bs4 import BeautifulSoup
+from secureredact.redaction.word_rules import merge_word_matches_with_priority  # PR-C1.1
 from PyQt6.QtCore import Qt, QTimer, QUrl
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (

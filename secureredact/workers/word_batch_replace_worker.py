@@ -16,6 +16,7 @@ from io import BytesIO
 
 from PIL import Image
 from bs4 import BeautifulSoup
+from secureredact.redaction.word_rules import normalize_word_replace_rules, build_word_rule_matches, replace_matches_in_paragraph  # PR-C1.1
 
 # PyQt6 — 完整集合,覆盖所有 5 个新模块需要
 from PyQt6.QtCore import (

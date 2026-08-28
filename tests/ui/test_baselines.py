@@ -164,12 +164,17 @@ class TestWordDualPreview(BaselineScreenshotTest):
 
 
 class TestSettingsDialogOverview(BaselineScreenshotTest):
-    """05 — 设置对话框首屏(规则面板)。【占位】"""
+    """05 — 设置对话框首屏(规则面板)。【占位】
+
+    SettingsDialog 深度依赖 main.py 模块级常量(DEFAULT_RULES / DEFAULT_RULES_META / 等),
+    本 PR-C2 范围无法独立实例化。留待后续 PR-C3.x 单独处理 SettingsDialog 模块依赖清理。
+    """
     NAME = "05_settings_dialog_overview"
 
     def build_widget(self) -> QWidget:
         self.skipTest(
-            "占位场景 — 需 SettingsDialog 拆分到 secureredact.ui.settings 后落实(PR-B3)"
+            "占位场景 — SettingsDialog __init__ 依赖 main.py 中 DEFAULT_RULES / DEFAULT_RULES_META 等 "
+            "30+ 模块级常量,需独立 PR-C3.x 处理才能实例化"
         )
         raise NotImplementedError
 
