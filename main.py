@@ -62,6 +62,7 @@ from secureredact.ui.main_window.batch_replace import MainWindowBatchReplaceMixi
 from secureredact.ui.main_window.density import MainWindowDensityMixin  # PR-B2.6
 from secureredact.ui.main_window.setup_ui import MainWindowSetupMixin  # PR-B2.7
 from secureredact.ui.main_window.handlers import MainWindowHandlersMixin  # PR-B2.8
+from secureredact.ui.main_window.theme import MainWindowThemeMixin  # PR-C1
 from secureredact.redaction.override_store import HitOverrideStore  # v1.1.11: override store 单例
 from secureredact.redaction.doc_hash import compute_doc_hash  # v1.1.11: 文档 hash
 from secureredact.redaction.black_white_list_store import BlackWhiteListStore  # v1.1.11: 黑/白名单 store
@@ -1801,7 +1802,7 @@ _INTERACTIVE_JS_CODE = r"""
 """
 
 # === 主窗口 ===
-class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWordPreviewMixin, MainWindowPdfRenderMixin, MainWindowBatchReplaceMixin, MainWindowDensityMixin, MainWindowSetupMixin, MainWindowHandlersMixin, QMainWindow):
+class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWordPreviewMixin, MainWindowPdfRenderMixin, MainWindowBatchReplaceMixin, MainWindowDensityMixin, MainWindowSetupMixin, MainWindowHandlersMixin, MainWindowThemeMixin, QMainWindow):
     def _apply_light_theme(self):
         """应用浅色主题样式(v1.1.11: Windows 强制浅色主题;v1.1.13 PR-B1: QSS 集中化)。
 
@@ -1870,6 +1871,8 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
             # v1.1.11: 黑/白名单(用于设置中心初始化)
             self.current_blacklist = config.get("redaction.blacklist", []) or []
             self.current_whitelist = config.get("redaction.whitelist", []) or []
+            # PR-C1: 主题(PR-B1 DARK API 通后启用)
+            self.theme_name = config.get("app.theme", "light")
             # v1.1.11: 移除 OCR 引擎配置，只使用 RapidOCR
         else:
             min_width, min_height = 900, 600
@@ -1882,6 +1885,7 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
             self.enable_name_recognition = False
             self.current_blacklist = []
             self.current_whitelist = []
+            self.theme_name = "light"
 
         # 窗口尺寸设置：最小尺寸 + 默认尺寸
         self.setMinimumSize(min_width, min_height)
@@ -1975,6 +1979,8 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
         atexit.register(self._app_exit_cleanup)
 
         self.setup_ui()
+        # PR-C1: 应用初始主题
+        self._apply_theme(self.theme_name)
 
         # v1.1.11: 干预 override store (右键菜单 + 永久 override)
         self._override_store.bind_config(config)
