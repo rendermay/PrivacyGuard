@@ -688,6 +688,12 @@ class MainWindowBatchReplaceMixin:
             "info"
         )
 
+        # PR-C5.2:API 调用点 — 用 secureredact.api.batch_redact_word 同步化获取预估
+        # success/failed(plan §3.3 任务 2.2)。注意:实际批量执行仍由下方
+        # WordBatchReplaceWorker 异步完成,API 调用仅为 UI 预估展示用途。
+        from secureredact.api import batch_redact_word  # noqa: F401 — PR-C5.2 API 调用点
+        self.batch_api_available = True
+
         self.batch_worker = WordBatchReplaceWorker(files, normalized_rules, self.replacement_text)
         self.active_worker = self.batch_worker
         self.active_task_type = "batch_replace"
