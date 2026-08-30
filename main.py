@@ -222,3 +222,32 @@ class WordWorker(_ModularWordWorker):
 
 from secureredact.ui.main_window._js_constants import _INTERACTIVE_JS_CODE  # PR-C9 Task 2 C2-fix: 抽出到独立模块
 
+
+# ⚠️ main.py 入口已恢复 (PR-B5.x — 兼顾打包 .exe 友好)
+# ====================================================================
+# 优先使用 `python -m secureredact.main`(更纯净,无副作用)。
+# 但 `python main.py` 仍可用,便于 PyInstaller --onefile 打包时以 main.py 为主入口。
+#
+# 两种入口等价:
+#     python main.py                     ← PyInstaller 推荐,用户习惯
+#     python -m secureredact.main        ← 模块入口,开发推荐
+# ====================================================================
+if __name__ == "__main__":
+    # v1.1.12: 启动诊断(只在 __main__ 入口处打印, 避免 import main 时重复)
+    _mask_diag = []
+    for _name, _meta in DEFAULT_RULES_META.items():
+        if not _meta:
+            _mask_diag.append(f"{_name}=<空>")
+        else:
+            _pf = _meta.get("mask_keep_prefix", 0)
+            _ps = _meta.get("mask_keep_suffix", 0)
+            _md = _meta.get("mask_mode", "default")
+            _mask_diag.append(f"{_name}={_md} {_pf}+{_ps}")
+    print(f"[v1.1.12 启动诊断] DEFAULT_RULES_META 加载: {len(DEFAULT_RULES_META)} 条")
+    for _line in _mask_diag:
+        print(f"  - {_line}")
+
+    import sys as _sys
+    from secureredact.main import main as _entry_main
+    _sys.exit(_entry_main())
+
