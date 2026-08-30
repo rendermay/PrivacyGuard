@@ -1,9 +1,9 @@
 """
-secureredact/api.py 单元测试 (PR-C4)
+secureredact/api.py 单元测试 (PR-C4 + PR-C5)
 
 设计原则:
 - 不启动 QApplication(避免依赖 Qt event loop)
-- PyQt6 依赖的测试用 try/except ImportError 跳过,不在子进程失败
+- PyQt6 依赖的 test 在 setUp 里检测 QtCore DLL,不可用时 skipTest
 - 100% 覆盖:每个分支都至少一条用例
 """
 import os
@@ -11,61 +11,16 @@ import sys
 import tempfile
 import unittest
 
-# PR-C4:api.py 顶层 import PyQt6(QtCore 用于 batch_redact_word 的 QEventLoop/QTimer)。
-# 子进程若 Qt DLL 不可用,test 模块 loader 会先 import secureredact.__init__ → api →
-# word_batch_replace_worker → PyQt6.QtCore 链,触发 ImportError,让整个 module loader
-# 失败(0 test 跑、全 _FailedTest)。我们用 sys.modules 预占位 + 注入 fake api module,
-# 让 loader 看到 import "成功",再把 test 方法装饰为 skip。
-import types as _types
+# PR-C5 修订:api.py 顶层 import 已改 lazy(worker + QEventLoop),真 module load
+# 总是成功。子进程无 Qt DLL 不影响 import,但调用 batch_redact_word /
+# filter_hits_by_overrides 时会失败,setUp 检测后 skip。
+import importlib.util as _importlib_util
 
-_api_stub = _types.ModuleType("secureredact.api")
-_api_stub.__file__ = "secureredact/api.py"  # 让 traceback 友好
-sys.modules["secureredact.api"] = _api_stub
-
-_QT_AVAILABLE = True
-try:
-    # 触发完整 import chain(包括 PyQt6);失败则后续 test 全部 skip
-    from secureredact import api as _real_api  # noqa: F401
-    _api_stub.__dict__.update(_real_api.__dict__)
-    api = _real_api  # type: ignore[assignment]
-except ImportError as _e:
-    _QT_AVAILABLE = False
-    api = _api_stub  # type: ignore[assignment]
-    _SKIP_REASON = f"PyQt6 不可用(子进程 Qt DLL 缺失): {_e}"
-
-if not _QT_AVAILABLE:
-    # 给 stub api module 加 compute_doc_hash 简化版(原实现只依赖 stdlib,无需 Qt)
-    # TestComputeDocHash 是核心测试,不应被 Qt skip 拖累
-    import hashlib as _hashlib
-
-    def _stub_compute_doc_hash(file_path):
-        if not file_path:
-            raise OSError("file_path 为空")
-        stat = os.stat(file_path)
-        payload = f"{file_path}\n{stat.st_size}\n{stat.st_mtime_ns}".encode("utf-8")
-        return _hashlib.sha1(payload).hexdigest()[:8]
-    _api_stub.compute_doc_hash = _stub_compute_doc_hash
-
-    # 给 stub api module 加 4 个抛 NotImplementedError 的假函数,让 TestStubFunctions 仍能跑
-    def _stub_not_implemented(*args, **kwargs):
-        raise NotImplementedError("scan_pdf/scan_word/redact_pdf/redact_word 完整实现在 PR-C5 阶段。当前为骨架版 stub。")
-    for _stub_name in ("scan_pdf", "scan_word", "redact_pdf", "redact_word"):
-        setattr(_api_stub, _stub_name, _stub_not_implemented)
-
-    # 只对 PyQt6 真正依赖的 test 类做 skip(stub + compute_doc_hash 不需要 Qt)
-    _QT_DEPENDENT_CLASSES = {"TestFilterHitsByOverrides", "TestBatchRedactWord"}
-    for _name in list(globals().keys()):
-        _cls = globals().get(_name)
-        if (
-            isinstance(_cls, type)
-            and _name in _QT_DEPENDENT_CLASSES
-            and issubclass(_cls, unittest.TestCase)
-        ):
-            for _method_name in list(vars(_cls)):
-                if _method_name.startswith("test_"):
-                    _method = getattr(_cls, _method_name)
-                    if callable(_method):
-                        setattr(_cls, _method_name, unittest.skip(_SKIP_REASON)(_method))
+_api_path = os.path.join(os.path.dirname(__file__), "..", "..", "secureredact", "api.py")
+_spec = _importlib_util.spec_from_file_location("secureredact.api", _api_path)
+api = _importlib_util.module_from_spec(_spec)  # type: ignore[assignment]
+sys.modules["secureredact.api"] = api  # 让 api.py 内部 import chain 找到它
+_spec.loader.exec_module(api)
 
 
 class TestComputeDocHash(unittest.TestCase):
@@ -129,23 +84,156 @@ class TestComputeDocHash(unittest.TestCase):
 
 
 class TestStubFunctions(unittest.TestCase):
-    """scan_pdf / scan_word / redact_pdf / redact_word — 骨架版,抛 NotImplementedError。"""
+    """scan_pdf / scan_word / redact_pdf / redact_word — 真实实现(非 stub)。"""
 
-    def test_scan_pdf_raises_not_implemented(self):
-        with self.assertRaises(NotImplementedError):
-            api.scan_pdf("/tmp/nonexistent.pdf", rules={})
+    def _make_pdf(self):
+        """创建一个最小有效 PDF,fitz 能打开。"""
+        import fitz
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        tmp.close()
+        doc = fitz.open()
+        page = doc.new_page(width=300, height=200)
+        page.insert_text((50, 100), "张三 13800138000")
+        doc.save(tmp.name)
+        doc.close()
+        return tmp.name
 
-    def test_scan_word_raises_not_implemented(self):
-        with self.assertRaises(NotImplementedError):
-            api.scan_word("/tmp/nonexistent.docx", rules={})
+    def _make_docx(self):
+        """创建一个最小 .docx。"""
+        from docx import Document
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+        tmp.close()
+        doc = Document()
+        doc.add_paragraph("张三 13800138000")
+        doc.save(tmp.name)
+        return tmp.name
 
-    def test_redact_pdf_raises_not_implemented(self):
-        with self.assertRaises(NotImplementedError):
-            api.redact_pdf("/tmp/in.pdf", "/tmp/out.pdf", rules={})
+    def test_scan_pdf_returns_page_keyed_dict(self):
+        """scan_pdf 返回 {page_num: [hits]} 字典。"""
+        pdf = self._make_pdf()
+        try:
+            result = api.scan_pdf(pdf, rules={"phone": r"1[3-9]\d{9}"})
+            self.assertIsInstance(result, dict)
+            self.assertGreaterEqual(len(result), 1)
+            page_0_hits = result.get(0, [])
+            self.assertGreater(len(page_0_hits), 0)
+            hit = page_0_hits[0]
+            self.assertEqual(hit["source"], "rule")
+            self.assertIn("rect", hit)
+            self.assertEqual(len(hit["rect"]), 4)  # (x, y, w, h)
+        finally:
+            os.unlink(pdf)
 
-    def test_redact_word_raises_not_implemented(self):
-        with self.assertRaises(NotImplementedError):
-            api.redact_word("/tmp/in.docx", "/tmp/out.docx", rules={})
+    def test_scan_pdf_nonexistent_raises_filenotfound(self):
+        """scan_pdf 不存在文件抛 FileNotFoundError。"""
+        with self.assertRaises(FileNotFoundError):
+            api.scan_pdf("/nonexistent.pdf", rules={})
+
+    def test_scan_pdf_with_keywords_adds_to_patterns(self):
+        """scan_pdf 把 custom_keywords 拆词后附加到 patterns。"""
+        pdf = self._make_pdf()
+        try:
+            result = api.scan_pdf(
+                pdf,
+                rules={"phone": r"1[3-9]\d{9}"},
+                custom_keywords="张三",
+            )
+            # 应该至少有一个命中(text "张三 13800138000" 包含 "张三" 和 "13800138000")
+            all_texts = [h["text"] for h_list in result.values() for h in h_list]
+            self.assertTrue(any("张三" in t for t in all_texts) or any("13800" in t for t in all_texts))
+        finally:
+            os.unlink(pdf)
+
+    def test_scan_word_returns_match_list(self):
+        """scan_word 返回 matches list。"""
+        docx = self._make_docx()
+        try:
+            result = api.scan_word(docx, rules=[{"find": "张三", "mode": "exact", "enabled": True}])
+            self.assertIsInstance(result, list)
+            self.assertGreater(len(result), 0)
+            m = result[0]
+            self.assertIn("text", m)
+            self.assertIn("start", m)
+            self.assertIn("end", m)
+            self.assertEqual(m["text"], "张三")
+        finally:
+            os.unlink(docx)
+
+    def test_scan_word_nonexistent_raises_filenotfound(self):
+        """scan_word 不存在文件抛 FileNotFoundError。"""
+        with self.assertRaises(FileNotFoundError):
+            api.scan_word("/nonexistent.docx", rules=[])
+
+    def test_redact_pdf_writes_output_file(self):
+        """redact_pdf 写 output 文件并返回 summary。"""
+        pdf = self._make_pdf()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = os.path.join(tmpdir, "out.pdf")
+            try:
+                result = api.redact_pdf(
+                    pdf, out,
+                    rules={"phone": r"1[3-9]\d{9}"},
+                )
+                self.assertEqual(result["output"], out)
+                self.assertGreater(result["hits"], 0)
+                self.assertGreater(result["pages"], 0)
+                self.assertGreater(result["elapsed_sec"], 0)
+                self.assertTrue(os.path.isfile(out))
+            finally:
+                os.unlink(pdf)
+
+    def test_redact_pdf_nonexistent_input_raises_filenotfound(self):
+        """redact_pdf 输入不存在抛 FileNotFoundError。"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(FileNotFoundError):
+                api.redact_pdf(
+                    "/nonexistent.pdf",
+                    os.path.join(tmpdir, "out.pdf"),
+                    rules={},
+                )
+
+    def test_redact_pdf_nonexistent_output_dir_raises_filenotfound(self):
+        """redact_pdf 输出目录不存在抛 FileNotFoundError。"""
+        pdf = self._make_pdf()
+        try:
+            with self.assertRaises(FileNotFoundError):
+                api.redact_pdf(
+                    pdf, "/nonexistent/dir/out.pdf", rules={}
+                )
+        finally:
+            os.unlink(pdf)
+
+    def test_redact_word_writes_output_file(self):
+        """redact_word 写 output 文件并返回 summary。"""
+        docx = self._make_docx()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = os.path.join(tmpdir, "out.docx")
+            try:
+                result = api.redact_word(
+                    docx, out,
+                    rules=[{"find": "张三", "mode": "exact", "enabled": True}],
+                )
+                self.assertEqual(result["output"], out)
+                self.assertGreater(result["hits"], 0)
+                self.assertGreater(result["elapsed_sec"], 0)
+                self.assertTrue(os.path.isfile(out))
+                # 验证 output 文件中 "张三" 已被替换
+                from docx import Document
+                out_doc = Document(out)
+                text = "\n".join(p.text for p in out_doc.paragraphs)
+                self.assertNotIn("张三", text)
+            finally:
+                os.unlink(docx)
+
+    def test_redact_word_nonexistent_input_raises_filenotfound(self):
+        """redact_word 输入不存在抛 FileNotFoundError。"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(FileNotFoundError):
+                api.redact_word(
+                    "/nonexistent.docx",
+                    os.path.join(tmpdir, "out.docx"),
+                    rules=[],
+                )
 
 
 class TestFilterHitsByOverrides(unittest.TestCase):

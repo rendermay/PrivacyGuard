@@ -18,14 +18,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # 主链路:直接走 secureredact/ 子包,无临时 main.py 依赖
+# 注:QThread 子类 worker + QEventLoop 都有 PyQt6 DLL 依赖;为让 api.py 在无 Qt 环境
+# 也可 import,所有 PyQt6 符号 + WordBatchReplaceWorker 全部 lazy(函数体内 import)
 from secureredact.redaction.doc_hash import compute_doc_hash as _compute_doc_hash_impl
 from secureredact.redaction.override_store import HitOverrideStore
-from secureredact.workers.word_batch_replace_worker import WordBatchReplaceWorker
 from secureredact.utils.exceptions import WorkerCancelledError
-
-# PyQt6 依赖说明:WordBatchReplaceWorker 是 QThread 子类,实例化需 PyQt6 已加载
-# CLI/SDK 用户需要保证 Qt DLL 在 PATH 上(同 `python main.py` 启动条件)
-from PyQt6.QtCore import QEventLoop, QTimer  # noqa: F401 — used in batch_redact_word
+from secureredact.ocr import text_pdf as _text_pdf_module
 
 
 __all__ = [
@@ -63,22 +61,58 @@ def scan_pdf(
     custom_keywords: str = "",
     options: Optional[Dict[str, Any]] = None,
 ) -> Dict[int, List[Dict[str, Any]]]:
-    """逐页扫描 PDF,合并 text layer + image block OCR(简化版 stub)。
+    """逐页扫描 PDF,产出文本层命中(简化版,不含 image-block OCR 合并)。
+
+    Args:
+        pdf_path: PDF 路径,接受 `str` 或 `pathlib.Path`。
+        rules: 规则字典(键为规则名,值为正则 pattern)。也接受 `{"patterns": [...]}` 形式。
+        custom_keywords: 用户自定义关键词(空格分隔,扫描时附加到 patterns)。
+        options: 可选行为控制(详见 plan §2.7 Options 契约)。当前未使用。
 
     Returns:
         {page_num(0-based int): [{"rect": (x, y, w, h) tuple,
-          "source": str, "text": str}, ...]}
-
-    Note:
-        当前为骨架版:仅扫描文本通道,不调用 OCR。完整版(含 image-block OCR
-        合并)在 PR-C5 阶段实现。
+          "source": str, "text": str, "rule_name": str}, ...]}
 
     Raises:
         FileNotFoundError: PDF 文件不存在。
     """
-    raise NotImplementedError(
-        "scan_pdf 完整实现在 PR-C5 阶段。当前为骨架版 stub。"
-    )
+    import fitz  # 延迟导入避免非 PDF 场景的依赖
+
+    pdf_path = os.fspath(pdf_path)
+    if not os.path.isfile(pdf_path):
+        raise FileNotFoundError(f"PDF 文件不存在: {pdf_path}")
+
+    # 提取规则 patterns:支持 dict[str,pattern] 或 dict 含 patterns key
+    patterns = []
+    if isinstance(rules, dict):
+        if "patterns" in rules:
+            patterns.extend(rules["patterns"])
+        else:
+            patterns.extend(p for p in rules.values() if isinstance(p, str))
+    if custom_keywords:
+        import re as _re
+        for kw in custom_keywords.split():
+            if kw.strip():
+                patterns.append(_re.escape(kw.strip()))
+
+    # 逐页扫描
+    result: Dict[int, List[Dict[str, Any]]] = {}
+    with fitz.open(pdf_path) as doc:
+        for page_idx in range(len(doc)):
+            page = doc[page_idx]
+            hits = []
+            for x0, y0, w, h, text, rule_name in _text_pdf_module.collect_text_pdf_hit_boxes(
+                page, patterns
+            ):
+                hits.append({
+                    "rect": (x0, y0, w, h),
+                    "source": "rule",
+                    "text": text,
+                    "rule_name": rule_name,
+                })
+            if hits:
+                result[page_idx] = hits
+    return result
 
 
 # === 3. Word 命中扫描(方案 B:一次性同步)===
@@ -92,17 +126,59 @@ def scan_word(
 ) -> List[Dict[str, Any]]:
     """扫描 Word 段落,产出 matches 列表。
 
-    Note:
-        方案 B(plan §2.3 任务 1.2):直接实例化 WordWorker.run() 同步执行,
-        不复用 worker 信号体系。返回 matches 是空列表占位(完整算法在
-        worker.run 内部,不暴露中间产物)。
+    Args:
+        word_path: Word 文档路径(.docx)。
+        rules: 规则列表(每项为 dict,含 `find`/`mode`/`enabled` 字段)。
+        custom_keywords: 用户自定义关键词(空格分隔)。
+        replacement_text: 统一替换文本(传给 build_word_rule_matches)。
+        options: 当前未使用。
+
+    Returns:
+        [{start, end, text, source, rule_name, replacement}, ...]
+        (每个 match 是 build_word_rule_matches 的输出格式)
 
     Raises:
-        NotImplementedError: 当前为骨架版 stub。
+        FileNotFoundError: Word 文件不存在。
     """
-    raise NotImplementedError(
-        "scan_word 完整实现在 PR-C5 阶段。当前为骨架版 stub。"
+    from docx import Document
+    from secureredact.redaction.word_rules import (
+        build_word_rule_matches,
+        normalize_word_replace_rules,
     )
+
+    word_path = os.fspath(word_path)
+    if not os.path.isfile(word_path):
+        raise FileNotFoundError(f"Word 文件不存在: {word_path}")
+
+    # 归一化 rules 为 build_word_rule_matches 接受的格式
+    normalized = normalize_word_replace_rules(
+        list(rules) if isinstance(rules, (list, tuple)) else rules,
+        replacement_text,
+    )
+
+    # 合并自定义关键词到 normalized(转为简单 exact 规则)
+    if custom_keywords:
+        for kw in custom_keywords.split():
+            if kw.strip():
+                normalized.append({"find": kw.strip(), "mode": "exact", "enabled": True})
+
+    doc = Document(word_path)
+    matches: List[Dict[str, Any]] = []
+    cursor = 0
+    for para in doc.paragraphs:
+        text = "".join(run.text for run in para.runs)
+        if not text:
+            continue
+        para_matches = build_word_rule_matches(text, normalized, replacement_text)
+        for m in para_matches:
+            # 平移 start/end 到全文档坐标
+            if "start" in m and "end" in m:
+                m = dict(m)
+                m["start"] = m["start"] + cursor
+                m["end"] = m["end"] + cursor
+            matches.append(m)
+        cursor += len(text)
+    return matches
 
 
 # === 4. PDF 一站式脱敏 ===
@@ -115,20 +191,62 @@ def redact_pdf(
     doc_hash: Optional[str] = None,
     options: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """完整 PDF 脱敏链路:扫描 → override 过滤 → 合并 → 输出。
+    """完整 PDF 脱敏链路:扫描 → 黑遮罩写入 → 输出。
+
+    Args:
+        pdf_path: 输入 PDF 路径。
+        output_path: 输出 PDF 路径(若存在则覆盖)。
+        rules: 规则字典。
+        custom_keywords: 用户自定义关键词。
+        doc_hash: 文档哈希(用于 override 关联,当前未使用)。
+        options: 当前未使用。
 
     Returns:
         {"output": str, "pages": int, "hits": int, "elapsed_sec": float}
 
-    Note:
-        当前为骨架版 stub。完整实现在 PR-C5 阶段。
-
     Raises:
-        NotImplementedError: 当前为骨架版 stub。
+        FileNotFoundError: 输入或输出路径不存在。
     """
-    raise NotImplementedError(
-        "redact_pdf 完整实现在 PR-C5 阶段。当前为骨架版 stub。"
+    import time as _time
+
+    import fitz
+
+    pdf_path = os.fspath(pdf_path)
+    output_path = os.fspath(output_path)
+    if not os.path.isfile(pdf_path):
+        raise FileNotFoundError(f"输入 PDF 不存在: {pdf_path}")
+
+    # 确保输出目录存在
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.isdir(output_dir):
+        raise FileNotFoundError(f"输出目录不存在: {output_dir}")
+
+    t0 = _time.time()
+    hits_by_page = scan_pdf(
+        pdf_path,
+        rules=rules,
+        custom_keywords=custom_keywords,
+        options=options,
     )
+    total_hits = sum(len(h) for h in hits_by_page.values())
+
+    # 用 PyMuPDF 的 redact annotation 做遮罩
+    with fitz.open(pdf_path) as doc:
+        for page_idx, hits in hits_by_page.items():
+            page = doc[page_idx]
+            for hit in hits:
+                x, y, w, h = hit["rect"]
+                rect = fitz.Rect(x, y, x + w, y + h)
+                page.add_redact_annot(rect, text="", fill=(0, 0, 0))
+            page.apply_redactions()
+        doc.save(output_path)
+
+    return {
+        "output": output_path,
+        "pages": len(hits_by_page) if hits_by_page else 0,
+        "hits": total_hits,
+        "elapsed_sec": _time.time() - t0,
+    }
 
 
 # === 5. Word 一站式脱敏 ===
@@ -144,15 +262,67 @@ def redact_word(
 ) -> Dict[str, Any]:
     """完整 Word 替换链路。
 
-    Note:
-        当前为骨架版 stub。完整实现在 PR-C5 阶段。
+    Args:
+        word_path: 输入 Word 路径(.docx)。
+        output_path: 输出 Word 路径(若存在则覆盖)。
+        rules: 规则列表。
+        custom_keywords: 用户自定义关键词。
+        replacement_text: 统一替换文本。
+        doc_hash: 文档哈希(用于 override 关联,当前未使用)。
+        options: 当前未使用。
+
+    Returns:
+        {"output": str, "hits": int, "elapsed_sec": float}
 
     Raises:
-        NotImplementedError: 当前为骨架版 stub。
+        FileNotFoundError: 输入或输出路径不存在。
     """
-    raise NotImplementedError(
-        "redact_word 完整实现在 PR-C5 阶段。当前为骨架版 stub。"
+    import time as _time
+
+    from docx import Document
+    from secureredact.redaction.word_rules import (
+        build_word_rule_matches,
+        normalize_word_replace_rules,
+        replace_matches_in_paragraph,
     )
+
+    word_path = os.fspath(word_path)
+    output_path = os.fspath(output_path)
+    if not os.path.isfile(word_path):
+        raise FileNotFoundError(f"输入 Word 不存在: {word_path}")
+
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.isdir(output_dir):
+        raise FileNotFoundError(f"输出目录不存在: {output_dir}")
+
+    t0 = _time.time()
+    normalized = normalize_word_replace_rules(
+        list(rules) if isinstance(rules, (list, tuple)) else rules,
+        replacement_text,
+    )
+    if custom_keywords:
+        for kw in custom_keywords.split():
+            if kw.strip():
+                normalized.append({"find": kw.strip(), "mode": "exact", "enabled": True})
+
+    doc = Document(word_path)
+    total_hits = 0
+    for para in doc.paragraphs:
+        text = "".join(run.text for run in para.runs)
+        if not text:
+            continue
+        matches = build_word_rule_matches(text, normalized, replacement_text)
+        if matches:
+            total_hits += len(matches)
+            replace_matches_in_paragraph(para, matches, text_offset=0,
+                                         fallback_replacement_text=replacement_text)
+    doc.save(output_path)
+
+    return {
+        "output": output_path,
+        "hits": total_hits,
+        "elapsed_sec": _time.time() - t0,
+    }
 
 
 # === 6. 命中 override 过滤 ===
@@ -215,6 +385,10 @@ def batch_redact_word(
         FileNotFoundError: `output_dir` 不存在。
         WorkerCancelledError: 批处理超时(`options.timeout_sec` 默认 300s)。
     """
+    # Lazy import:QThread 子类 + PyQt6 依赖,延迟到函数调用时
+    from PyQt6.QtCore import QEventLoop, QTimer  # noqa: F401
+    from secureredact.workers.word_batch_replace_worker import WordBatchReplaceWorker
+
     output_dir = os.fspath(output_dir)
     if not os.path.isdir(output_dir):
         raise FileNotFoundError(f"output_dir 不存在: {output_dir}")

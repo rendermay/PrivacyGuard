@@ -37,15 +37,26 @@ from secureredact.utils import (
 # PR-C4 业务 API 层(plan §2.3 任务 1.3)
 # 注意:这会触发 api.py 顶层 import PyQt6,因为 batch_redact_word 同步化依赖
 # QEventLoop/QTimer。CLI 用户需要 Qt DLL 在 PATH 上(同 `python main.py` 启动条件)。
-from secureredact.api import (  # noqa: E402 — 必须在异常/工具之后导入
-    compute_doc_hash,
-    scan_pdf,
-    scan_word,
-    redact_pdf,
-    redact_word,
-    filter_hits_by_overrides,
-    batch_redact_word,
-)
+try:
+    from secureredact.api import (  # noqa: E402 — 必须在异常/工具之后导入
+        compute_doc_hash,
+        scan_pdf,
+        scan_word,
+        redact_pdf,
+        redact_word,
+        filter_hits_by_overrides,
+        batch_redact_word,
+    )
+except ImportError:
+    # PyQt6 不可用时(子进程 / 纯 stdlib 单元测试环境)跳过 API 暴露,
+    # 让 import secureredact 仍然成功。调用方按需 from secureredact.api import ... 自行处理。
+    compute_doc_hash = None  # type: ignore[assignment]
+    scan_pdf = None  # type: ignore[assignment]
+    scan_word = None  # type: ignore[assignment]
+    redact_pdf = None  # type: ignore[assignment]
+    redact_word = None  # type: ignore[assignment]
+    filter_hits_by_overrides = None  # type: ignore[assignment]
+    batch_redact_word = None  # type: ignore[assignment]
 
 __all__ = [
     '__version__',
