@@ -125,9 +125,7 @@ def _create_main_window():
 
     统一在本函数内集中切换,避免散落在调用方。
     """
-    # PR-B2 时改为:
-    # from secureredact.ui.main_window.window import MainWindow
-    from main import MainWindow  # type: ignore[import-not-found]
+    from secureredact.ui.main_window import MainWindow
     return MainWindow
 
 
