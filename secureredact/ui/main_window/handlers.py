@@ -379,6 +379,10 @@ sudo dnf install antiword
     def start_ocr(self):
         """智能扫描 - 支持 PDF 和 Word（v1.1.11: 增强错误处理）"""
         from main import DEFAULT_RULES, DEFAULT_RULES_META, config, OCRWorker, WordWorker  # PR-B5.2: 延迟导入
+        # PR-C5.1:API 调用点 — 用 secureredact.api.compute_doc_hash 计算当前文档的 8 位 doc_hash,
+        # 供后续 hit_override / override_store 关联使用(plan §3.3 任务 2.1)
+        from secureredact.api import compute_doc_hash  # noqa: F401 — PR-C5.1 API 调用点
+        self.current_doc_hash = compute_doc_hash(self.file_path) if hasattr(self, "file_path") else None
         # 线程安全检查：防止重复启动
         if self.active_worker is not None:
             if self.active_worker.isRunning():
