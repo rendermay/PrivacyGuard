@@ -1,8 +1,9 @@
 """
 SecureRedact 信息脱敏助手
 
-v36.5: 模块化重构版本
-v37.7.3: 修复 PyInstaller 打包时的相对导入问题
+v1.1.12: 部分遮蔽 (Partial Masking) + USCC Word-Only 隔离
+v1.1.11: 模块化重构版本 + 白名单片段级豁免
+v1.1.11: 修复 PyInstaller 打包时的相对导入问题
 """
 
 from importlib import import_module
@@ -14,7 +15,7 @@ def _read_version():
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except OSError:
-        return "38.0.0"
+        return "1.1.12"
 
 
 __version__ = _read_version()
@@ -31,6 +32,19 @@ from secureredact.utils import (
     TempFileManager,
     validate_safe_path,
     resource_path,
+)
+
+# PR-C4 业务 API 层(plan §2.3 任务 1.3)
+# 注意:这会触发 api.py 顶层 import PyQt6,因为 batch_redact_word 同步化依赖
+# QEventLoop/QTimer。CLI 用户需要 Qt DLL 在 PATH 上(同 `python main.py` 启动条件)。
+from secureredact.api import (  # noqa: E402 — 必须在异常/工具之后导入
+    compute_doc_hash,
+    scan_pdf,
+    scan_word,
+    redact_pdf,
+    redact_word,
+    filter_hits_by_overrides,
+    batch_redact_word,
 )
 
 __all__ = [
@@ -56,6 +70,14 @@ __all__ = [
     'OCREngineManager',
     'OCRResult',
     'CharInfo',
+    # PR-C4 业务 API 层
+    'compute_doc_hash',
+    'scan_pdf',
+    'scan_word',
+    'redact_pdf',
+    'redact_word',
+    'filter_hits_by_overrides',
+    'batch_redact_word',
 ]
 
 _LAZY_IMPORTS = {
