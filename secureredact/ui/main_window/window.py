@@ -1,7 +1,7 @@
 """
 secureredact.ui.main_window.window — MainWindow 类容器
 
-PR-XXX 引入。本模块承载 MainWindow 主类的物理定义,
+PR-C9 (Plan 1) 引入。本模块承载 MainWindow 主类的物理定义,
 与 9 个 mixin(toolbar/workbench/word_preview/pdf_render/batch_replace/
 density/setup_ui/handlers/theme) 平行放置。
 
