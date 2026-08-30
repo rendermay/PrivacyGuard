@@ -12,8 +12,17 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QWidget,
+    QApplication, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QStyle,
+    QToolBar, QToolButton, QVBoxLayout, QWidget,
 )
+from theme import Theme  # PR-B5.1: 补 Theme 引用
+# PR-B5.1: toolbar 方法链引用 main.py 模块级函数
+# 用 `import main` 而非 `from main import`,避免循环 import。
+# 调用时用 main.resolve_workspace_density_mode(...) 形式。
+from secureredact.ui.utils.density import (  # PR-B5.1
+    resolve_workspace_density_mode, resolve_settings_density_mode, _shift_density_mode,
+)
+from ._helpers import build_toolbar_mode_labels  # PR-B5.2: 综合迁出
 
 
 class MainWindowToolbarMixin:

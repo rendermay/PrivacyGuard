@@ -71,6 +71,7 @@ class MainWindowThemeMixin:
         self.theme_name = name
 
     def set_theme(self, name):
+        from main import config  # PR-B5.2: 延迟导入
         """public API:切换主题并持久化到 config.json。"""
         if name not in ("light", "dark", "system"):
             return

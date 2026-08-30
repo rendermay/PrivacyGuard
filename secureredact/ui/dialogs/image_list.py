@@ -46,6 +46,7 @@ from secureredact.redaction.hit_ref import HitRef
 class ImageListDialog(QDialog):
     """图片排序对话框 - 支持拖拽调整图片顺序"""
     def __init__(self, image_paths, parent=None):
+        from main import config  # PR-B5.2: 延迟导入, 避免 main.py 加载时循环
         super().__init__(parent)
 
         # v1.1.11: 修复 Windows 深色模式下对话框显示问题

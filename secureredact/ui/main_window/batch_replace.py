@@ -15,10 +15,26 @@
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor
+import os
+
+from PyQt6.QtCore import Qt, QTimer, QUrl
+from PyQt6.QtGui import QColor, QDesktopServices
 from PyQt6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QWidget,
+    QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
+    QListWidgetItem, QMessageBox, QPushButton, QTableWidgetItem, QVBoxLayout, QWidget,
+)
+
+from secureredact.redaction.word_rules import normalize_word_replace_rules
+from secureredact.ui.dialogs.word_replace_rules import WordReplaceRulesDialog
+from secureredact.workers.word_batch_replace_worker import WordBatchReplaceWorker
+from theme import Theme
+
+from ._batch_helpers import (
+    build_batch_filter_labels,
+    build_batch_result_rows,
+    build_batch_rule_summary_lines,
+    filter_batch_result_rows,
+    summarize_batch_result_rows,
 )
 
 

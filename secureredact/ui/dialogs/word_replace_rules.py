@@ -1,9 +1,9 @@
+from __future__ import annotations
 """对话框/Worker 模块 — 从 main.py 迁出 (PR-B3/B4)
 
 公共 API 不变。MainWindow 通过 `from main import X` 或对应模块 re-export 导入。
 """
-from __future__ import annotations
-
+import json
 import sys
 import os
 import re
@@ -254,6 +254,7 @@ class WordReplaceRulesDialog(QDialog):
             QMessageBox.critical(self, "导入失败", f"无法导入规则文件：\n{e}")
 
     def export_rules_json(self):
+        from main import WORD_RULE_SCHEMA_VERSION  # PR-B5.2: 延迟导入
         rules, default_text, errors = self._collect_rules_from_table(validate_regex=True)
         if errors:
             QMessageBox.warning(self, "无法导出", "\n".join(errors))

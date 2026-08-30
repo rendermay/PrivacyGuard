@@ -9,11 +9,16 @@
 """
 from __future__ import annotations
 
+import os  # PR-B5.2: 补 os 引用
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QWidget,
 )
+from theme import Theme  # PR-B5.2: 补 Theme 引用(原 main.py 模块级)
+
+from ._helpers import build_workbench_guidance  # PR-B5.2: 综合迁出
 
 
 class MainWindowWorkbenchMixin:

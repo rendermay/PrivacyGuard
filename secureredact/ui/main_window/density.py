@@ -21,13 +21,13 @@ main.py 中对应行数减少。
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QWidget,
+from PyQt6.QtCore import *  # PR-B5.1: 918 行超大方法需 QSize/QPoint/QRect 等
+from PyQt6.QtGui import *  # PR-B5.1: 也用 QFontMetrics 等
+from PyQt6.QtWidgets import *  # PR-B5.1: density 是 918 行超大方法,widget 用量广,通配符导入
+from theme import Theme
+from secureredact.ui.utils.density import (
+    resolve_workspace_density_mode, resolve_settings_density_mode, _shift_density_mode,
 )
-
-
 class MainWindowDensityMixin:
     """Windows 全局密度指标计算 — 字号 / 间距 / margin / widget 高度。
 

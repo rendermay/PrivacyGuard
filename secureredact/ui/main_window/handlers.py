@@ -18,10 +18,13 @@ PR-B2.8 目标:推进 main.py < 5000 行。
 """
 from __future__ import annotations
 
+import fitz  # PyMuPDF
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QKeyEvent
 from PyQt6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QWidget,
+    QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMenu, QMessageBox,
+    QPushButton, QWidget,
 )
 
 
@@ -375,6 +378,7 @@ sudo dnf install antiword
 
     def start_ocr(self):
         """智能扫描 - 支持 PDF 和 Word（v1.1.11: 增强错误处理）"""
+        from main import DEFAULT_RULES, DEFAULT_RULES_META, config, OCRWorker, WordWorker  # PR-B5.2: 延迟导入
         # 线程安全检查：防止重复启动
         if self.active_worker is not None:
             if self.active_worker.isRunning():
@@ -417,7 +421,7 @@ sudo dnf install antiword
             # v1.1.14: 注入 name_context_extra_tokens (config.json →
             # redaction.name_context.extra_tokens),让 PDF 图片通道 OCR 出来的
             # '甲方/乙方/原告/... 与 A、B、C 之间' 类并列名单中的姓名也能被识别.
-            _name_ctx_extra = self.config.get(
+            _name_ctx_extra = config.get(
                 "redaction.name_context.extra_tokens", [],
             ) or []  # JSON 值为 null 时 SimpleConfig.get 返回 None → 归一化为 []
             self.worker = OCRWorker(self.file_path, pdf_rules, self.use_enhance, self.custom_keywords,
@@ -442,7 +446,7 @@ sudo dnf install antiword
             # v1.1.14: 注入 name_context_extra_tokens (config.json →
             # redaction.name_context.extra_tokens),让 '甲方/乙方/原告/... 与 A、B、C 之间'
             # 类并列名单中的姓名也能被识别.
-            _name_ctx_extra = self.config.get(
+            _name_ctx_extra = config.get(
                 "redaction.name_context.extra_tokens", [],
             ) or []  # JSON 值为 null 时 SimpleConfig.get 返回 None → 归一化为 []
             self.worker = WordWorker(self.word_doc, self.word_data, self.active_rules,

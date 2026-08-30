@@ -47,6 +47,7 @@ class FeedbackDialog(QDialog):
     """开发者信息与反馈对话框"""
     def __init__(self, parent=None):
         super().__init__(parent)
+        from main import APP_NAME, VERSION, config  # PR-B5.2: 延迟导入, 避免 main.py 加载时循环
 
         # v1.1.11: 修复 Windows 深色模式下对话框显示问题
         self.setWindowFlags(

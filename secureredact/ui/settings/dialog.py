@@ -17,6 +17,14 @@ from io import BytesIO
 from PIL import Image
 from bs4 import BeautifulSoup
 
+from ._helpers import (  # PR-B5.2: 综合迁出
+    build_settings_hero_tags,
+    build_settings_nav_labels,
+    format_signed_percent,
+)
+from secureredact.ui.utils.density import resolve_settings_density_mode  # PR-B5.2: 补 density helper 引用
+from theme import Theme  # PR-B5.2: 补 Theme 引用
+
 # PyQt6 — 完整集合,覆盖所有 5 个新模块需要
 from PyQt6.QtCore import (
     Qt, QSize, QPoint, QPointF, QRect, QRectF, QTimer, QThread, QObject,
@@ -43,6 +51,7 @@ from PyQt6.QtWidgets import (
 from secureredact.utils.security import validate_safe_path, resource_path
 from secureredact.utils.exceptions import PrivacyAppError
 from secureredact.redaction.hit_ref import HitRef
+from secureredact.redaction.word_rules import normalize_word_replace_rules  # PR-C1.1 extraction
 class SettingsDialog(QDialog):
     """设置对话框 - v1.1.11: 支持配置持久化"""
 
@@ -53,6 +62,7 @@ class SettingsDialog(QDialog):
                  enable_name_recognition=False,
                  current_blacklist=None,
                  current_whitelist=None):
+        from main import DEFAULT_RULES, config  # PR-B5.2: 延迟导入, 避免 main.py 加载时循环
         super().__init__(parent)
         self.config = config_manager
 
@@ -1893,6 +1903,7 @@ class SettingsDialog(QDialog):
         self._refresh_word_rule_summary()
 
     def save_settings(self):
+        from main import DEFAULT_RULES  # PR-B5.2: 延迟导入, 避免循环
         self.selected_rules = [DEFAULT_RULES[name] for name, cb in self.checks.items() if cb.isChecked()]
         # v1.1.11: 添加调试输出
         print(f"[Settings] 保存的规则: {self.selected_rules}")

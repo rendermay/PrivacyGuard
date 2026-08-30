@@ -15,12 +15,27 @@ Word 双栏预览 mixin — MainWindow Word 双栏预览逻辑 (PR-B2.3 迁出)
 """
 from __future__ import annotations
 
+import os
+import shutil
+import tempfile
+
 from bs4 import BeautifulSoup
 from secureredact.redaction.word_rules import merge_word_matches_with_priority  # PR-C1.1
 from PyQt6.QtCore import Qt, QTimer, QUrl
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QWidget,
+    QApplication, QFrame, QHBoxLayout, QLabel, QMenu, QMessageBox, QPushButton,
+    QWidget,
+)
+from PyQt6.QtWebChannel import QWebChannel  # PR-B5.2: 补 WebChannel 引用
+
+from ._helpers import (  # PR-B5.2: 综合迁出
+    WORD_PREVIEW_BROKEN_IMAGE_DATA_URI,
+    build_highlight_preview_segments,
+    build_replaced_preview_segments,
+    build_word_panel_update_script,
+    resolve_word_preview_image_suffix,
+    should_reload_word_panel,
 )
 
 

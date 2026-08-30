@@ -7,25 +7,31 @@ from main import (
     normalize_word_replace_rules,
     build_word_rule_matches,
     apply_word_rules_to_text,
-    build_batch_result_rows,
-    build_batch_filter_labels,
-    build_batch_rule_summary_lines,
-    filter_batch_result_rows,
-    format_signed_percent,
     merge_word_matches_with_priority,
-    build_settings_hero_tags,
-    build_toolbar_mode_labels,
-    build_workbench_guidance,
     resolve_workspace_density_mode,
     resolve_settings_density_mode,
+)
+from secureredact.ui.main_window._batch_helpers import (
+    build_batch_filter_labels,
+    build_batch_result_rows,
+    build_batch_rule_summary_lines,
+    filter_batch_result_rows,
+    summarize_batch_result_rows,
+)
+from secureredact.ui.main_window._helpers import (  # PR-B5.2: 综合迁出
+    WORD_PREVIEW_BLOCK_SELECTOR,
     build_highlight_preview_segments,
     build_replaced_preview_segments,
-    build_settings_nav_labels,
-    summarize_batch_result_rows,
+    build_toolbar_mode_labels,
     build_word_panel_update_script,
-    should_reload_word_panel,
+    build_workbench_guidance,
     resolve_word_preview_image_suffix,
-    WORD_PREVIEW_BLOCK_SELECTOR,
+    should_reload_word_panel,
+)
+from secureredact.ui.settings._helpers import (  # PR-B5.2: 综合迁出
+    build_settings_hero_tags,
+    build_settings_nav_labels,
+    format_signed_percent,
 )
 
 
@@ -299,7 +305,7 @@ class TestWordReplaceRules(unittest.TestCase):
 
         self.assertEqual(labels[0], "1 通用规则 · 2项启用")
         self.assertEqual(labels[1], "2 自定义关键词 · 5条")
-        # v37.9.0: 黑/白名单 Tab 插入到 自定义关键词 与 扫描与微调 之间
+        # v1.1.11: 黑/白名单 Tab 插入到 自定义关键词 与 扫描与微调 之间
         self.assertEqual(labels[2], "3 黑名单 · 0条")
         self.assertEqual(labels[3], "4 白名单 · 0条")
         self.assertEqual(labels[4], "5 扫描与微调 · 已微调")

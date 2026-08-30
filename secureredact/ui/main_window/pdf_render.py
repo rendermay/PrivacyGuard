@@ -14,8 +14,10 @@ PDF 渲染编排 mixin — MainWindow PDF 渲染逻辑 (PR-B2.4 迁出)
 """
 from __future__ import annotations
 
+import fitz  # PyMuPDF
+
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QImage, QPixmap
 from PyQt6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QWidget,
 )
@@ -63,6 +65,7 @@ class MainWindowPdfRenderMixin:
             return False
 
     def handle_zoom_request(self, delta):
+        from main import ZOOM_MIN, ZOOM_MAX  # PR-B5.2: 延迟导入
         new_zoom = self.zoom_level + delta
         if new_zoom < ZOOM_MIN: new_zoom = ZOOM_MIN
         if new_zoom > ZOOM_MAX: new_zoom = ZOOM_MAX
@@ -82,6 +85,7 @@ class MainWindowPdfRenderMixin:
             zoom: 缩放值
             allow_below_min: 是否允许低于 ZOOM_MIN (用于自适应模式)
         """
+        from main import ZOOM_MIN, ZOOM_MAX  # PR-B5.2: 延迟导入
         if allow_below_min:
             # 自适应模式：允许更小的缩放比例以完整显示页面
             return min(ZOOM_MAX, zoom)
