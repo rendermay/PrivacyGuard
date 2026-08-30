@@ -91,12 +91,23 @@ __all__ = [
     'batch_redact_word',
     # PR-C6.1 迁出的纯常量
     'WORD_RULE_SCHEMA_VERSION',
+    # PR-C6.2 迁出的 UI 内部常量(原 config.get 默认值)
+    'ZOOM_MIN',
+    'ZOOM_MAX',
 ]
 
 
 # PR-C6.1:WORD_RULE_SCHEMA_VERSION 从 main.py 顶层迁出(plan §4.4 优先级 3 UI 常量末批,
 # 实际因为纯常量 = 1,迁移风险极低,提前到 P3 第一批)
 WORD_RULE_SCHEMA_VERSION = 1
+
+# PR-C6.2:ZOOM_MIN / ZOOM_MAX 从 main.py 顶层迁出。
+# 原 main.py 用 config.get("ocr.zoom_min", 0.5) / config.get("ocr.zoom_max", 4.0),
+# 此处接受失去运行时可配置性(plan §4.3 任务 N — UI 内部常量末批)。
+# 如需恢复可配置,后续可在 secureredact/utils/runtime_config.py 提供 SimpleConfig
+# singleton 后再切回 config 派生。
+ZOOM_MIN = 0.5
+ZOOM_MAX = 4.0
 
 _LAZY_IMPORTS = {
     'ImageMergeWorker': ('secureredact.workers', 'ImageMergeWorker'),

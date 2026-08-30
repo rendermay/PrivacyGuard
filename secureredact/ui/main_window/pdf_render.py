@@ -65,7 +65,7 @@ class MainWindowPdfRenderMixin:
             return False
 
     def handle_zoom_request(self, delta):
-        from main import ZOOM_MIN, ZOOM_MAX  # PR-B5.2: 延迟导入
+        from secureredact import ZOOM_MIN, ZOOM_MAX  # PR-C6.2: 延迟导入(原 main.py 顶层常量)
         new_zoom = self.zoom_level + delta
         if new_zoom < ZOOM_MIN: new_zoom = ZOOM_MIN
         if new_zoom > ZOOM_MAX: new_zoom = ZOOM_MAX
@@ -85,7 +85,7 @@ class MainWindowPdfRenderMixin:
             zoom: 缩放值
             allow_below_min: 是否允许低于 ZOOM_MIN (用于自适应模式)
         """
-        from main import ZOOM_MIN, ZOOM_MAX  # PR-B5.2: 延迟导入
+        from secureredact import ZOOM_MIN, ZOOM_MAX  # PR-C6.2: 延迟导入(原 main.py 顶层常量)
         if allow_below_min:
             # 自适应模式：允许更小的缩放比例以完整显示页面
             return min(ZOOM_MAX, zoom)
