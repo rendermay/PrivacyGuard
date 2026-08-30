@@ -16,6 +16,8 @@ import unittest
 # filter_hits_by_overrides 时会失败,setUp 检测后 skip。
 import importlib.util as _importlib_util
 
+import pytest  # noqa: E402 — for markers (api / smoke)
+
 _api_path = os.path.join(os.path.dirname(__file__), "..", "..", "secureredact", "api.py")
 _spec = _importlib_util.spec_from_file_location("secureredact.api", _api_path)
 api = _importlib_util.module_from_spec(_spec)  # type: ignore[assignment]
@@ -23,6 +25,8 @@ sys.modules["secureredact.api"] = api  # 让 api.py 内部 import chain 找到�
 _spec.loader.exec_module(api)
 
 
+@pytest.mark.api
+@pytest.mark.smoke
 class TestComputeDocHash(unittest.TestCase):
     """compute_doc_hash — 主链路,无需 PyQt6。"""
 
@@ -83,6 +87,7 @@ class TestComputeDocHash(unittest.TestCase):
             api.compute_doc_hash("/nonexistent/path/that/does/not/exist.txt")
 
 
+@pytest.mark.api
 class TestStubFunctions(unittest.TestCase):
     """scan_pdf / scan_word / redact_pdf / redact_word — 真实实现(非 stub)。"""
 
@@ -236,6 +241,7 @@ class TestStubFunctions(unittest.TestCase):
                 )
 
 
+@pytest.mark.api
 class TestFilterHitsByOverrides(unittest.TestCase):
     """filter_hits_by_overrides — 需要 PyQt6(Qt 在子进程不可用时跳过)。"""
 
@@ -282,6 +288,7 @@ class TestFilterHitsByOverrides(unittest.TestCase):
         self.assertEqual(len(result), 2)
 
 
+@pytest.mark.api
 class TestBatchRedactWord(unittest.TestCase):
     """batch_redact_word — 需要 PyQt6 + .docx 文件。子进程无 Qt 时跳过核心分支,只测参数校验。"""
 
