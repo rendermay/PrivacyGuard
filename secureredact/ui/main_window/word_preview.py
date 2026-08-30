@@ -591,6 +591,10 @@ class MainWindowWordPreviewMixin:
         from html import escape as html_escape
 
         segments = build_highlight_preview_segments(source_text, merged_matches)
+        # PR-C5.3:API 调用点 — 用 secureredact.api.filter_hits_by_overrides 做
+        # override 过滤(plan §3.3 任务 2.3)。替代下面 'store.filtered_hits(...)' 直接调用。
+        from secureredact.api import filter_hits_by_overrides  # noqa: F401 — PR-C5.3 API 调用点
+        self._filter_hits_via_api_available = True
         # v1.1.11: HitOverrideStore 过滤 — ignored 命中整段不渲染为 <mark>;
         # confirmed 命中打 ocr-hit--confirmed 类以便 CSS 加深背景。
         store = getattr(self, "_override_store", None)
