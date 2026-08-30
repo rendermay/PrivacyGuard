@@ -62,7 +62,8 @@ class SettingsDialog(QDialog):
                  enable_name_recognition=False,
                  current_blacklist=None,
                  current_whitelist=None):
-        from main import DEFAULT_RULES, config  # PR-B5.2: 延迟导入, 避免 main.py 加载时循环
+        from secureredact.utils.config import config  # PR-C6.4: config singleton 从 main.py 迁出
+        from secureredact.redaction.rules_loader import DEFAULT_RULES  # PR-C6.5: 从 main.py 迁出
         super().__init__(parent)
         self.config = config_manager
 
@@ -1903,7 +1904,7 @@ class SettingsDialog(QDialog):
         self._refresh_word_rule_summary()
 
     def save_settings(self):
-        from main import DEFAULT_RULES  # PR-B5.2: 延迟导入, 避免循环
+        from secureredact.redaction.rules_loader import DEFAULT_RULES  # PR-C6.5: 延迟导入(原 main.py 顶层常量)
         self.selected_rules = [DEFAULT_RULES[name] for name, cb in self.checks.items() if cb.isChecked()]
         # v1.1.11: 添加调试输出
         print(f"[Settings] 保存的规则: {self.selected_rules}")
