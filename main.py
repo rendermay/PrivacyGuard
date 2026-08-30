@@ -48,8 +48,14 @@ from secureredact.workers.word_worker import WordWorker as _ModularWordWorker
 from secureredact.workers.ocr_worker import OCRWorker as _ModularOCRWorker
 from secureredact.utils.doc_converter import convert_doc_to_docx as _shared_convert_doc_to_docx
 from secureredact.redaction.hit_ref import HitRef  # v1.1.11: 人工干预
+from secureredact.ui.utils.density import (  # PR-B5.1 re-export
+    resolve_workspace_density_mode, resolve_settings_density_mode, _shift_density_mode,
+)
 from secureredact.redaction.word_rules import (normalize_word_replace_rules, merge_word_matches_with_priority, build_word_rule_matches, apply_rule_matches_to_text, apply_word_rules_to_text, _range_overlaps, replace_matches_in_paragraph, apply_range_to_runs)  # PR-C1.1 re-export
 from secureredact.ui.main_window.word_preview import PREVIEW_FONT_STACK  # PR-C1.1 shared constant
+from secureredact.ui.main_window._helpers import (  # PR-B5.2 re-export
+    build_replaced_preview_segments, build_word_panel_update_script,
+)
 from secureredact.ui.settings.dialog import SettingsDialog  # PR-B3 re-export
 from secureredact.ui.dialogs.word_replace_rules import WordReplaceRulesDialog  # PR-B4 re-export
 from secureredact.ui.dialogs.image_list import ImageListDialog  # PR-B4 re-export
@@ -315,21 +321,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 APP_NAME = config.get("app.name", "SecureRedact 信息脱敏助手") if config else "SecureRedact 信息脱敏助手"
 APP_VERSION = read_app_version()
 VERSION = APP_VERSION
-WORD_PREVIEW_IMAGE_EXTENSION_MAP = {
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/jpg": ".jpg",
-    "image/gif": ".gif",
-    "image/tiff": ".tiff",
-    "image/bmp": ".bmp",
-    "image/webp": ".webp",
-    "image/svg+xml": ".svg",
-}
-WORD_PREVIEW_BROKEN_IMAGE_DATA_URI = (
-    "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
-)
-
-# === 常量定义 ===
+# === 默认规则库 + Mask 元数据 ===
 # v1.1.11: 从配置读取，失败时使用硬编码后备
 MIN_RECT_WIDTH = config.get("ocr.min_rect_width", 5) if config else 5
 PROGRESS_UPDATE_INTERVAL = config.get("ocr.progress_update_interval", 0.05) if config else 0.05
@@ -360,7 +352,6 @@ def _v113_apply_rule_overrides():
         r"(?=[的之及与和按于在跟同向对为由被让等,，。；;）)\]】\s]|$)"
     )
 
-
 if config:
     _rules_from_config = config.get_redaction_rules()
     for name, rule in _rules_from_config.items():
@@ -376,21 +367,9 @@ if config:
             # 旧格式兼容: 仅 pattern 字符串, 无 mask 信息
             DEFAULT_RULES[name] = str(rule)
             DEFAULT_RULES_META[name] = {}
-    # v1.1.12: 启动诊断, 帮助用户确认 mask 配置是否从 config.json 正确加载
-    _mask_diag = []
-    for _name, _meta in DEFAULT_RULES_META.items():
-        if not _meta:
-            _mask_diag.append(f"{_name}=<空>")
-        else:
-            _pf = _meta.get("mask_keep_prefix", 0)
-            _ps = _meta.get("mask_keep_suffix", 0)
-            _md = _meta.get("mask_mode", "default")
-            _mask_diag.append(f"{_name}={_md} {_pf}+{_ps}")
-    print(f"[v1.1.12 启动诊断] DEFAULT_RULES_META 加载: {len(DEFAULT_RULES_META)} 条")
-    for _line in _mask_diag:
-        print(f"  - {_line}")
     # v1.1.13: 强制代码层默认 — 不依赖磁盘 config.json 漂移
     _v113_apply_rule_overrides()
+    # 注: 启动诊断 print 移到 if __name__ == "__main__": 块, 避免被 import 时重复触发
 else:
     DEFAULT_RULES = {
         "身份证号": r"(?<!\d)([1-9]\d{5}(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]|\d{15})(?!\d)",
@@ -428,530 +407,7 @@ else:
 WORD_RULE_SCHEMA_VERSION = 1
 
 
-def resolve_word_preview_image_suffix(content_type):
-    """根据 Mammoth 图片内容类型推导本地文件后缀。"""
-    if not isinstance(content_type, str):
-        return ".img"
-
-    normalized = content_type.strip().lower()
-    if normalized in WORD_PREVIEW_IMAGE_EXTENSION_MAP:
-        return WORD_PREVIEW_IMAGE_EXTENSION_MAP[normalized]
-
-    if "/" not in normalized:
-        return ".img"
-
-    subtype = normalized.split("/", 1)[1].split(";", 1)[0].strip()
-    subtype = subtype.replace("+xml", "").replace("+zip", "")
-    subtype = re.sub(r"[^a-z0-9]+", "", subtype)
-    if not subtype:
-        return ".img"
-    return f".{subtype}"
-
-
-
-
-
-
-
-
-
-
-def build_replaced_preview_segments(text, matches, default_replacement_text="[已脱敏]"):
-    """根据匹配区间生成替换后文本分段（用于右侧预览高亮）。"""
-    if not isinstance(text, str):
-        return [{"type": "text", "value": ""}]
-    if not matches:
-        return [{"type": "text", "value": text}]
-
-    fallback_text = default_replacement_text if isinstance(default_replacement_text, str) and default_replacement_text else "[已脱敏]"
-    segments = []
-    cursor = 0
-
-    for match in sorted(matches, key=lambda item: item.get("start", 0)):
-        start = match.get("start")
-        end = match.get("end")
-        if not isinstance(start, int) or not isinstance(end, int):
-            continue
-        if start < cursor or start < 0 or end > len(text) or start >= end:
-            continue
-
-        if start > cursor:
-            segments.append({
-                "type": "text",
-                "value": text[cursor:start]
-            })
-
-        replacement = match.get("replacement", fallback_text)
-        if replacement is None:
-            replacement = fallback_text
-        if not isinstance(replacement, str):
-            replacement = str(replacement)
-
-        segments.append({
-            "type": "replacement",
-            "value": replacement,
-            "source": match.get("source", "rule"),
-            "mode": match.get("mode", ""),
-            "rule_name": match.get("rule_name", "")
-        })
-        cursor = end
-
-    if cursor < len(text):
-        segments.append({
-            "type": "text",
-            "value": text[cursor:]
-        })
-
-    if not segments:
-        return [{"type": "text", "value": text}]
-    return segments
-
-
-def build_highlight_preview_segments(text, matches):
-    """根据匹配区间生成原文高亮分段（用于左侧预览）。"""
-    if not isinstance(text, str):
-        return [{"type": "text", "value": ""}]
-    if not matches:
-        return [{"type": "text", "value": text}]
-
-    segments = []
-    cursor = 0
-    for match in sorted(matches, key=lambda item: item.get("start", 0)):
-        start = match.get("start")
-        end = match.get("end")
-        if not isinstance(start, int) or not isinstance(end, int):
-            continue
-        if start < cursor or start < 0 or end > len(text) or start >= end:
-            continue
-
-        if start > cursor:
-            segments.append({"type": "text", "value": text[cursor:start]})
-
-        segments.append({
-            "type": "highlight",
-            "value": text[start:end],
-            "source": match.get("source", "manual"),
-            "mode": match.get("mode", ""),
-            "rule_name": match.get("rule_name", ""),
-            "start": start,
-            "end": end,
-        })
-        cursor = end
-
-    if cursor < len(text):
-        segments.append({"type": "text", "value": text[cursor:]})
-
-    if not segments:
-        return [{"type": "text", "value": text}]
-    return segments
-
-
-WORD_PREVIEW_BLOCK_SELECTOR = '[data-word-block="1"][data-key]'
-
-
-def build_word_panel_update_script(block_updates):
-    """构建仅更新正文块的 Word 预览增量刷新脚本。"""
-    payload = json.dumps(block_updates or {}, ensure_ascii=False)
-    return f"""
-        (function() {{
-            const updates = {payload};
-            const elements = document.querySelectorAll('{WORD_PREVIEW_BLOCK_SELECTOR}');
-            elements.forEach(function(el) {{
-                const key = el.dataset.key;
-                if (Object.prototype.hasOwnProperty.call(updates, key)) {{
-                    const nextHtml = updates[key];
-                    if (el.innerHTML !== nextHtml) {{
-                        el.innerHTML = nextHtml;
-                    }}
-                }}
-            }});
-        }})();
-    """
-
-
-def should_reload_word_panel(source_changed, loaded_source_path, current_file_path, panel_ready):
-    """判断 Word 预览面板是否需要重新加载完整文档。"""
-    if source_changed:
-        return True
-    if not panel_ready:
-        return True
-    return loaded_source_path != current_file_path
-
-
-def format_signed_percent(value):
-    """将百分比格式化为适合界面展示的文案。"""
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
-        number = 0
-    return f"{number:+d}%" if number else "0%"
-
-
-def build_settings_nav_labels(enabled_rules, keyword_count, precision_is_default, ocr_adjust_value, blacklist_count=0, whitelist_count=0):
-    """构建设置中心左侧导航标签。"""
-    return [
-        f"1 通用规则 · {max(0, int(enabled_rules))}项启用",
-        f"2 自定义关键词 · {max(0, int(keyword_count))}条",
-        f"3 黑名单 · {max(0, int(blacklist_count))}条",
-        f"4 白名单 · {max(0, int(whitelist_count))}条",
-        f"5 扫描与微调 · {'默认' if precision_is_default else '已微调'}",
-        f"6 OCR 检测框 · {format_signed_percent(ocr_adjust_value)}",
-    ]
-
-
-def build_settings_hero_tags(enabled_rules, keyword_count, enabled_word_rules, precision_is_default, ocr_adjust_value, scan_label):
-    """构建设置页顶部的动态摘要标签。"""
-    common_tag = (
-        f"常用：规则 {max(0, int(enabled_rules))} 项 · "
-        f"关键词 {max(0, int(keyword_count))} 条 · "
-        f"Word {max(0, int(enabled_word_rules))} 条"
-    )
-    if precision_is_default:
-        advanced_tag = f"高级：扫描推荐值 · OCR {format_signed_percent(ocr_adjust_value)}"
-    else:
-        normalized_scan_label = str(scan_label or "-").strip() or "-"
-        advanced_tag = (
-            f"高级：{normalized_scan_label} · "
-            f"OCR {format_signed_percent(ocr_adjust_value)} · 已微调"
-        )
-    return common_tag, advanced_tag
-
-
-def build_batch_result_rows(summary):
-    """将批量替换 summary 转成结果表格行。"""
-    if not isinstance(summary, dict):
-        return []
-
-    rows = []
-    failed_items = summary.get("failed", []) if isinstance(summary.get("failed", []), list) else []
-    success_items = summary.get("success", []) if isinstance(summary.get("success", []), list) else []
-
-    for item in failed_items:
-        if not isinstance(item, dict):
-            continue
-        input_path = str(item.get("input", "") or "")
-        rows.append({
-            "status": "失败",
-            "status_key": "failed",
-            "document": os.path.basename(input_path) if input_path else "未知文档",
-            "detail": str(item.get("error", "") or "处理失败"),
-            "action": "双击定位原文件",
-            "open_path": input_path,
-            "fallback_dir": os.path.dirname(input_path) if input_path else "",
-        })
-
-    for item in success_items:
-        if not isinstance(item, dict):
-            continue
-        input_path = str(item.get("input", "") or "")
-        output_path = str(item.get("output", "") or "")
-        rows.append({
-            "status": "成功",
-            "status_key": "success",
-            "document": os.path.basename(input_path) if input_path else "未知文档",
-            "detail": os.path.basename(output_path) if output_path else "已生成输出文件",
-            "action": "双击打开输出",
-            "open_path": output_path,
-            "fallback_dir": os.path.dirname(output_path) if output_path else "",
-        })
-
-    return rows
-
-
-def summarize_batch_result_rows(rows):
-    """汇总批量结果行数量。"""
-    summary = {"total": 0, "success": 0, "failed": 0}
-    for row in rows or []:
-        if not isinstance(row, dict):
-            continue
-        summary["total"] += 1
-        status_key = row.get("status_key")
-        if status_key == "success":
-            summary["success"] += 1
-        elif status_key == "failed":
-            summary["failed"] += 1
-    return summary
-
-
-def build_batch_filter_labels(summary_counts, show_counts=False):
-    """构建批量结果筛选按钮文案。"""
-    counts = summary_counts if isinstance(summary_counts, dict) else {}
-    total = max(0, int(counts.get("total", 0) or 0))
-    success = max(0, int(counts.get("success", 0) or 0))
-    failed = max(0, int(counts.get("failed", 0) or 0))
-    if not show_counts:
-        return {"all": "全部", "success": "成功", "failed": "失败"}
-    return {
-        "all": f"全部 {total}",
-        "success": f"成功 {success}",
-        "failed": f"失败 {failed}",
-    }
-
-
-def filter_batch_result_rows(rows, filter_mode):
-    """按筛选模式过滤批量结果行。"""
-    if filter_mode not in {"all", "success", "failed"}:
-        filter_mode = "all"
-
-    filtered = []
-    for row in rows or []:
-        if not isinstance(row, dict):
-            continue
-        if filter_mode == "all":
-            filtered.append(row)
-        elif row.get("status_key") == filter_mode:
-            filtered.append(row)
-    return filtered
-
-
-def build_batch_rule_summary_lines(rules, success_items, default_replacement_text="[已脱敏]"):
-    """按规则生成批量替换摘要明细。"""
-    normalized_rules = normalize_word_replace_rules(rules, default_replacement_text)
-    if not normalized_rules:
-        return []
-
-    def _extract_rule_count(item, target_rule_index):
-        if not isinstance(item, dict):
-            return 0
-
-        counts = item.get("rule_counts", [])
-        if isinstance(counts, dict):
-            try:
-                return max(0, int(counts.get(str(target_rule_index), counts.get(target_rule_index, 0)) or 0))
-            except (TypeError, ValueError):
-                return 0
-
-        if not isinstance(counts, list):
-            return 0
-
-        for entry in counts:
-            if not isinstance(entry, dict):
-                continue
-            try:
-                rule_index = int(entry.get("rule_index", -1))
-                count = int(entry.get("count", 0) or 0)
-            except (TypeError, ValueError):
-                continue
-            if rule_index == target_rule_index:
-                return max(0, count)
-        return 0
-
-    lines = []
-    for rule_index, rule in enumerate(normalized_rules, start=1):
-        doc_parts = []
-        replacement_text = rule.get("replace") or default_replacement_text
-
-        for item in success_items or []:
-            count = _extract_rule_count(item, rule_index - 1)
-            if count <= 0:
-                continue
-            input_name = os.path.basename(str(item.get("input", "") or "")) or "未知文档"
-            doc_parts.append(f"{input_name} 成功替换 {count} 条")
-
-        if doc_parts:
-            lines.append(
-                f"{rule_index}、“{rule.get('find', '')}”替换为“{replacement_text}”，"
-                + "，".join(doc_parts)
-                + "；"
-            )
-        else:
-            lines.append(
-                f"{rule_index}、“{rule.get('find', '')}”替换为“{replacement_text}”，本轮未命中；"
-            )
-
-    return lines
-
-
-def build_workbench_guidance(mode, batch_stage="rule_setup", has_results=False, compare_mode=False):
-    """按当前模式生成顶部工作台的下一步引导标签。"""
-    if mode == "pdf":
-        first_step = "下一步：人工复核并导出" if has_results else "下一步：先点智能脱敏"
-        return [
-            first_step,
-            "黑 / 白遮罩可立即切换",
-            "支持手动画框补充脱敏",
-        ]
-    if mode == "word":
-        compare_tip = "当前可隐藏对比预览" if compare_mode else "需要时可打开对比预览"
-        first_step = "下一步：先检查替换规则" if not has_results else "下一步：复核替换结果"
-        return [
-            first_step,
-            "原文预览与替换预览分开显示",
-            compare_tip,
-        ]
-    if mode == "batch":
-        if batch_stage == "running":
-            return [
-                "当前：正在批量替换文档",
-                "可随时停止并保留已完成结果",
-                "完成后可筛选成功 / 失败清单",
-            ]
-        if batch_stage in ("finished", "stopped"):
-            return [
-                "下一步：先看失败文档和原因",
-                "可仅重试失败文档",
-                "双击结果可打开输出或定位原文件",
-            ]
-        return [
-            "下一步：确认规则后再开始执行",
-            "这一步不会改动任何原文件",
-            "建议至少启用一条 Word 替换规则",
-        ]
-    if mode == "image_merge":
-        return [
-            "下一步：确认图片顺序后开始合并",
-            "支持多张图片自动合成为 PDF",
-            "合并完成后会直接进入 PDF 脱敏",
-        ]
-    return [
-        "支持拖拽导入，系统会自动分流",
-        "PDF 走脱敏，Word 走替换",
-        "多个 Word 会先进入批量规则确认",
-        "多张图片可直接合并为 PDF",
-    ]
-
-
-def build_toolbar_mode_labels(mode, density_mode, has_results=False, enabled_word_rules=0):
-    """构建工具栏在不同模式下的主动作文案。"""
-    compact = density_mode != "wide"
-
-    if mode == "pdf":
-        if has_results:
-            scan_text = "重脱" if compact else "重新脱敏"
-            scan_tooltip = "重新执行 PDF 智能脱敏扫描"
-        else:
-            scan_text = "脱敏" if compact else "智能脱敏"
-            scan_tooltip = "执行 PDF 智能脱敏扫描"
-        save_text = "导出" if compact else "导出 PDF"
-        save_tooltip = "导出当前 PDF 脱敏结果"
-    elif mode == "word":
-        if has_results:
-            scan_text = "重替" if compact else "重新替换"
-            scan_tooltip = "重新执行 Word 智能替换扫描"
-        else:
-            scan_text = "替换" if compact else "智能替换"
-            scan_tooltip = "执行 Word 智能替换扫描"
-        save_text = "导出" if compact else "导出 Word"
-        save_tooltip = "导出当前 Word 替换结果"
-    else:
-        scan_text = "脱敏" if compact else "智能脱敏"
-        save_text = "导出"
-        scan_tooltip = "执行智能脱敏扫描"
-        save_tooltip = "导出处理结果"
-
-    if enabled_word_rules > 0:
-        word_rules_text = f"规则 {enabled_word_rules}" if compact else f"替换规则 {enabled_word_rules}"
-        word_rules_tooltip = f"打开 Word 替换规则（当前启用 {enabled_word_rules} 条）"
-    else:
-        word_rules_text = "规则" if compact else "替换规则"
-        word_rules_tooltip = "打开 Word 替换规则"
-
-    return {
-        "open_text": "打开",
-        "open_tooltip": "打开 PDF、Word 或图片文件",
-        "scan_text": scan_text,
-        "scan_tooltip": scan_tooltip,
-        "save_text": save_text,
-        "save_tooltip": save_tooltip,
-        "word_rules_text": word_rules_text,
-        "word_rules_tooltip": word_rules_tooltip,
-    }
-
-
-def _shift_density_mode(mode, order, step):
-    """在既定密度序列里前后移动一档。"""
-    if mode not in order:
-        return mode
-    index = order.index(mode)
-    target = max(0, min(len(order) - 1, index + step))
-    return order[target]
-
-
-def resolve_workspace_density_mode(mode, width, height=0, scale=1.0):
-    """解析主工作区工具栏密度档位，兼顾 Windows DPI 与窗口高度。"""
-    width = max(int(width or 0), 1)
-    height = max(int(height or 0), 0)
-    scale = max(1.0, float(scale or 1.0))
-
-    if mode == "pdf":
-        wide_threshold = 1500
-        compact_threshold = 1260
-    elif mode == "word":
-        wide_threshold = 1220
-        compact_threshold = 980
-    else:
-        wide_threshold = 1080
-        compact_threshold = 860
-
-    if scale >= 1.5:
-        wide_threshold += 90
-        compact_threshold += 60
-    elif scale >= 1.25:
-        wide_threshold += 50
-        compact_threshold += 30
-
-    if height:
-        if height >= 980:
-            wide_threshold -= 50
-            compact_threshold -= 30
-        elif height <= 760:
-            wide_threshold += 70
-            compact_threshold += 40
-
-    wide_threshold = max(compact_threshold + 80, wide_threshold)
-    compact_threshold = max(720, min(compact_threshold, wide_threshold - 80))
-
-    if width >= wide_threshold:
-        return "wide"
-    if width >= compact_threshold:
-        return "compact"
-    return "narrow"
-
-
-def resolve_settings_density_mode(width, height=0, scale=1.0):
-    """解析高级设置页密度档位，优先为 Windows 高 DPI 和不同窗口高度收口。"""
-    width = max(int(width or 0), 1)
-    height = max(int(height or 0), 0)
-    scale = max(1.0, float(scale or 1.0))
-    order = ["narrow", "compact", "roomy", "wide"]
-
-    if width >= 1700:
-        density_mode = "wide"
-    elif width >= 1450:
-        density_mode = "roomy"
-    elif width >= 1260:
-        density_mode = "compact"
-    else:
-        density_mode = "narrow"
-
-    if scale >= 1.5:
-        density_mode = _shift_density_mode(density_mode, order, -1)
-        if width < 1360:
-            density_mode = "narrow"
-    elif scale >= 1.25 and density_mode == "wide" and width < 1760:
-        density_mode = "roomy"
-
-    if height:
-        if height <= 820:
-            density_mode = _shift_density_mode(density_mode, order, -1)
-        elif height >= 980:
-            if density_mode == "compact" and width >= 1380:
-                density_mode = "roomy"
-            elif density_mode == "roomy" and width >= 1600:
-                density_mode = "wide"
-
-    return density_mode
-
-
-
-
-
-
-
-
 # === 设置对话框 ===
-
-
 
 
 # === 图片排序对话框 ===
@@ -959,7 +415,6 @@ def resolve_settings_density_mode(width, height=0, scale=1.0):
 # === 配置常量 ===
 
 # === 反馈对话框 ===
-
 
 
 # === 单页画布 (完全复制 v1.1.11 的 PDFCanvas 实现) ===
@@ -972,13 +427,15 @@ class OCRWorker(_ModularOCRWorker):
 
     def __init__(self, pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
                  use_char_level_ocr: bool = False, seal_detection_enabled: bool = False,
-                 enable_name_recognition: bool = False):
+                 enable_name_recognition: bool = False,
+                 name_context_extra_tokens=None):
         box_adjust_ratio = config.get("ocr.box_adjust_ratio", 0.0) if config else 0.0
         super().__init__(pdf_path, rules, use_enhance, custom_keywords, scan_scale, off_x, off_w,
                          use_char_level_ocr=use_char_level_ocr,
                          seal_detection_enabled=seal_detection_enabled,
                          box_adjust_ratio=box_adjust_ratio,
-                         enable_name_recognition=enable_name_recognition)
+                         enable_name_recognition=enable_name_recognition,
+                         name_context_extra_tokens=name_context_extra_tokens)
 
 # === WebView Bridge：Python 与 JavaScript 通信 ===
 
@@ -1845,9 +1302,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
         QTimer.singleShot(0, self._refresh_toolbar_responsiveness)
 
 
-
-
-
     # ============== v1.1.11: 拖拽打开文件功能 ==============
 
     def dragEnterEvent(self, event):
@@ -2061,8 +1515,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
         )
 
 
-
-
     def _is_word_web_view_valid(self, web_view):
         """判断 Word 预览 WebView 是否仍然可用。"""
         if web_view is None:
@@ -2107,22 +1559,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
     # v1.1.11: 移除 eventFilter，直接在 SinglePageCanvas.mousePressEvent 中处理
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     def _get_display_scale_factor(self):
         """返回当前显示环境的缩放因子，主要用于 Windows DPI 收口。"""
         import platform
@@ -2165,13 +1601,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
         self._apply_native_toolbar_icons()
 
 
-
-
-
-
-
-
-
     def _refresh_workflow_steps(self, active_index):
         """刷新顶部流程步骤，让主路径始终可见。"""
         if not hasattr(self, "workflow_step_labels"):
@@ -2204,8 +1633,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
             )
 
 
-
-
     def _count_enabled_general_rules(self):
         """统计启用的通用规则数量。"""
         return len([rule for rule in self.active_rules if isinstance(rule, str) and rule])
@@ -2222,19 +1649,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
     def _has_word_redactions(self):
         """当前 Word 是否已有智能/手动脱敏结果。"""
         return any(data.get("ocr") or data.get("manual") for data in self.word_data.values())
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     def _refresh_merge_workspace(self):
@@ -2286,9 +1700,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
                 self._set_batch_step_style(frame, title_label, note_label, state)
 
 
-
-
-
     def _sync_ui_mode(self):
         """根据当前运行状态推导界面模式。"""
         if self.active_task_type == "batch_replace":
@@ -2303,7 +1714,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
             self._set_ui_mode("batch")
         else:
             self._set_ui_mode("idle")
-
 
 
     def create_btn(self, text, func, enabled=True, style="primary", width=None, tooltip=""):
@@ -2338,9 +1748,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
         btn.setProperty("btn_style", style)
 
         return btn
-
-
-
 
 
     def toggle_dual_view(self, checked):
@@ -2462,7 +1869,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
         self.replacement_text = text if text.strip() else "[已脱敏]"
 
 
-
     def _has_word_replacement_candidates(self):
         """是否存在可在右侧预览中展示的替换结果（规则/OCR/手动）。"""
         if self._has_enabled_word_replace_rules():
@@ -2512,11 +1918,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
             )
 
         return "".join(fragment_parts)
-
-
-
-
-
 
 
     def detect_file_type(self, fname):
@@ -2885,9 +2286,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
                 self.converted_temp_file = None
 
 
-
-
-
     def on_rect_added(self, page_idx, rect):
         """由于使用共享列表引用，canvas 已直接修改列表，这里只需刷新视图"""
         # self.page_data[page_idx]['manual'].append(rect)  # 不需要，canvas 已经添加
@@ -2912,7 +2310,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
         if self.dual_view and self.current_page % 2 != 0: self.current_page -= 1
         self.render_view()
         self.scroll.verticalScrollBar().setValue(0)
-
 
 
     def zoom_in(self):
@@ -3021,7 +2418,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
         # v1.1.11: 存储错误消息，延迟到线程清理完成后显示
         # 避免在模态对话框阻塞主线程时形成死锁
         self._pending_error_msg = error_msg
-
 
 
     @staticmethod
@@ -3149,12 +2545,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
             QMessageBox.information(self, "完成", f"智能扫描已完成！\n共发现 {total_matches} 处敏感信息")
 
 
-
-
-
-
-
-
     def _apply_word_panel_updates(self, web_view, block_updates):
         if web_view is None or not block_updates:
             return
@@ -3230,9 +2620,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
         )
 
 
-
-
-
     def _handle_word_scroll_sync_original_ratio(self, original_ratio, generation):
         """获取左侧比例后继续读取右侧比例。"""
         if generation != self._word_scroll_sync_generation:
@@ -3302,7 +2689,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
             self._apply_word_scroll_ratio_to_panel("original", normalized_replaced)
 
         self._word_scroll_sync_polling = False
-
 
 
     def _add_data_key_attributes(self, html, text_blocks):
@@ -3401,7 +2787,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
         return html
 
 
-
     def _inject_interactive_html(self, html, scroll_restore=''):
         """注入 JavaScript 交互逻辑用于右键菜单和脱敏操作
 
@@ -3453,7 +2838,6 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
 {html}
 </body>
 </html>'''
-
 
 
     def _replace_in_paragraph(self, para, matches, text_offset=0):
@@ -3515,6 +2899,31 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
         if source_run.font.superscript:
             target_run.font.superscript = True
 
-# ⚠️ main.py 入口已废弃 (PR-B5 收口)。
-# 新运行时入口:`python -m secureredact.main`
-# 此文件保留仅为向后兼容,不再包含任何运行时入口代码。
+# ⚠️ main.py 入口已恢复 (PR-B5.x — 兼顾打包 .exe 友好)
+# ====================================================================
+# 优先使用 `python -m secureredact.main`(更纯净,无副作用)。
+# 但 `python main.py` 仍可用,便于 PyInstaller --onefile 打包时以 main.py 为主入口。
+#
+# 两种入口等价:
+#     python main.py                     ← PyInstaller 推荐,用户习惯
+#     python -m secureredact.main        ← 模块入口,开发推荐
+# ====================================================================
+if __name__ == "__main__":
+    # v1.1.12: 启动诊断(只在 __main__ 入口处打印, 避免 import main 时重复)
+    _mask_diag = []
+    for _name, _meta in DEFAULT_RULES_META.items():
+        if not _meta:
+            _mask_diag.append(f"{_name}=<空>")
+        else:
+            _pf = _meta.get("mask_keep_prefix", 0)
+            _ps = _meta.get("mask_keep_suffix", 0)
+            _md = _meta.get("mask_mode", "default")
+            _mask_diag.append(f"{_name}={_md} {_pf}+{_ps}")
+    print(f"[v1.1.12 启动诊断] DEFAULT_RULES_META 加载: {len(DEFAULT_RULES_META)} 条")
+    for _line in _mask_diag:
+        print(f"  - {_line}")
+
+    import sys as _sys
+    from secureredact.main import main as _entry_main
+    _sys.exit(_entry_main())
+
