@@ -89,7 +89,14 @@ __all__ = [
     'redact_word',
     'filter_hits_by_overrides',
     'batch_redact_word',
+    # PR-C6.1 迁出的纯常量
+    'WORD_RULE_SCHEMA_VERSION',
 ]
+
+
+# PR-C6.1:WORD_RULE_SCHEMA_VERSION 从 main.py 顶层迁出(plan §4.4 优先级 3 UI 常量末批,
+# 实际因为纯常量 = 1,迁移风险极低,提前到 P3 第一批)
+WORD_RULE_SCHEMA_VERSION = 1
 
 _LAZY_IMPORTS = {
     'ImageMergeWorker': ('secureredact.workers', 'ImageMergeWorker'),

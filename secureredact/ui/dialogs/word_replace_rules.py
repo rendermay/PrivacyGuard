@@ -254,7 +254,7 @@ class WordReplaceRulesDialog(QDialog):
             QMessageBox.critical(self, "导入失败", f"无法导入规则文件：\n{e}")
 
     def export_rules_json(self):
-        from main import WORD_RULE_SCHEMA_VERSION  # PR-B5.2: 延迟导入
+        from secureredact import WORD_RULE_SCHEMA_VERSION  # PR-C6.1: 延迟导入(原 main.py 顶层常量)
         rules, default_text, errors = self._collect_rules_from_table(validate_regex=True)
         if errors:
             QMessageBox.warning(self, "无法导出", "\n".join(errors))
