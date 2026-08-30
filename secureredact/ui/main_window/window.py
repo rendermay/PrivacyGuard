@@ -7,8 +7,7 @@ density/setup_ui/handlers/theme) 平行放置。
 
 历史:
 - PR-B0~B2.x: MainWindow 在 main.py(同源兼容 shim)
-- PR-B5:     main.py 末尾 __main__ shim 移除
-- PR-XXX(本 PR): MainWindow 类整体迁入本模块
+- PR-C9 (本 PR): MainWindow 类整体迁入本模块;main.py 保留 if __name__ 块作为 python main.py 兼容入口(Python 打包 .exe 友好)
 
 公开 API:
 - `MainWindow` — 主窗口类,9 层 mixin + QMainWindow 多继承
@@ -115,7 +114,7 @@ from ._js_constants import _INTERACTIVE_JS_CODE  # PR-C9 Task 2 C2-fix: 见 _js_
 
 def read_app_version():
     """从统一版本文件读取基础版本号。"""
-    version_file = Path(__file__).resolve().parent / "version.txt"
+    version_file = Path(__file__).resolve().parent.parent.parent.parent / "version.txt"
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except OSError:

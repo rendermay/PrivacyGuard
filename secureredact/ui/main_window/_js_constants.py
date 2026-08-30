@@ -6,7 +6,7 @@ Single source for both main.py and window.py.
 历史:
 - v1.1.11: `_INTERACTIVE_JS_CODE` 作为模块级常量定义在 main.py:224
 - v1.1.13 PR-C9 Task 2: MainWindow 迁移到 secureredact/ui/main_window/window.py
-  但常量未同步迁移，导致 window.py:1923/1936/1938 的引用会 NameError。
+  但常量未同步迁移，导致 window.py 内的引用会 NameError。
 - v1.1.13 PR-C9 Task 2 C2-fix (本 PR): 把常量抽到独立模块,
   让 main.py (兼容 shim, 直到 Task 3 删除) 与 window.py 都从这里 import。
 
