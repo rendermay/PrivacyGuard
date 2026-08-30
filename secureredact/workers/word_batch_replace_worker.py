@@ -17,6 +17,7 @@ from io import BytesIO
 from PIL import Image
 from bs4 import BeautifulSoup
 from secureredact.redaction.word_rules import normalize_word_replace_rules, build_word_rule_matches, replace_matches_in_paragraph  # PR-C1.1
+from secureredact.utils.doc_converter import convert_doc_to_docx as _shared_convert_doc_to_docx  # PR-C4.0 fix-up (REVIEWS-v2 C-1):原本依赖 main.py:49 隐式 import,此处内联以让 worker 在没有 shim 时也能正常 import(.doc 路径 100% 触发该函数)
 
 # PyQt6 — 完整集合,覆盖所有 5 个新模块需要
 from PyQt6.QtCore import (
