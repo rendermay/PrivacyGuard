@@ -94,6 +94,9 @@ __all__ = [
     # PR-C6.2 迁出的 UI 内部常量(原 config.get 默认值)
     'ZOOM_MIN',
     'ZOOM_MAX',
+    # PR-C6.3 迁出的 UI 常量
+    'APP_NAME',
+    'VERSION',
 ]
 
 
@@ -108,6 +111,22 @@ WORD_RULE_SCHEMA_VERSION = 1
 # singleton 后再切回 config 派生。
 ZOOM_MIN = 0.5
 ZOOM_MAX = 4.0
+
+# PR-C6.3:APP_NAME / VERSION 从 main.py 顶层迁出。
+# APP_NAME 原 main.py 派生: config.get("app.name", "SecureRedact 信息脱敏助手")
+# VERSION 原 main.py 派生: VERSION = APP_VERSION, APP_VERSION = read_app_version()
+# 此处 APP_NAME 硬编码(默认值与原 config 一致),
+# VERSION 走 read_app_version()(读 version.txt,已存在 secureredact.__version__ 来源)。
+APP_NAME = "SecureRedact 信息脱敏助手"
+
+
+def VERSION():
+    """应用版本号(动态从 version.txt 读取,与 secureredact.__version__ 同源)。
+
+    注:封装为函数而非直接赋字符串,确保运行时最新版本被读取
+    (原 main.py read_app_version() 行为)。
+    """
+    return _read_version()
 
 _LAZY_IMPORTS = {
     'ImageMergeWorker': ('secureredact.workers', 'ImageMergeWorker'),
