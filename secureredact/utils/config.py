@@ -619,3 +619,154 @@ def get_config_value(path: str, default: Any = None, config_path: Optional[str] 
     """便捷函数：获取配置值"""
     config = ConfigManager(config_path)
     return config.get(path, default)
+
+
+# =====================================================================
+# PR-C6.4:从 main.py:144 迁出的 SimpleConfig + 全局 config singleton
+# =====================================================================
+
+class SimpleConfig:
+    """简化配置管理器 - 直接从 config.json 读取(PR-C6.4 从 main.py:144 迁出)
+
+    与 ConfigManager 区别:
+    - ConfigManager:高级 API,支持多 schema 验证、热重载、字段监听
+    - SimpleConfig:低阶 API,扁平 dict 读写 + dot-path 访问,无 schema 校验
+
+    保留兼容 — main.py 仍 re-export,GUI / mixin 仍可 'from main import config'。
+    """
+
+    def __init__(self, config_path=None):
+        self._config = {}
+        if config_path is None:
+            config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'config.json')
+        self._config_path = config_path
+        self.load()
+
+    @staticmethod
+    def _deep_merge(base: dict, override: dict) -> dict:
+        """v1.1.12: 深度合并 — override 中有的字段覆盖 base, base 中独有字段保留。
+
+        用于 SimpleConfig.save() 字段保护, 避免磁盘上其他版本/扩展字段被擦除。
+        对 dict 类型递归合并, 非 dict 类型(标量/列表)直接覆盖。
+        """
+        result = dict(base)
+        for k, v in override.items():
+            if k in result and isinstance(result[k], dict) and isinstance(v, dict):
+                result[k] = SimpleConfig._deep_merge(result[k], v)
+            else:
+                result[k] = v
+        return result
+
+    def load(self):
+        """加载配置文件并补齐默认键。
+
+        v1.1.12: 额外从 DEFAULT_CONFIG(本模块内嵌)合并缺失的 default_rules 字段,
+        避免 disk 配置被外部操作擦除 mask_* 等扩展字段时丢失功能。
+        """
+        try:
+            if os.path.exists(self._config_path):
+                with open(self._config_path, 'r', encoding='utf-8') as f:
+                    self._config = json.load(f)
+        except (OSError, IOError, json.JSONDecodeError) as e:
+            print(f"[配置系统] 加载配置失败: {e}")
+
+        red = self._config.setdefault("redaction", {})
+        red.setdefault("enable_hit_override", True)
+        overrides = red.setdefault("overrides", {})
+        overrides.setdefault("permanent", [])
+
+        # v1.1.12: 字段保护 — 强制覆盖内置规则的 mask_* 字段
+        try:
+            disk_rules = self._config.setdefault("redaction", {}).setdefault("default_rules", {})
+            default_rules = DEFAULT_CONFIG.get("redaction", {}).get("default_rules", {})
+            for rule_name, default_meta in default_rules.items():
+                if rule_name not in disk_rules:
+                    disk_rules[rule_name] = default_meta
+                elif isinstance(default_meta, dict) and isinstance(disk_rules[rule_name], dict):
+                    for k, v in default_meta.items():
+                        if k.startswith("mask_") and k in default_meta:
+                            disk_rules[rule_name][k] = v
+                    if "pattern" in default_meta and "pattern" in disk_rules[rule_name]:
+                        code_pat = default_meta["pattern"]
+                        disk_pat = disk_rules[rule_name]["pattern"]
+                        if code_pat != disk_pat:
+                            code_normalized = code_pat.replace("\\", "").replace("\\\\", "")
+                            disk_normalized = disk_pat.replace("\\", "").replace("\\\\", "")
+                            if len(code_normalized) > len(disk_normalized):
+                                disk_rules[rule_name]["pattern"] = code_pat
+
+            default_whitelist = DEFAULT_CONFIG.get("redaction", {}).get("whitelist", [])
+            disk_whitelist = self._config.setdefault("redaction", {}).setdefault("whitelist", [])
+            for item in default_whitelist:
+                if item not in disk_whitelist:
+                    disk_whitelist.append(item)
+        except Exception as _exc:
+            print(f"[配置系统] 强制覆盖 mask 字段失败: {_exc}")
+
+    def _load_config(self):
+        """[兼容保留] 旧版加载入口,委托给 load()."""
+        self.load()
+
+    def save(self):
+        """原子写回磁盘 — 先写 .tmp,再 os.replace 原子替换.
+
+        v1.1.12: 字段保护 — 从磁盘读 + 合并,避免 SettingsDialog 保存时擦除
+        disk 上 self._config 没有的字段(如 mask_* 等其他版本/扩展字段)。
+        """
+        tmp_path = self._config_path + ".tmp"
+        try:
+            try:
+                if os.path.exists(self._config_path):
+                    with open(self._config_path, 'r', encoding='utf-8') as f:
+                        disk_config = json.load(f)
+                else:
+                    disk_config = {}
+            except (OSError, IOError, json.JSONDecodeError):
+                disk_config = {}
+
+            merged = self._deep_merge(disk_config, self._config)
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                json.dump(merged, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, self._config_path)
+            return True
+        except (OSError, IOError, TypeError) as e:
+            print(f"[配置系统] 保存配置失败: {e}")
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+            return False
+
+    def get(self, key, default=None):
+        """获取配置值(支持点分隔路径)"""
+        keys = key.split('.')
+        value = self._config
+        for k in keys:
+            if isinstance(value, dict) and k in value:
+                value = value[k]
+            else:
+                return default
+        return value
+
+    def set(self, key, value, persist=True):
+        """设置配置值(支持点分隔路径)"""
+        keys = key.split('.')
+        config = self._config
+        for k in keys[:-1]:
+            if k not in config:
+                config[k] = {}
+            elif not isinstance(config[k], dict):
+                config[k] = {}
+            config = config[k]
+        config[keys[-1]] = value
+        if persist:
+            self.save()
+
+    def get_redaction_rules(self):
+        """获取脱敏规则"""
+        return self.get('redaction.default_rules', {})
+
+
+# 全局 config singleton(原 main.py:313 'config = SimpleConfig()' 迁出)
+config = SimpleConfig()

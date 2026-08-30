@@ -47,7 +47,8 @@ class FeedbackDialog(QDialog):
     """开发者信息与反馈对话框"""
     def __init__(self, parent=None):
         super().__init__(parent)
-        from secureredact import APP_NAME, VERSION, config  # PR-C6.3: 延迟导入(原 main.py 顶层常量)
+        from secureredact import APP_NAME, VERSION  # PR-C6.3: 延迟导入(原 main.py 顶层常量)
+        from secureredact.utils.config import config  # PR-C6.4: config singleton 从 main.py 迁出
 
         # v1.1.11: 修复 Windows 深色模式下对话框显示问题
         self.setWindowFlags(
