@@ -108,6 +108,7 @@ from secureredact.ui.main_window.theme import MainWindowThemeMixin  # PR-C1
 from secureredact.redaction.override_store import HitOverrideStore  # v1.1.11: override store 单例
 from secureredact.redaction.doc_hash import compute_doc_hash  # v1.1.11: 文档 hash
 from secureredact.redaction.black_white_list_store import BlackWhiteListStore  # v1.1.11: 黑/白名单 store
+from ._js_constants import _INTERACTIVE_JS_CODE  # PR-C9 Task 2 C2-fix: 见 _js_constants.py 模块头说明
 
 
 # === Module-level constants (from main.py:140-164) ===
