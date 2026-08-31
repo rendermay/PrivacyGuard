@@ -64,7 +64,7 @@ jobs:
 
       - name: Run API tests with coverage gate (100%)
         run: |
-          python -m pytest -m api --cov=secureredact/api --cov-report=term-missing --cov-fail-under=100
+          python -m pytest -m api --cov=secureredact.api --cov-report=term-missing --cov-fail-under=100
 
       - name: Run full test suite (excluding slow)
         run: |
