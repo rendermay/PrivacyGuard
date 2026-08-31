@@ -62,3 +62,24 @@ def test_font_tokens_available():
     assert FONT_WEIGHT_REGULAR == 400
     assert FONT_SIZE_XS == 11
     assert FONT_SIZE_2XL == 32
+
+
+def test_tokens_dataclass_has_primary_hover():
+    """Tokens dataclass 含 primary_hover 字段（Spec A §4.1 新增）。"""
+    from secureredact.ui.styles.tokens import Tokens, LIGHT, DARK
+    assert "primary_hover" in Tokens.__dataclass_fields__
+    assert LIGHT.primary_hover  # 任意非空 hex
+    assert DARK.primary_hover
+
+
+def test_tokens_dataclass_legacy_compat():
+    """所有原 16 字段保留,get_substitution_map 输出含全部 17 字段。"""
+    from secureredact.ui.styles.tokens import get_substitution_map
+    light_map = get_substitution_map("light")
+    dark_map = get_substitution_map("dark")
+    # 17 颜色字段 + font_family / font_size_small / font_size_normal = 20
+    assert len(light_map) == 20
+    assert "primary_hover" in light_map
+    assert "primary_hover" in dark_map
+    # LIGHT 和 DARK 的 primary_hover 应该不同
+    assert light_map["primary_hover"] != dark_map["primary_hover"]

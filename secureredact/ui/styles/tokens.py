@@ -24,6 +24,7 @@ class Tokens:
     background: str
     surface: str
     primary: str
+    primary_hover: str  # PR-V1 Task 2 新增（Logo Blue-700/600）
     secondary: str
     accent: str
     text: str
@@ -45,6 +46,7 @@ LIGHT = Tokens(
     background="#F7F8FA",
     surface="#FFFFFF",
     primary="#0F6CBD",
+    primary_hover="#1D4ED8",  # Blue-700 (LOGO)
     secondary="#5F6B7A",
     accent="#0FA968",
     text="#18212F",
@@ -64,6 +66,7 @@ DARK = Tokens(
     background="#151C26",
     surface="#1E2836",
     primary="#56A8FF",
+    primary_hover="#2563EB",  # Blue-600 (LOGO Dark)
     secondary="#9AA8BA",
     accent="#34D399",
     text="#F6F8FC",
