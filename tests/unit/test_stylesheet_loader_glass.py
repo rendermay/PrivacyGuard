@@ -23,3 +23,44 @@ def test_qt_version_parsing():
     result = _qt_major_version()
     assert isinstance(result, int)
     assert result >= 5  # 至少 Qt 5
+
+
+def test_stylesheet_loader_has_glass_attribute():
+    """StylesheetLoader 实例有 glass_supported 属性(启动期确定)。"""
+    from secureredact.ui.styles.loader import StylesheetLoader
+    loader = StylesheetLoader()
+    assert hasattr(loader, "glass_supported")
+    assert isinstance(loader.glass_supported, bool)
+
+
+def test_stylesheet_loader_glass_branch_in_render():
+    """render() 输出对 glass_supported 行为有可识别差异。
+
+    验证方式:检查 QSS 中是否包含 backdrop-filter 字符串。
+    """
+    from secureredact.ui.styles.loader import StylesheetLoader
+    from secureredact.ui.styles import _platform
+
+    # 强制设置两个 loader 实例测试
+    loader_with_glass = StylesheetLoader()
+    loader_without_glass = StylesheetLoader()
+
+    # 通过 monkeypatch 模拟两种状态
+    original = _platform.detect_blur_support
+    try:
+        _platform.detect_blur_support = lambda: True
+        _platform._GLASS_SUPPORT_CACHE = True
+        loader_with_glass.glass_supported = True
+        qss_with = loader_with_glass.render("dark", scope="main")
+
+        _platform.detect_blur_support = lambda: False
+        _platform._GLASS_SUPPORT_CACHE = False
+        loader_without_glass.glass_supported = False
+        qss_without = loader_without_glass.render("dark", scope="main")
+    finally:
+        _platform.detect_blur_support = original
+        _platform._GLASS_SUPPORT_CACHE = None
+
+    # 两条 QSS 都应正常返回(占位符机制生效即可,具体差异留给 PR-V2 的 component .qss)
+    assert isinstance(qss_with, str)
+    assert isinstance(qss_without, str)

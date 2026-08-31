@@ -19,6 +19,7 @@ import re
 from pathlib import Path
 from typing import Iterable, Sequence
 
+from ._platform import detect_blur_support
 from .tokens import get_substitution_map
 
 
@@ -91,6 +92,8 @@ class StylesheetLoader:
 
     def __init__(self, default_theme: str = "light") -> None:
         self.default_theme = default_theme
+        # PR-V3 Task 4: 启动期检测 Glass 支持(后续 PR-V2 组件 .qss 会基于此切换)
+        self.glass_supported: bool = detect_blur_support()
 
     def render(
         self,
