@@ -19,7 +19,7 @@ from typing import Dict, Mapping
 
 @dataclass(frozen=True)
 class Tokens:
-    """16 个语义 token,Light/Dark 共用键集。"""
+    """17 个语义 token,Light/Dark 共用键集(primary_hover 在 PR-V1 Task 2 新增)。"""
 
     background: str
     surface: str
@@ -104,7 +104,7 @@ def get_substitution_map(theme_name: str = "light") -> Mapping[str, str]:
     """返回 token 名字 → 实际值的 dict,供 .qss 模板替换。
 
     字段集:
-      - 16 个颜色 token 全部展开
+      - 17 个颜色 token 全部展开(primary_hover PR-V1 Task 2 新增)
       - 字体/字号常量:font_family / font_size_small / font_size_normal
     """
     tokens = get_tokens(theme_name)
