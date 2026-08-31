@@ -1,0 +1,45 @@
+{
+  "version": "1.1.13",
+  "viewport": [
+    1280,
+    800
+  ],
+  "images": [
+    {
+      "file": "main_window_light.png",
+      "theme": "light",
+      "size": [
+        1280,
+        800
+      ],
+      "sha256": "f0651dcfea3f4094"
+    },
+    {
+      "file": "main_window_dark.png",
+      "theme": "dark",
+      "size": [
+        1280,
+        800
+      ],
+      "sha256": "1d18cb6acd134f5b"
+    },
+    {
+      "file": "settings_dialog_light.png",
+      "theme": "light",
+      "size": [
+        760,
+        720
+      ],
+      "sha256": "ab4799ed71a24477"
+    },
+    {
+      "file": "settings_dialog_dark.png",
+      "theme": "dark",
+      "size": [
+        760,
+        720
+      ],
+      "sha256": "ab4799ed71a24477"
+    }
+  ]
+}
