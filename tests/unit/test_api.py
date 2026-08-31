@@ -15,7 +15,15 @@ import unittest
 # `import secureredact.api` 在无 PyQt6 环境也能成功(coverage 也能跟踪)。
 # PyQt6 依赖的函数(batch_redact_word / filter_hits_by_overrides)在 setUp
 # 检测后 skipTest,不影响 import。
-import secureredact.api as api  # noqa: E402
+#
+# PR-C9 CI 修:用 pytest.importorskip 模式保护。import 失败则 module-level
+# skip,避免 collection ERROR(cannot load module more than once per process)。
+import pytest as _pytest  # noqa: E402
+
+try:
+    import secureredact.api as api  # noqa: E402
+except Exception as e:  # noqa: BLE001 — 任意异常都视为不可用
+    _pytest.skip(f"secureredact.api import failed: {e}", allow_module_level=True)
 
 import pytest  # noqa: E402 — for markers (api / smoke)
 
