@@ -1,6 +1,6 @@
 # SecureRedact 当前项目结构说明
 
-> 仅保留当前生效结构与路径，不再混用旧版目录命名和历史脚本名。
+> 仅保留当前生效结构与路径。
 
 ---
 
@@ -14,13 +14,14 @@ SecureRedact/
 ├── config.json
 ├── config.json.template
 ├── README.md
+├── README_EN.md
 ├── PROJECT_INDEX.md
 ├── AGENTS.md
 ├── CLAUDE.md
 ├── CHANGELOG.md
-├── rollback_journal.md
-├── restore_checkpoint.sh
-├── ROLLBACK_GUIDE.md
+├── requirements.txt
+├── start_app.sh
+├── clean_project.sh
 ```
 
 ---
@@ -37,14 +38,29 @@ secureredact/
 │   ├── mixed_pdf.py
 │   ├── rapidocr.py
 │   └── text_pdf.py
+├── redaction/
+│   ├── black_white_list_store.py
+│   ├── doc_hash.py
+│   ├── hit_ref.py
+│   ├── override_store.py
+│   └── whitelist_split.py
+├── pii/
+│   └── name_recognizer.py
 ├── utils/
+│   ├── config.py
+│   ├── doc_converter.py
+│   ├── exceptions.py
+│   ├── security.py
+│   └── temp_manager.py
 └── workers/
+    ├── ocr_worker.py
+    ├── word_worker.py
+    └── image_merge.py
 ```
 
 说明：
 - `main.py` 仍是活动运行时主入口。
 - `secureredact/` 提供共享模块，但并未完全替代 `main.py`。
-- v38 UI 改造代码层仍主要落在 `main.py` 中，包含首页、主工作区和高级设置的响应式壳层逻辑。
 - OCR 当前固定为 RapidOCR 单引擎。
 
 ---
@@ -56,10 +72,7 @@ docs/
 ├── current/
 │   ├── STATUS.md
 │   ├── DEV_LOG.md
-│   ├── V38_UI_REFACTOR_PLAN.md
-│   ├── PRIORITY_REMEDIATION_PLAN.md
 │   ├── PROJECT_STRUCTURE.md
-│   ├── PROJECT_SUMMARY.md
 │   └── RECOVERY_GUIDE.md
 ├── guides/
 │   ├── QUICK_START_FOR_CLAUDE_CODE.md
@@ -69,8 +82,12 @@ docs/
 │   ├── README.md
 │   ├── windows-packaging-guide.md
 │   └── macos-packaging-guide.md
-├── diary/
-└── archive/
+├── features/
+├── marketing/
+├── CODE_REVIEW_ANALYSIS_OPUS.md
+├── CODE_REVIEW_REPORT202602172000_glm.md
+├── CROSS_PLATFORM_GUIDE.md
+└── DEVELOPMENT_WORKFLOW.md
 ```
 
 ---
@@ -87,7 +104,6 @@ packaging/
 │   ├── docs/
 │   └── scripts/
 └── windows/
-    ├── archive/
     ├── assets/
     ├── config/
     ├── docs/
@@ -104,7 +120,6 @@ packaging/
 ## 构建与发布目录
 
 ```text
-backups/iteration_checkpoints/
 build/
 dist/
 releases/macos/
@@ -115,6 +130,6 @@ releases/windows/
 
 ## 当前版本信息
 
-- **当前版本**: v37.7.4
-- **版本标识**: `37.7.4 - Release Audit and Final Polish`
-- **最后更新**: 2026-03-18
+- **当前版本**: v1.1.11
+- **版本标识**: `1.1.11 - Whitelist Span Trim`
+- **最后更新**: 2026-08-20

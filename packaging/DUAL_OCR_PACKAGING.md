@@ -5,7 +5,7 @@
 历史文件名沿用 `DUAL_OCR_PACKAGING.md`，但当前项目已固定为 **RapidOCR 单引擎**。  
 Windows 与 macOS 的 active 打包配置都按单 OCR 路径维护，不再包含 PaddleOCR 依赖。
 
-当前发布基线：`v37.7.4`  
+当前发布基线：`v1.1.11`  
 版本来源：项目根目录 `version.txt`
 
 ---
@@ -34,7 +34,7 @@ secureredact/ocr/
 ### Windows
 
 - spec: `packaging/windows/config/SecureRedact_windows.spec`
-- 历史增强 spec: `packaging/windows/config/SecureRedact_windows_v2.spec`（保留归档，不作为当前正式主链）
+- 历史增强 spec: `packaging/windows/config/SecureRedact_windows_v1.1.11`（保留归档，不作为当前正式主链）
 - 版本资源生成：`packaging/windows/scripts/generate_version_info.py`
 - 推荐脚本：
   - 便携版：`packaging/windows/scripts/build_complete.bat`

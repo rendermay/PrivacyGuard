@@ -21,11 +21,11 @@ widget 的创建、布局、信号连接。
 """
 from __future__ import annotations
 
+from PyQt6.QtWidgets import *  # PR-B5.1: setup_ui 是 925 行超大方法,widget 用量极广,
+# 通配符导入避免逐个补 widget 类导致反复修补。后续 B2.6 拆分 setup_ui 后改回显式 import。
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QLabel, QMenu, QPushButton, QWidget,
-)
+from theme import Theme  # PR-B5.1: 补 Theme 引用
 
 
 class MainWindowSetupMixin:
@@ -35,6 +35,19 @@ class MainWindowSetupMixin:
     """
 
     def setup_ui(self):
+        # PR-B5.1: 跨 mixin 类引用 + main 模块级函数(密度/工具等) re-export 兼容
+        # 必须在方法体顶部,不能用 `from main import ...` 模块级语句(循环 import)
+        from main import (  # type: ignore[attr-defined]
+            SinglePageCanvas, WebViewBridge,
+            resolve_workspace_density_mode, resolve_settings_density_mode,
+            _shift_density_mode,  # 密度模式 helper
+        )
+        # PR-B5.1: QtWebEngineWidgets 延迟导入(需 QApplication 已创建)
+        # 当前 Python 3.13 + Qt6 环境下部分系统无法 import,使用 QWidget 占位
+        try:
+            from PyQt6.QtWebEngineWidgets import QWebEngineView
+        except ImportError:
+            QWebEngineView = None  # type: ignore[assignment,misc]
         # 统一上下文条：文档上下文 + 临时任务提示
         self.default_info_bar_text = "📝 支持直接拖拽导入，系统会按文件类型自动进入 PDF 脱敏、Word 替换、批量 Word 或图片合并。"
         self.workbench_panel = QFrame()
@@ -266,11 +279,16 @@ class MainWindowSetupMixin:
             canvas.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
 
         # 预先创建 Word 预览视图（左：原文，右：替换后）
-        self.word_preview = QWebEngineView()
-        self.word_preview_replaced = QWebEngineView()
-        self.word_preview_replaced.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
-        self.word_preview.loadFinished.connect(self._on_word_preview_load_finished)
-        self.word_preview_replaced.loadFinished.connect(self._on_word_replaced_load_finished)
+        # PR-B5.1: QtWebEngineView 在某些环境(无 OpenGL/QtWebEngineWidgets)不可用,fallback 到 QWidget
+        try:
+            self.word_preview = QWebEngineView() if QWebEngineView else QWidget()
+            self.word_preview_replaced = QWebEngineView() if QWebEngineView else QWidget()
+            self.word_preview_replaced.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
+            self.word_preview.loadFinished.connect(self._on_word_preview_load_finished)
+            self.word_preview_replaced.loadFinished.connect(self._on_word_replaced_load_finished)
+        except (AttributeError, TypeError):
+            self.word_preview = QWidget()
+            self.word_preview_replaced = QWidget()
 
         self.idle_workspace_container = QWidget()
         idle_outer_layout = QVBoxLayout(self.idle_workspace_container)

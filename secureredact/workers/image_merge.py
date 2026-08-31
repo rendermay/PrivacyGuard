@@ -1,7 +1,7 @@
 """
 图片合并 Worker
 
-v36.5: 模块化拆分，从 main.py 提取
+v1.1.11: 模块化拆分，从 main.py 提取
 """
 
 import os

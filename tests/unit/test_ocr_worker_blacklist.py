@@ -71,7 +71,7 @@ class _CollectBlacklistTest(unittest.TestCase):
             return_value=np.zeros((100, 100, 3), dtype=np.uint8)
         )
         w.calculate_sub_rect = MagicMock(return_value=QRectF(10, 20, 30, 10))
-        # v37.9.0-hotfix: 实现统一走 _ocr_full_page_tokens 而非 _ocr_clip.
+        # v1.1.11-hotfix: 实现统一走 _ocr_full_page_tokens 而非 _ocr_clip.
         w._ocr_full_page_tokens = MagicMock(return_value=[
             ("签名或者盖章。", [[10, 20], [40, 20], [40, 30], [10, 30]]),
         ])
@@ -84,7 +84,7 @@ class _CollectBlacklistTest(unittest.TestCase):
 
     @patch("secureredact.workers.ocr_worker.collect_embedded_image_clip_rects")
     def test_no_attribute_error_when_ocr_clip_undefined(self, mock_collect):
-        """v37.9.0-hotfix 回归测试: _collect_blacklist_hits 不应依赖不存在的 _ocr_clip.
+        """v1.1.11-hotfix 回归测试: _collect_blacklist_hits 不应依赖不存在的 _ocr_clip.
 
         历史 bug: 当 clip_rects 只有一个时, 旧实现调用 self._ocr_clip(...), 触发
         AttributeError 被 try/except 静默吞掉, 导致生产中黑名单注入从未生效.

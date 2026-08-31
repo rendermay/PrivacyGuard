@@ -15,7 +15,7 @@ import numpy as np
 # │ "刘妹 034-62407159"-style regression sample before merging.          │
 # └────────────────────────────────────────────────────────────────────┘
 #
-# v37.7.x 方案 X: 同一 OCR 行内,水平相邻的命中 rect 合并阈值 (扫描坐标像素).
+# v1.1.11 方案 X: 同一 OCR 行内,水平相邻的命中 rect 合并阈值 (扫描坐标像素).
 # 解决 Page 0 "刘妹 034-62407159" 这类场景下,字符级 _calculate_from_line
 # 行级线性插值在"汉字 pattern + 数字 pattern"同一行时产生的 rect 间隙.
 #
@@ -156,7 +156,7 @@ def merge_adjacent_hit_rects(
     y_tolerance_px=DEFAULT_LINE_Y_TOLERANCE_PX,
     output_factory=None,
 ):
-    """v37.7.x 方案 X: 对同一 OCR 行内水平相邻的命中 rect 做合并.
+    """v1.1.11 方案 X: 对同一 OCR 行内水平相邻的命中 rect 做合并.
 
     Args:
         hits_with_box: list[(line_box, rect)], rect 可以是 QRectF / tuple / SimpleNamespace.
@@ -305,9 +305,9 @@ def collect_image_block_ocr_hits(
     │ merge_adjacent_hit_rects 去重.                                      │
     │                                                                    │
     │ hit.text 故意保持空字符串: 由 _apply_whitelist_filter 中             │
-    │ original_text_was_empty 分支走 v37.9.0 整条剥掉行为. 详见             │
+    │ original_text_was_empty 分支走 v1.1.11 整条剥掉行为. 详见             │
     │ ocr_worker.py._apply_whitelist_filter 顶部 docstring + CHANGELOG    │
-    │ v38.0.0 段.                                                        │
+    │ v1.1.11 段.                                                        │
     │                                                                    │
     │ 锁定测试: tests/unit/test_mixed_pdf_ocr.py (合并去重 + 手写场景).    │
     └────────────────────────────────────────────────────────────────────┘
@@ -322,7 +322,7 @@ def collect_image_block_ocr_hits(
         image_clip_rects = collect_embedded_image_clip_rects(page_dict)
 
     render_clip = render_clip_fn or render_pdf_clip_to_bgr
-    # v37.7.x 方案 X: 收集 (line_box, page_rect) 而非纯 page_rect, 末尾做相邻合并.
+    # v1.1.11 方案 X: 收集 (line_box, page_rect) 而非纯 page_rect, 末尾做相邻合并.
     hits_with_box: list = []
 
     for clip_rect in image_clip_rects or []:
@@ -335,7 +335,7 @@ def collect_image_block_ocr_hits(
         if clip_img is None or getattr(clip_img, "size", 0) == 0:
             continue
 
-        # v37.7.x 双路 OCR: 同时跑原始图 (用于手写体) 和预处理图 (用于印刷体增强).
+        # v1.1.11 双路 OCR: 同时跑原始图 (用于手写体) 和预处理图 (用于印刷体增强).
         # 原 OCRWorker 仅跑预处理图, 导致 preprocess_image 把手写体行擦掉.
         # 现在合并两路输出作为识别行来源, 后续 calculate_rect_fn 用对应 scan_img.
         scan_outputs: list = []  # list of (scan_img, ocr_results)

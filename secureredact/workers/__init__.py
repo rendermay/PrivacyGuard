@@ -1,7 +1,7 @@
 """
 SecureRedact Workers 模块
 
-v36.5: 模块化拆分
+v1.1.11: 模块化拆分
 """
 
 from importlib import import_module

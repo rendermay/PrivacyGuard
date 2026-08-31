@@ -10,8 +10,8 @@
 
 ## 当前打包发布基线
 
-- 当前应用版本：`v37.7.4`
-- 版本标识：`37.7.4 - Release Audit and Final Polish`
+- 当前应用版本：`v1.1.11`
+- 版本标识：`1.1.11 - Whitelist Span Trim`
 - 版本唯一来源：项目根目录 `version.txt`
 
 ---
@@ -78,7 +78,7 @@ bash packaging/macos/scripts/build_complete.sh
 
 ## 2026-03-18 本轮同步内容
 
-- Windows 安装器默认回退版本已同步到 `37.7.4`
+- Windows 安装器默认回退版本已同步到 `1.1.11`
 - Windows / macOS 打包脚本改为优先使用当前虚拟环境中的 `PyInstaller`
 - Windows / macOS 打包脚本统一切换到项目内 PyInstaller 缓存目录，避免依赖用户目录全局缓存
 - `packaging/windows/scripts/` 已清理不再属于正式主链的历史兼容与解除阻止脚本

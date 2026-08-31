@@ -2,7 +2,7 @@
 
 > 生成日期：2026-02-17
 > 审查工具：Claude Code (Claude Opus 4.6)
-> 项目版本：v36.4 - Code Refactoring
+> 项目版本：v1.1.11 - Code Refactoring
 
 ---
 
@@ -11,7 +11,7 @@
 | 项目属性 | 详情 |
 |---------|------|
 | **名称** | SecureRedact 信息脱敏助手 |
-| **版本** | v36.4 - Code Refactoring |
+| **版本** | v1.1.11 - Code Refactoring |
 | **主文件** | main.py (~4177行) |
 | **技术栈** | Python 3.11 + PyQt6 + PyMuPDF + RapidOCR |
 | **架构** | 单体架构 (Monolithic) |
@@ -22,7 +22,7 @@
 
 **未发现严重的安全漏洞或致命错误。**
 
-项目在 v36.2 版本已经进行了安全加固，包括：
+项目在 v1.1.11 版本已经进行了安全加固，包括：
 - [x] 路径验证防止命令注入 (`validate_safe_path`)
 - [x] 临时文件自动清理 (`TempFileManager`)
 - [x] 具体异常类型处理（已替换裸 `except Exception`）
@@ -73,7 +73,7 @@ python-docx>=1.0.0
 
 ### 3. 线程安全问题潜在风险
 
-虽然 v36.4 已改用信号槽机制，但以下位置仍需注意：
+虽然 v1.1.11 已改用信号槽机制，但以下位置仍需注意：
 - `main.py:1199-1220` - `add_manual_redaction_global` 中的字典遍历
 - `main.py:1257-1268` - `remove_global_redaction` 中的列表修改
 
@@ -161,7 +161,7 @@ def validate_safe_path(path, allowed_extensions=None):
 # 类级别注册表追踪所有实例
 ```
 
-### 3. 线程安全改进 (v36.4)
+### 3. 线程安全改进 (v1.1.11)
 
 ```python
 # main.py:3384-3399 - 逐页发送结果，避免共享字典

@@ -1,7 +1,7 @@
 # PrivacyApp 测试报告
 
 **测试日期:** 2026-02-08
-**项目版本:** v19.0 Hybrid Stable (v7 Logic)
+**项目版本:** v1.1.11 Hybrid Stable (v7 Logic)
 **测试环境:** macOS 10.14+, Python 3.11.14
 
 ---
@@ -341,4 +341,4 @@ python create_test_pdf.py
 
 **文档版本:** 1.0
 **创建日期:** 2026-02-08
-**适用版本:** PrivacyApp v19.0 Hybrid Stable (v7 Logic)
+**适用版本:** PrivacyApp v1.1.11 Hybrid Stable (v7 Logic)

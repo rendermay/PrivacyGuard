@@ -1,7 +1,7 @@
 """
 DOC -> DOCX 文档转换工具
 
-v37.7.6: 从 main.py 提取为共享模块，消除 WordBatchReplaceWorker 和 MainWindow 之间的重复实现。
+v1.1.11: 从 main.py 提取为共享模块，消除 WordBatchReplaceWorker 和 MainWindow 之间的重复实现。
 """
 
 import os

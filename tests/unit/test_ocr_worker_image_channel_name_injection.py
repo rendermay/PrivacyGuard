@@ -149,7 +149,7 @@ class TestImageChannelNameInjection(unittest.TestCase):
 
 
 class TestScanPdfWatermarkPageTextRegression(unittest.TestCase):
-    """regression v37.x: CamScanner 等扫描 PDF 在 page_text 仅含页码水印
+    """regression v1.1.11: CamScanner 等扫描 PDF 在 page_text 仅含页码水印
     (如 '1\\n', 非空但极短) 时, OCRWorker 必须仍然触发全页 OCR 喂给 jieba,
     否则姓名注入静默失效 — page 上所有人名都不会脱敏.
 

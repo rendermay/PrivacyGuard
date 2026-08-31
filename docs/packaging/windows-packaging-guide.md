@@ -6,7 +6,7 @@
 
 ## 当前发布基线
 
-- 当前版本：`v37.7.4`
+- 当前版本：`v1.1.11`
 - 版本标识：`37.7.4 - Release Audit and Final Polish`
 - 版本唯一来源：项目根目录 `version.txt`
 
@@ -85,7 +85,7 @@ packaging\windows\scripts\1_init_environment.bat
 packaging/windows/config/version_info.txt
 ```
 
-当前 `v37.7.4` 同步内容：
+当前 `v1.1.11` 同步内容：
 
 - `version_info.txt` 版本资源：`37.7.4.0`
 - `SecureRedact_windows.spec` 补齐 `secureredact` 相关 hiddenimports
@@ -137,7 +137,7 @@ build\.pyinstaller-cache
 ### PyInstaller spec
 
 - 标准 spec：`packaging/windows/config/SecureRedact_windows.spec`
-- 历史增强 spec：`packaging/windows/config/SecureRedact_windows_v2.spec`（保留归档，不作为当前正式主链）
+- 历史增强 spec：`packaging/windows/config/SecureRedact_windows_v1.1.11`（保留归档，不作为当前正式主链）
 
 ### Inno Setup
 

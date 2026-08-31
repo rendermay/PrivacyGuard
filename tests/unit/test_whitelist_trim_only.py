@@ -155,7 +155,7 @@ class OCRFilterWhitelistTrimTest(unittest.TestCase):
         self.assertEqual(out, [])
 
     def test_ocr_channel_resolves_text_then_drops_when_wl_in_resolved(self):
-        """v38.0.1 hotfix: image-channel hit (text="") + wl 在反查文本中 → 整条 drop (v37.9.0 行为).
+        """v1.1.11 hotfix: image-channel hit (text="") + wl 在反查文本中 → 整条 drop (v1.1.11 行为).
 
         不再 trim — 避免 sub-rect 错位 (custom_keyword 命中「签名或者盖章」中的「盖章」子串时,
         resolve 拿到整条 token, trim 会把「签名或者」画到「盖章」位置).
@@ -219,18 +219,18 @@ class OCRFilterWhitelistTrimTest(unittest.TestCase):
 
 
 class OCRFilterImageChannelEmptyTextTest(unittest.TestCase):
-    """v38.0.1 hotfix: image-channel / seal hit (原 text 空) 走 v37.9.0 整条剥掉.
+    """v1.1.11 hotfix: image-channel / seal hit (原 text 空) 走 v1.1.11 整条剥掉.
 
     不做 trim — _resolve_text_from_rect 反查可能返回比原 hit rect 更长的 OCR token
     (例如 custom_keyword 命中「签名或者盖章」中的「盖章」子串), 此时 _sub_rect_for_text_span
     用原小 rect 做权重切分会把「签名或者」画到「盖章」位置, 导致错误脱敏.
 
     ┌────────────────────────────────────────────────────────────────────┐
-    │ ⚠️  本测试是 v38.0.1 hotfix 的回归锁 — 删除/修改前必须先实现            │
+    │ ⚠️  本测试是 v1.1.11 hotfix 的回归锁 — 删除/修改前必须先实现            │
     │ collect_image_block_ocr_hits 返回 matched 子串 (而非仅 rect), 让     │
     │ hit.text 携带精确 keyword, 避免 resolve 反查歧义.                  │
     │ 详见 OCRWorker._apply_whitelist_filter 顶部 docstring +              │
-    │ CHANGELOG.md v38.0.0 「已知限制」段.                                  │
+    │ CHANGELOG.md v1.1.11 「已知限制」段.                                  │
     └────────────────────────────────────────────────────────────────────┘
     """
 
@@ -249,7 +249,7 @@ class OCRFilterImageChannelEmptyTextTest(unittest.TestCase):
         return w._apply_whitelist_filter(rects, page_idx=0)
 
     def test_empty_text_resolved_text_contains_wl_dropped_under_trim(self):
-        """v38.0.1 hotfix: image-channel hit (text="") + wl 含子串 → 整条 drop, 即使 trim_only=True."""
+        """v1.1.11 hotfix: image-channel hit (text="") + wl 含子串 → 整条 drop, 即使 trim_only=True."""
         hit = _hit("", source="ocr", x=472, y=455, w=28, h=20)
         out = self._filter([hit], wl=["盖章"], trim_only=True)
         self.assertEqual(out, [], "image-channel hit 应被整条 drop, 而不是错误 trim")

@@ -7,9 +7,9 @@ This file is the primary development guide for Codex and other coding agents wor
 ## Project Overview
 
 **Project**: SecureRedact 信息脱敏助手  
-**Current Version**: v37.7.6 (`37.7.6 - Full Convergence Remediation`)  
-**Last Updated**: 2026-05-16  
-**Status**: v37.7.6 全面重复实现收敛完成；P1-P4 修复全部完成；基线测试 79/79 通过
+**Current Version**: v1.1.11 (`1.1.11 - Whitelist Span Trim`)  
+**Last Updated**: 2026-08-20  
+**Status**: v1.1.11 白名单片段级豁免完成；全量回归 162 项 / 160 通过（2 项为 v1.1.11 起既有失败）
 
 SecureRedact is a Python + PyQt6 desktop application for intelligent redaction of PDF and Word documents.
 
@@ -39,12 +39,8 @@ When resuming work, read these files in order:
 
 1. `docs/current/STATUS.md`
 2. `docs/current/DEV_LOG.md`
-3. `docs/current/V38_UI_REFACTOR_PLAN.md`
-4. `CHANGELOG.md`
-5. `rollback_journal.md`
-6. `docs/current/PRIORITY_REMEDIATION_PLAN.md`
-7. `docs/diary/20260309_2338_release_sync_diary.md`
-8. `docs/diary/20260311_pyinstaller_packaging_fix_diary.md`
+3. `CHANGELOG.md`
+4. `docs/guides/QUICK_START_FOR_CLAUDE_CODE.md`
 
 ---
 
@@ -202,20 +198,7 @@ packaging/windows/scripts/build_complete.bat
 
 ## Current Checkpoints
 
-- `20260309_runtime_remediation_cp18_verified`
-- `20260309_word_compare_bugfix_cp20_verified`
-- `20260309_mixed_pdf_ocr_cp23_verified`
-- `20260309_release_sync_cp25_verified`
-- `20260310_word_preview_highlight_cp27_verified`
-- `20260310_release_sync_cp29_verified`
-- `20260311_pyinstaller_packaging_fix_cp30_verified`
-- `v38_ui_refactor_cp31_20260313_140645`
-
-Rollback references:
-
-- `rollback_journal.md`
-- `ROLLBACK_GUIDE.md`
-- `restore_checkpoint.sh`
+（无 — 历史 checkpoint 已随 rollback 工具链一同清理；项目以 `version.txt` 为单一版本源。）
 
 ---
 

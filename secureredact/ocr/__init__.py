@@ -1,7 +1,7 @@
 """
 SecureRedact OCR 模块
-提供统一的 OCR 接口 - v37.4.0: 单引擎架构（RapidOCR）
-v37.7.3: 修复 PyInstaller 打包时的相对导入问题
+提供统一的 OCR 接口 - v1.1.11: 单引擎架构（RapidOCR）
+v1.1.11: 修复 PyInstaller 打包时的相对导入问题
 """
 
 # 使用绝对导入（修复 PyInstaller 打包问题）

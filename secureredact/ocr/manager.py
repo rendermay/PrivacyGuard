@@ -9,7 +9,7 @@ from .rapidocr import RapidOCREngine
 
 
 class OCREngineManager:
-    """OCR 引擎管理器 - v37.4.0: 简化，只保留 RapidOCR"""
+    """OCR 引擎管理器 - v1.1.11: 简化，只保留 RapidOCR"""
 
     def __init__(self):
         self._engine: Optional[BaseOCREngine] = None

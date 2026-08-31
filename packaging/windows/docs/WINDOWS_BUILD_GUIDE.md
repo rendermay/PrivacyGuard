@@ -9,7 +9,7 @@ Windows 打包完整指南统一维护在：
 
 ## 当前打包基线
 
-- 当前版本：`v37.7.4`
+- 当前版本：`v1.1.11`
 - 版本来源：项目根目录 `version.txt`
 
 ---
@@ -49,7 +49,7 @@ Windows 打包完整指南统一维护在：
 
 - 详细参数、签名策略、发布流程请以 `docs/packaging/windows-packaging-guide.md` 为准。
 - 本文件只保留最小索引，避免与主文档重复维护。
-- 当前默认安装器版本与 EXE 版本资源已经同步到 `v37.7.4`。
+- 当前默认安装器版本与 EXE 版本资源已经同步到 `v1.1.11`。
 - 当前 Windows 打包脚本统一通过 `python -m PyInstaller` 执行，并使用 `build\.pyinstaller-cache`。
 - `packaging/windows/scripts/` 已清理历史兼容与解除阻止脚本，仅保留当前正式主链与必要诊断工具。
 - 2026-03-18 已完成脚本链、spec、版本资源与 Inno Setup 配置复核；最终发布前仍需 Windows 真机执行便携包与安装包链路。

@@ -63,7 +63,7 @@ class HitOverrideStore:
         # keyed by hit_id
         self._overrides: Dict[str, Override] = {}
         self._lock = threading.Lock()
-        # v37.8.x: 可选 SimpleConfig 引用，由调用方在 init 后注入
+        # v1.1.11: 可选 SimpleConfig 引用，由调用方在 init 后注入
         self._config = None  # type: ignore[assignment]
 
     @classmethod
@@ -266,7 +266,7 @@ class HitOverrideStore:
             promoted_at=raw.get("promoted_at"),
         )
 
-    # ---- v37.8.x: 与 SimpleConfig 双向绑定 ----
+    # ---- v1.1.11: 与 SimpleConfig 双向绑定 ----
 
     def bind_config(self, config) -> None:
         """由 MainWindow 在 init 时注入 SimpleConfig 引用。

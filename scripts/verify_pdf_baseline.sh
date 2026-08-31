@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # verify_pdf_baseline.sh
 #
-# CONST-01 guard for v39.0.0 — Word 脱敏重做。
-# 验证 HEAD..v38.0.1-pdf-baseline 之间没有任何 PDF 端脱敏代码被修改。
+# CONST-01 guard for v1.1.11 — Word 脱敏重做。
+# 验证 HEAD..v1.1.11-pdf-baseline 之间没有任何 PDF 端脱敏代码被修改。
 #
 # 用法：
 #   ./scripts/verify_pdf_baseline.sh           # 检查 HEAD
@@ -15,14 +15,14 @@
 #
 # 被守护的 PDF 端代码：
 #   secureredact/ocr/text_pdf.py         — PDF 文本通道
-#   secureredact/ocr/mixed_pdf.py        — PDF 混合通道（v39.6 仅 import，不修改）
+#   secureredact/ocr/mixed_pdf.py        — PDF 混合通道（v1.1.11 仅 import，不修改）
 #   secureredact/workers/ocr_worker.py   — OCRWorker（PDF）— 含 page_result_signal payload
 #
 # 任何不在以上列表中但属于 PDF 端路径的文件，应更新本脚本的 PDF_GUARD_PATHS。
 
 set -uo pipefail
 
-PDF_BASELINE_TAG="${PDF_BASELINE_TAG:-v38.0.1-pdf-baseline}"
+PDF_BASELINE_TAG="${PDF_BASELINE_TAG:-v1.1.11-pdf-baseline}"
 REF="${1:-${PDF_BASELINE_TAG}}"
 
 PDF_GUARD_PATHS=(

@@ -5,7 +5,7 @@
 #define MyAppName "SecureRedact"
 #define MyAppNameFull "SecureRedact 信息脱敏助手"
 #ifndef MyAppVersion
-  #define MyAppVersion "37.7.4"
+  #define MyAppVersion "1.1.11"
 #endif
 #define MyAppPublisher "SecureRedact Team"
 #define MyAppURL "https://github.com/secureredact/secureredact"

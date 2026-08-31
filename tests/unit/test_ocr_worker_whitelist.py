@@ -71,7 +71,7 @@ class ApplyWhitelistFilterTest(unittest.TestCase):
         self.assertEqual(out, [])
 
     def test_warm_cache_populates_tokens_for_bbox_lookup(self):
-        """v37.9.0-hotfix2: _warm_rect_text_cache 必须填充 _rect_tokens_per_page.
+        """v1.1.11-hotfix2: _warm_rect_text_cache 必须填充 _rect_tokens_per_page.
 
         历史 bug: 旧版 _rect_text_cache 是 (page_idx, cx, cy) → text 字典,
         _resolve_text_from_rect 用 center 查, 但 hit rect 经过 merge_adjacent_hit_rects

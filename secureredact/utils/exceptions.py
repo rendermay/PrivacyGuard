@@ -1,7 +1,7 @@
 """
 SecureRedact 自定义异常类
 
-v36.5: 模块化拆分，从 main.py 提取
+v1.1.11: 模块化拆分，从 main.py 提取
 """
 
 

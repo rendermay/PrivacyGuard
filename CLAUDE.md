@@ -13,6 +13,15 @@ This file is the primary development guide for Claude Code and other coding agen
 
 SecureRedact is a Python + PyQt6 desktop application for intelligent redaction of PDF and Word documents.
 
+> **⚠️ v1.1.13+ 入口迁移提示 (PR-B0)**
+>
+> `main.py` (13,026 行) 已转为 **过渡期兼容 shim**。
+> 真正的运行时入口已迁至 `secureredact/main.py`(v1.1.13 PR-B0 引入)。
+>
+> **禁止继续往 `main.py` 添加新业务代码。**所有新功能请写到 `secureredact/` 对应子包。
+> 阶段 B 重构路线图:详见 `frontend-refactor-plan.md`(当前工作目录)+ `docs/refactor/` (项目内报告)。
+> 阶段 B5 收口时 `main.py` 将被彻底移除,所有打包入口 (`SecureRedact_verify.spec`、`start_app.sh`、packaging 脚本) 同步切换到 `secureredact.main:main`。
+
 ### Current active capabilities
 
 - PDF redaction:

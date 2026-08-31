@@ -54,7 +54,7 @@
 
 ## 当前版本与打包策略
 
-- 当前版本：`v37.7.4`
+- 当前版本：`v1.1.11`
 - 版本标识：`37.7.4 - Release Audit and Final Polish`
 - 版本唯一来源：`version.txt`
 

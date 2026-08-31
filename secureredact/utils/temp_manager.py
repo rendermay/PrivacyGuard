@@ -1,7 +1,7 @@
 """
 临时文件管理器
 
-v36.5: 模块化拆分，从 main.py 提取
+v1.1.11: 模块化拆分，从 main.py 提取
 安全特性:
 - 使用 atexit 注册退出清理钩子
 - 类级别注册表追踪所有实例
@@ -15,14 +15,14 @@ import tempfile
 
 
 class TempFileManager:
-    """统一临时文件管理器，确保资源正确释放（v36.5: 线程安全版）
+    """统一临时文件管理器，确保资源正确释放（v1.1.11: 线程安全版）
 
     安全特性:
     - 使用 atexit 注册退出清理钩子，确保程序退出时自动清理
     - 类级别注册表追踪所有实例
     - 使用具体异常类型处理删除错误 (OSError, IOError)
     - 防止临时文件泄露
-    - v36.5: 添加线程锁保护，确保多线程安全
+    - v1.1.11: 添加线程锁保护，确保多线程安全
 
     使用示例:
         manager = TempFileManager()
@@ -33,12 +33,12 @@ class TempFileManager:
 
     # 类级别注册表，跟踪所有实例
     _instances = []
-    _global_lock = threading.Lock()  # v36.5: 类级别锁
+    _global_lock = threading.Lock()  # v1.1.11: 类级别锁
 
     def __init__(self):
         self.temp_files = []
         self.temp_dirs = []
-        self._instance_lock = threading.Lock()  # v36.5: 实例级别锁
+        self._instance_lock = threading.Lock()  # v1.1.11: 实例级别锁
         # 注册到类级别列表
         with TempFileManager._global_lock:
             TempFileManager._instances.append(self)
@@ -64,12 +64,12 @@ class TempFileManager:
                 pass  # 清理失败不抛出异常
 
     def create_temp_file(self, suffix='', content=None):
-        """创建临时文件并追踪（v36.5: 线程安全）"""
+        """创建临时文件并追踪（v1.1.11: 线程安全）"""
         temp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
         temp_name = temp.name
         temp.close()  # 立即关闭文件句柄
 
-        # v36.5: 线程安全地添加到列表
+        # v1.1.11: 线程安全地添加到列表
         with self._instance_lock:
             self.temp_files.append(temp_name)
 
@@ -80,24 +80,24 @@ class TempFileManager:
         return temp_name
 
     def create_temp_dir(self):
-        """创建临时目录并追踪（v36.5: 线程安全）"""
+        """创建临时目录并追踪（v1.1.11: 线程安全）"""
         temp_dir = tempfile.mkdtemp()
 
-        # v36.5: 线程安全地添加到列表
+        # v1.1.11: 线程安全地添加到列表
         with self._instance_lock:
             self.temp_dirs.append(temp_dir)
 
         return temp_dir
 
     def cleanup(self):
-        """清理所有临时文件和目录（v36.5: 线程安全）
+        """清理所有临时文件和目录（v1.1.11: 线程安全）
 
         Returns:
             list: 清理过程中的错误列表
         """
         errors = []
 
-        # v36.5: 线程安全地复制列表
+        # v1.1.11: 线程安全地复制列表
         with self._instance_lock:
             files_to_clean = self.temp_files[:]
             dirs_to_clean = self.temp_dirs[:]

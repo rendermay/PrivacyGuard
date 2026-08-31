@@ -1,10 +1,10 @@
 # SecureRedact 双 OCR 引擎技术文档
 
-**版本**: v37.2.0 (Dual OCR Engine)
-**状态**: ⚠️ **已废弃** - v37.4.0 起完全移除 PaddleOCR，统一使用 RapidOCR
+**版本**: v1.1.11 (Dual OCR Engine)
+**状态**: ⚠️ **已废弃** - v1.1.11 起完全移除 PaddleOCR，统一使用 RapidOCR
 **日期**: 2026-02-22 → 废弃于 2026-02-23
 
-> **注意**: 本文档仅用于历史参考。自 v37.4.0 起，项目已完全移除 PaddleOCR，统一使用 RapidOCR 单引擎架构。详见 `CHANGELOG.md` v37.4.0 条目。
+> **注意**: 本文档仅用于历史参考。自 v1.1.11 起，项目已完全移除 PaddleOCR，统一使用 RapidOCR 单引擎架构。详见 `CHANGELOG.md` v1.1.11 条目。
 
 ---
 
@@ -182,11 +182,11 @@ class OCRResult:
 - `main.py` - OCRWorker, SettingsDialog, MainWindow
 - `config.json.template` - 添加 ocr.engine 配置
 - `requirements.txt` - 添加 paddleocr, paddlepaddle
-- `docs/current/STATUS.md` - 添加 v37.2.0 条目
+- `docs/current/STATUS.md` - 添加 v1.1.11 条目
 - `docs/current/DEV_LOG.md` - 添加开发日志
 
 ---
 
 **完成时间**: 2026-02-22
-**版本**: v37.2.0 (Dual OCR Engine)
+**版本**: v1.1.11 (Dual OCR Engine)
 **状态**: ✅ 已发布

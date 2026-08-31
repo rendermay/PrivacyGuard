@@ -8,26 +8,20 @@
 
 按下面顺序读取：
 
-1. `docs/current/STATUS.md`
-2. `docs/current/DEV_LOG.md`
-3. `docs/current/V38_UI_REFACTOR_PLAN.md`
-4. `CHANGELOG.md`
-5. `rollback_journal.md`
-6. `CLAUDE.md`
-7. `docs/current/PRIORITY_REMEDIATION_PLAN.md`
-8. `docs/diary/20260309_2338_release_sync_diary.md`
-9. `docs/diary/20260311_pyinstaller_packaging_fix_diary.md`
+1. `CLAUDE.md`
+2. `docs/current/STATUS.md`
+3. `CHANGELOG.md`
+4. `docs/current/PROJECT_STRUCTURE.md`
+5. `docs/current/RECOVERY_GUIDE.md`
 
 ---
 
 ## 当前基线
 
-- **版本号**: v37.7.4
-- **版本标识**: `37.7.4 - Release Audit and Final Polish`
-- **最后更新**: 2026-03-18
-- **当前状态**:
-  - `v37.7.4` 运行基线稳定
-  - v38 UI 改造代码层已完成
+- **版本号**: v1.1.11
+- **版本标识**: `1.1.11 - Whitelist Span Trim`
+- **最后更新**: 2026-08-20
+- **当前状态**: 白名单片段级豁免（Whitelist Span Trim）发布基线
   - 首页、PDF、Word、批量、图片、高级设置已统一到桌面级壳层语言
   - 当前默认阶段已切换到真机截图驱动的细节抛光
 
@@ -113,14 +107,4 @@ python3 -m unittest \
 - `20260309_runtime_remediation_cp18_verified`
 - `20260309_word_compare_bugfix_cp20_verified`
 - `20260309_mixed_pdf_ocr_cp23_verified`
-- `20260309_release_sync_cp25_verified`
-- `20260310_word_preview_highlight_cp27_verified`
-- `20260310_release_sync_cp29_verified`
-- `20260311_pyinstaller_packaging_fix_cp30_verified`
-- `v38_ui_refactor_cp31_20260313_140645`
-
-查看：
-
-- `rollback_journal.md`
-- `ROLLBACK_GUIDE.md`
-- `restore_checkpoint.sh`
+（无 — 历史 checkpoint 与 rollback 工具链已清理；项目以 `version.txt` 为单一版本源。）

@@ -1,8 +1,8 @@
 """
 安全验证工具
 
-v36.5: 模块化拆分，从 main.py 提取
-v37.7.3: 修复 f-string 中的反斜杠语法错误
+v1.1.11: 模块化拆分，从 main.py 提取
+v1.1.11: 修复 f-string 中的反斜杠语法错误
 """
 
 import os
@@ -12,7 +12,7 @@ import platform
 
 
 def validate_safe_path(path, allowed_extensions=None):
-    """验证文件路径安全（v37.6: 跨平台兼容 + 路径范围校验）
+    """验证文件路径安全（v1.1.11: 跨平台兼容 + 路径范围校验）
 
     安全特性:
     - 命令注入防护: 过滤危险字符 (; | & $ ` $( > < \\n \\r)
@@ -54,13 +54,13 @@ def validate_safe_path(path, allowed_extensions=None):
             return False, f"路径包含危险序列: {seq}"
 
     # 非 Windows 下拒绝反斜杠（可疑转义）
-    # v37.7.3: 修复 f-string 中不能使用反斜杠的语法错误
+    # v1.1.11: 修复 f-string 中不能使用反斜杠的语法错误
     backslash_char = '\\'
     if not is_windows and backslash_char in path:
         backslash_repr = repr(backslash_char)
         return False, f"路径包含危险字符: {backslash_repr}"
 
-    # 检查空字节注入 (v36.5: 防止空字节绕过)
+    # 检查空字节注入 (v1.1.11: 防止空字节绕过)
     if '\x00' in path:
         return False, "路径包含空字节"
 
