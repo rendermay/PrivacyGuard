@@ -11,18 +11,13 @@ import sys
 import tempfile
 import unittest
 
-# PR-C5 修订:api.py 顶层 import 已改 lazy(worker + QEventLoop),真 module load
-# 总是成功。子进程无 Qt DLL 不影响 import,但调用 batch_redact_word /
-# filter_hits_by_overrides 时会失败,setUp 检测后 skip。
-import importlib.util as _importlib_util
+# PR-C5 修订:api.py 顶层 import 已改 lazy(worker + QEventLoop),直接
+# `import secureredact.api` 在无 PyQt6 环境也能成功(coverage 也能跟踪)。
+# PyQt6 依赖的函数(batch_redact_word / filter_hits_by_overrides)在 setUp
+# 检测后 skipTest,不影响 import。
+import secureredact.api as api  # noqa: E402
 
 import pytest  # noqa: E402 — for markers (api / smoke)
-
-_api_path = os.path.join(os.path.dirname(__file__), "..", "..", "secureredact", "api.py")
-_spec = _importlib_util.spec_from_file_location("secureredact.api", _api_path)
-api = _importlib_util.module_from_spec(_spec)  # type: ignore[assignment]
-sys.modules["secureredact.api"] = api  # 让 api.py 内部 import chain 找到它
-_spec.loader.exec_module(api)
 
 
 @pytest.mark.api
