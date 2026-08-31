@@ -112,14 +112,119 @@ def get_substitution_map(theme_name: str = "light") -> Mapping[str, str]:
     return mapping
 
 
+# ============================================================================
+# 非颜色设计 token（PR-V1 Task 1 引入，对齐 LOGO_DESIGN_GUIDE.md + ui_design_preview.html）
+# ============================================================================
+
+# === 圆角 token（5 级）===
+# 来源: ui_design_preview.html 的 --radius-{sm,md,lg,xl}
+RADIUS_SM = 6          # 标签 / chip
+RADIUS_MD = 10         # 按钮 / 输入框
+RADIUS_LG = 16         # 卡片 / dock 容器
+RADIUS_XL = 24         # 主面板容器
+RADIUS_PILL = 999      # 头像 / 徽章
+
+
+# === 间距 token（8 进制 / 6 级）===
+# 迁移映射(保留向后兼容):
+#   SPACING_SMALL=8  → SPACING_SM
+#   SPACING_MEDIUM=14 → SPACING_MD
+#   SPACING_LARGE=22  → SPACING_LG
+SPACING_XS = 4         # 内边距微调
+SPACING_SM = 8         # 紧凑布局
+SPACING_MD = 14        # 标准间距
+SPACING_LG = 22        # 区块间距
+SPACING_XL = 32        # section 大间距
+SPACING_2XL = 48       # 页面顶部 / 大留白
+
+
+# === 阴影 token（4 级 + glow）===
+# 来源: ui_design_preview.html 的 --shadow-{sm,md,lg,xl}
+# SHADOW_GLOW 仅 Dark 主题生效
+SHADOW_SM = "0 1px 2px rgba(0,0,0,0.06)"
+SHADOW_MD = "0 4px 6px -1px rgba(0,0,0,0.10), 0 2px 4px -2px rgba(0,0,0,0.10)"
+SHADOW_LG = "0 10px 15px -3px rgba(0,0,0,0.10), 0 4px 6px -4px rgba(0,0,0,0.10)"
+SHADOW_XL = "0 20px 25px -5px rgba(0,0,0,0.10), 0 8px 10px -6px rgba(0,0,0,0.10)"
+SHADOW_GLOW = "0 0 40px rgba(37,99,235,0.30)"
+
+
+# === 动效 token（3 duration + 2 ease）===
+# 迁移映射(保留向后兼容):
+#   ANIMATION_DURATION=200 → DURATION_NORMAL
+DURATION_FAST = 150    # hover / press
+DURATION_NORMAL = 200  # 默认过渡
+DURATION_SLOW = 300    # 页面切换 / 抽屉动画
+
+EASE_OUT = "cubic-bezier(0.16, 1, 0.3, 1)"        # 弹性出口(适合入场)
+EASE_IN_OUT = "cubic-bezier(0.4, 0, 0.2, 1)"     # 平滑(适合状态切换)
+
+
+# === 字体 token（2 family + 4 weight + 6 size）===
+# 来源: ui_design_preview.html 的 Inter / Segoe UI Variable
+FONT_FAMILY_DISPLAY = "'Inter', 'Segoe UI Variable', 'PingFang SC', sans-serif"
+FONT_FAMILY_BODY = "'Inter', 'Segoe UI Variable', 'Microsoft YaHei UI', sans-serif"
+
+FONT_WEIGHT_REGULAR = 400
+FONT_WEIGHT_MEDIUM = 500
+FONT_WEIGHT_SEMIBOLD = 600
+FONT_WEIGHT_BOLD = 700
+
+FONT_SIZE_XS = 11      # 极小（仅时间戳 / 标记）
+FONT_SIZE_SM = 12      # 副文本
+FONT_SIZE_BASE = 14    # 正文
+FONT_SIZE_LG = 18      # 小标题
+FONT_SIZE_XL = 24      # 标题
+FONT_SIZE_2XL = 32     # 大标题
+
+
 __all__ = [
+    # 颜色 token
     "Tokens",
     "LIGHT",
     "DARK",
-    "FONT_FAMILY",
-    "FONT_SIZE_SMALL",
-    "FONT_SIZE_NORMAL",
     "THEMES",
     "get_tokens",
     "get_substitution_map",
+    # 字体
+    "FONT_FAMILY",
+    "FONT_FAMILY_DISPLAY",
+    "FONT_FAMILY_BODY",
+    "FONT_SIZE_SMALL",
+    "FONT_SIZE_NORMAL",
+    "FONT_SIZE_XS",
+    "FONT_SIZE_SM",
+    "FONT_SIZE_BASE",
+    "FONT_SIZE_LG",
+    "FONT_SIZE_XL",
+    "FONT_SIZE_2XL",
+    # 圆角
+    "RADIUS_SM",
+    "RADIUS_MD",
+    "RADIUS_LG",
+    "RADIUS_XL",
+    "RADIUS_PILL",
+    # 间距
+    "SPACING_XS",
+    "SPACING_SM",
+    "SPACING_MD",
+    "SPACING_LG",
+    "SPACING_XL",
+    "SPACING_2XL",
+    # 阴影
+    "SHADOW_SM",
+    "SHADOW_MD",
+    "SHADOW_LG",
+    "SHADOW_XL",
+    "SHADOW_GLOW",
+    # 动效
+    "DURATION_FAST",
+    "DURATION_NORMAL",
+    "DURATION_SLOW",
+    "EASE_OUT",
+    "EASE_IN_OUT",
+    # 字重
+    "FONT_WEIGHT_REGULAR",
+    "FONT_WEIGHT_MEDIUM",
+    "FONT_WEIGHT_SEMIBOLD",
+    "FONT_WEIGHT_BOLD",
 ]
