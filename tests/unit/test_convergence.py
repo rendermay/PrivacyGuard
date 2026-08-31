@@ -1,5 +1,5 @@
 """
-v37.7.6: 重复实现收敛回归测试
+v1.1.11: 重复实现收敛回归测试
 
 验证 main.py 中的 Worker 和工具函数正确委托给共享模块，
 不再保留独立的重复实现。
@@ -19,7 +19,7 @@ class TestImageMergeWorkerConvergence(unittest.TestCase):
     def test_main_py_imports_shared_image_merge_worker(self):
         """main.py 应导入共享 ImageMergeWorker。"""
         source = MAIN_PY.read_text(encoding="utf-8")
-        self.assertIn("from privacyguard.workers.image_merge import ImageMergeWorker",
+        self.assertIn("from secureredact.workers.image_merge import ImageMergeWorker",
                        source, "main.py 应从共享模块导入 ImageMergeWorker")
 
     def test_main_py_has_no_inline_image_merge_worker_class(self):
@@ -39,7 +39,7 @@ class TestWordWorkerConvergence(unittest.TestCase):
     def test_main_py_imports_shared_word_worker(self):
         """main.py 应导入共享 WordWorker。"""
         source = MAIN_PY.read_text(encoding="utf-8")
-        self.assertIn("from privacyguard.workers.word_worker import WordWorker",
+        self.assertIn("from secureredact.workers.word_worker import WordWorker",
                        source, "main.py 应从共享模块导入 WordWorker")
 
     def test_main_py_word_worker_is_thin_compat_layer(self):
@@ -66,13 +66,13 @@ class TestDocConverterConvergence(unittest.TestCase):
     """验证 DOC 转换逻辑提取到共享模块。"""
 
     def test_shared_doc_converter_module_exists(self):
-        """privacyguard/utils/doc_converter.py 应存在。"""
-        path = Path(__file__).resolve().parents[2] / "privacyguard" / "utils" / "doc_converter.py"
+        """secureredact/utils/doc_converter.py 应存在。"""
+        path = Path(__file__).resolve().parents[2] / "secureredact" / "utils" / "doc_converter.py"
         self.assertTrue(path.exists(), "共享 DOC 转换模块应存在")
 
     def test_shared_doc_converter_exports_key_functions(self):
         """共享模块应导出 convert_doc_to_docx, resolve_soffice_cmd 等函数。"""
-        from privacyguard.utils.doc_converter import (
+        from secureredact.utils.doc_converter import (
             convert_doc_to_docx,
             convert_with_libreoffice,
             convert_with_antiword,
@@ -86,7 +86,7 @@ class TestDocConverterConvergence(unittest.TestCase):
     def test_main_py_imports_shared_doc_converter(self):
         """main.py 应导入共享 DOC 转换模块。"""
         source = MAIN_PY.read_text(encoding="utf-8")
-        self.assertIn("from privacyguard.utils.doc_converter import",
+        self.assertIn("from secureredact.utils.doc_converter import",
                        source, "main.py 应导入共享 DOC 转换模块")
 
     def test_main_py_has_no_inline_resolve_soffice_cmd(self):
@@ -113,15 +113,15 @@ class TestVersionFallbackAlignment(unittest.TestCase):
         self.assertEqual(fallback, version_txt,
                          f"版本回退值 {fallback} 应与 version.txt {version_txt} 一致")
 
-    def test_privacyguard_init_version_fallback_matches_main(self):
-        """privacyguard/__init__.py 的版本回退值应与 main.py 一致。"""
-        init_path = Path(__file__).resolve().parents[2] / "privacyguard" / "__init__.py"
+    def test_secureredact_init_version_fallback_matches_main(self):
+        """secureredact/__init__.py 的版本回退值应与 main.py 一致。"""
+        init_path = Path(__file__).resolve().parents[2] / "secureredact" / "__init__.py"
         init_source = init_path.read_text(encoding="utf-8")
         main_source = MAIN_PY.read_text(encoding="utf-8")
         main_match = re.search(r'return "(\d+\.\d+\.\d+)"', main_source)
         init_match = re.search(r'return "(\d+\.\d+\.\d+)"', init_source)
         self.assertTrue(main_match, "main.py 应包含版本回退值")
-        self.assertTrue(init_match, "privacyguard/__init__.py 应包含版本回退值")
+        self.assertTrue(init_match, "secureredact/__init__.py 应包含版本回退值")
         self.assertEqual(main_match.group(1), init_match.group(1),
                          "两处版本回退值应一致")
 

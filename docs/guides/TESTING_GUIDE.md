@@ -1,7 +1,7 @@
 # PrivacyApp 测试报告
 
 **测试日期:** 2026-02-08
-**项目版本:** v19.0 Hybrid Stable (v7 Logic)
+**项目版本:** v1.1.11 Hybrid Stable (v7 Logic)
 **测试环境:** macOS 10.14+, Python 3.11.14
 
 ---
@@ -17,7 +17,7 @@
 | 依赖包检查 | ✓ 通过 | 所有依赖已安装 |
 | 测试文件检查 | ✓ 通过 | test_sample.pdf 已生成 |
 | 虚拟环境检查 | ✓ 通过 | Python 3.11.14 |
-| 已打包应用检查 | ✓ 通过 | PrivacyGuard.app 可用 |
+| 已打包应用检查 | ✓ 通过 | SecureRedact.app 可用 |
 | PDF 处理测试 | ✓ 通过 | 文本提取功能正常 |
 | OCR 功能测试 | ✓ 通过 | RapidOCR 可正常识别 |
 
@@ -40,14 +40,14 @@ reportlab             4.4.9
 
 **启动方式 1 - 源码运行:**
 ```bash
-cd "/Users/a49144/Desktop/codexhub/PrivacyGuardApp"
+cd "/Users/a49144/Desktop/codexhub/SecureRedactApp"
 source venv/bin/activate
 python main.py
 ```
 
 **启动方式 2 - 打包应用:**
 ```bash
-open "/Users/a49144/Desktop/codexhub/PrivacyGuardApp/dist/PrivacyGuard.app"
+open "/Users/a49144/Desktop/codexhub/SecureRedactApp/dist/SecureRedact.app"
 ```
 
 **验证项:**
@@ -315,24 +315,24 @@ time python main.py
 
 ### 一键运行所有自动化测试
 ```bash
-cd "/Users/a49144/Desktop/codexhub/PrivacyGuardApp"
+cd "/Users/a49144/Desktop/codexhub/SecureRedactApp"
 bash test.sh
 ```
 
 ### 启动应用
 ```bash
 # 方式 1: 源码
-cd "/Users/a49144/Desktop/codexhub/PrivacyGuardApp"
+cd "/Users/a49144/Desktop/codexhub/SecureRedactApp"
 source venv/bin/activate
 python main.py
 
 # 方式 2: 打包应用
-open "/Users/a49144/Desktop/codexhub/PrivacyGuardApp/dist/PrivacyGuard.app"
+open "/Users/a49144/Desktop/codexhub/SecureRedactApp/dist/SecureRedact.app"
 ```
 
 ### 生成测试 PDF
 ```bash
-cd "/Users/a49144/Desktop/codexhub/PrivacyGuardApp"
+cd "/Users/a49144/Desktop/codexhub/SecureRedactApp"
 source venv/bin/activate
 python create_test_pdf.py
 ```
@@ -341,4 +341,4 @@ python create_test_pdf.py
 
 **文档版本:** 1.0
 **创建日期:** 2026-02-08
-**适用版本:** PrivacyApp v19.0 Hybrid Stable (v7 Logic)
+**适用版本:** PrivacyApp v1.1.11 Hybrid Stable (v7 Logic)

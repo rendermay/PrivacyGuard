@@ -2,7 +2,7 @@
 """_split_text_by_whitelist 单元测试."""
 import unittest
 
-from privacyguard.redaction.whitelist_split import _split_text_by_whitelist
+from secureredact.redaction.whitelist_split import _split_text_by_whitelist
 
 
 class SplitTextByWhitelistTest(unittest.TestCase):

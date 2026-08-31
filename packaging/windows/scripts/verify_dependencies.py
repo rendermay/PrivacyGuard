@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Dependency Verification Script for PrivacyGuard
+Dependency Verification Script for SecureRedact
 Run this before building to ensure all required modules are installed.
 
 Usage:
@@ -44,7 +44,7 @@ def check_module(import_name: str) -> Tuple[bool, str]:
 def verify_dependencies() -> bool:
     """Verify all required dependencies are installed."""
     print("=" * 60)
-    print("  PrivacyGuard Dependency Verification")
+    print("  SecureRedact Dependency Verification")
     print("=" * 60)
     print()
 

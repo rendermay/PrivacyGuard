@@ -6,12 +6,21 @@ This file is the primary development guide for Claude Code and other coding agen
 
 ## Project Overview
 
-**Project**: PrivacyGuard 脱敏卫士  
-**Current Version**: v37.8.0 (`37.8.0 - Manual Redaction Intervention`)  
-**Last Updated**: 2026-08-17  
-**Status**: v37.8.0 自动脱敏人工干预机制完成；Wave 1-5 全部完成；全量回归 162 项 / 160 通过（2 项为 v37.7.6 起既有失败）
+**Project**: SecureRedact 信息脱敏助手  
+**Current Version**: v1.1.13 (`1.1.13 - Name Context Injection`)  
+**Last Updated**: 2026-08-24  
+**Status**: v1.1.13 姓名上下文注入 + 三层防护收口完成；WordWorker/OCRWorker 默认严格模式 (require_context=True)
 
-PrivacyGuard is a Python + PyQt6 desktop application for intelligent redaction of PDF and Word documents.
+SecureRedact is a Python + PyQt6 desktop application for intelligent redaction of PDF and Word documents.
+
+> **⚠️ v1.1.13+ 入口迁移提示 (PR-B0)**
+>
+> `main.py` (13,026 行) 已转为 **过渡期兼容 shim**。
+> 真正的运行时入口已迁至 `secureredact/main.py`(v1.1.13 PR-B0 引入)。
+>
+> **禁止继续往 `main.py` 添加新业务代码。**所有新功能请写到 `secureredact/` 对应子包。
+> 阶段 B 重构路线图:详见 `frontend-refactor-plan.md`(当前工作目录)+ `docs/refactor/` (项目内报告)。
+> 阶段 B5 收口时 `main.py` 将被彻底移除,所有打包入口 (`SecureRedact_verify.spec`、`start_app.sh`、packaging 脚本) 同步切换到 `secureredact.main:main`。
 
 ### Current active capabilities
 
@@ -30,7 +39,7 @@ PrivacyGuard is a Python + PyQt6 desktop application for intelligent redaction o
   - right: merged replaced preview (`rule > manual > ocr`)
 - 白名单片段级豁免 (Whitelist Span Trim, v38):
   - 白名单条目仅豁免自身所在片段，同区间内其他敏感内容仍脱敏
-  - 通过 `redaction.whitelist_trim_only`（默认 True）控制；设为 False 回退到 v37.9.0 行为
+  - 通过 `redaction.whitelist_trim_only`（默认 True）控制；设为 False 回退到 v1.1.11 行为
   - 覆盖 Word matches、PDF 文本通道、PDF 图片通道 OCR
 - Drag & drop open
 - 人工干预 (Manual Redaction Intervention):
@@ -48,14 +57,9 @@ When resuming work, read these files in order:
 
 1. `docs/current/STATUS.md`
 2. `docs/current/DEV_LOG.md`
-3. `docs/current/PHASE_HIT_OVERRIDE.md`
-4. `docs/current/V38_UI_REFACTOR_PLAN.md`
-5. `CHANGELOG.md`
-6. `rollback_journal.md`
-7. `docs/superpowers/specs/2026-08-19-whitelist-trim-only-design.md`
-8. `docs/current/PRIORITY_REMEDIATION_PLAN.md`
-9. `docs/diary/20260309_2338_release_sync_diary.md`
-10. `docs/diary/20260311_pyinstaller_packaging_fix_diary.md`
+3. `CHANGELOG.md`
+4. `docs/guides/QUICK_START_FOR_CLAUDE_CODE.md`
+5. `docs/current/PROJECT_STRUCTURE.md`
 
 ---
 
@@ -64,26 +68,26 @@ When resuming work, read these files in order:
 ### Main architecture
 
 - `main.py` is still the active runtime entry and remains monolithic.
-- `privacyguard/` contains shared modules and partial extractions, but not all runtime logic has moved there.
-- Avoid reintroducing drift between `main.py` and `privacyguard/*`.
+- `secureredact/` contains shared modules and partial extractions, but not all runtime logic has moved there.
+- Avoid reintroducing drift between `main.py` and `secureredact/*`.
 
 ### Version source
 
 - Single source of truth: `version.txt`
-- `main.py` and `privacyguard.__version__` both read from it
+- `main.py` and `secureredact.__version__` both read from it
 - Packaging defaults and version resources must stay aligned with `version.txt`
 
 ### Active config path
 
 - Runtime currently uses `SimpleConfig` in `main.py`
-- Shared config utilities also exist in `privacyguard/utils/config.py`
+- Shared config utilities also exist in `secureredact/utils/config.py`
 - Do not assume `ConfigManager` is the active runtime path unless you have explicitly switched the app over
-- **v37.7.x 中文姓名启发式识别 (jieba X3)**：新增 `redaction.enable_name_recognition` 键，默认 False；详见 `docs/current/PHASE_NAME_RECOGNITION.md`
-- **v37.8.0 人工干预 (Hit Override)**：新增 `redaction.enable_hit_override`（默认 True）与 `redaction.overrides.permanent`；详见 `docs/current/PHASE_HIT_OVERRIDE.md`
+- **v1.1.11 中文姓名启发式识别 (jieba X3)**：新增 `redaction.enable_name_recognition` 键，默认 False
+- **v1.1.11 人工干预 (Hit Override)**：新增 `redaction.enable_hit_override`（默认 True）与 `redaction.overrides.permanent`
 
 ### Hit override store (人工干预)
 
-- 核心包：`privacyguard/redaction/`
+- 核心包：`secureredact/redaction/`
   - `hit_ref.py` — `HitRef`(frozen) + `Override`；`hit_id = f"{doc_hash}|{location}|{start}|{end}|{source}"`
   - `doc_hash.py` — `compute_doc_hash(file_path)`，基于 路径 + size + mtime 的 8 位标识
   - `override_store.py` — `HitOverrideStore` 单例，session / permanent 双层作用域
@@ -92,13 +96,13 @@ When resuming work, read these files in order:
 - `manual` 来源命中永不被过滤（人工框选是显式意图）
 - `OCRWorker.page_result_signal` payload 是 `list[dict]`（含 `rect` / `source` / `text` / `start` / `end`），**不再是** `list[QRectF]`
 - 永久 override 存于 `config.json` 的 `redaction.overrides.permanent`，写入走 tmp + rename 原子替换
-- 默认空 override 时行为与 v37.7.6 完全一致
+- 默认空 override 时行为与 v1.1.11 完全一致
 
 ### OCR dependency behavior
 
-- `privacyguard` package import is now lazy
+- `secureredact` package import is now lazy
 - `RapidOCR` must only initialize at actual OCR execution time
-- Do not add package-level eager OCR imports back into `privacyguard/__init__.py` or `privacyguard/workers/__init__.py`
+- Do not add package-level eager OCR imports back into `secureredact/__init__.py` or `secureredact/workers/__init__.py`
 
 ### Mixed PDF handling
 
@@ -108,7 +112,7 @@ When resuming work, read these files in order:
   2. embedded image block discovery via `page.get_text("dict")`
   3. image-block OCR
   4. local OCR box offset back into page coordinates
-- Shared logic lives in `privacyguard/ocr/mixed_pdf.py`
+- Shared logic lives in `secureredact/ocr/mixed_pdf.py`
 
 ---
 
@@ -148,20 +152,20 @@ Important:
 - `theme.py` - UI theme definitions
 - `version.txt` - single version source
 - `config.json` - local runtime config
-- `privacyguard/__init__.py` - package metadata + lazy exports
-- `privacyguard/ocr/text_pdf.py` - shared text-PDF hit collection
-- `privacyguard/ocr/mixed_pdf.py` - shared mixed-PDF image-block OCR helper
-- `privacyguard/workers/ocr_worker.py` - modular OCR worker
-- `privacyguard/workers/word_worker.py` - modular Word worker
-- `privacyguard/workers/image_merge.py` - modular image merge worker
-- `privacyguard/utils/doc_converter.py` - shared DOC→DOCX converter
-- `privacyguard/utils/config.py` - modular config manager
-- `privacyguard/utils/exceptions.py` - shared exception classes
-- `privacyguard/utils/temp_manager.py` - shared temp file manager
-- `privacyguard/utils/security.py` - shared path validation & resource_path
-- `privacyguard/redaction/hit_ref.py` - `HitRef` / `Override` 数据模型
-- `privacyguard/redaction/doc_hash.py` - 文档 8 位标识
-- `privacyguard/redaction/override_store.py` - `HitOverrideStore` 单例 + `filtered_hits`
+- `secureredact/__init__.py` - package metadata + lazy exports
+- `secureredact/ocr/text_pdf.py` - shared text-PDF hit collection
+- `secureredact/ocr/mixed_pdf.py` - shared mixed-PDF image-block OCR helper
+- `secureredact/workers/ocr_worker.py` - modular OCR worker
+- `secureredact/workers/word_worker.py` - modular Word worker
+- `secureredact/workers/image_merge.py` - modular image merge worker
+- `secureredact/utils/doc_converter.py` - shared DOC→DOCX converter
+- `secureredact/utils/config.py` - modular config manager
+- `secureredact/utils/exceptions.py` - shared exception classes
+- `secureredact/utils/temp_manager.py` - shared temp file manager
+- `secureredact/utils/security.py` - shared path validation & resource_path
+- `secureredact/redaction/hit_ref.py` - `HitRef` / `Override` 数据模型
+- `secureredact/redaction/doc_hash.py` - 文档 8 位标识
+- `secureredact/redaction/override_store.py` - `HitOverrideStore` 单例 + `filtered_hits`
 
 ---
 
@@ -170,14 +174,14 @@ Important:
 ### Run app
 
 ```bash
-cd /Users/a49144/Desktop/codexhub/PrivacyGuardApp
+cd /Users/a49144/Desktop/codexhub/SecureRedactApp
 python3 main.py
 ```
 
 ### Compile check
 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 ```
 
 ### Main regression suite
@@ -218,10 +222,10 @@ python3 -m unittest \
 
 共 38 例，全部 PASS。
 
-### Full regression (v37.8.0 基线)
+### Full regression (v1.1.11 基线)
 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 python3 -m unittest \
   tests.unit.test_hit_ref \
   tests.unit.test_doc_hash \
@@ -255,7 +259,7 @@ python3 -m unittest \
 
 结果：`Ran 162 tests` / `FAILED (failures=2)`。
 
-**已知既有失败（非回归，自 v37.7.6 起存在）**：
+**已知既有失败（非回归，自 v1.1.11 起存在）**：
 `tests.unit.test_config_alignment.test_scan_default_level_matches` 与
 `test_simple_config_reads_config_json_values` —— `config.json` 中
 `redaction.scan.default_level` 为 `2.0`，测试期望 `1.5`。修复前请勿把它当成新引入的回归。
@@ -314,22 +318,7 @@ packaging/windows/scripts/build_complete.bat
 
 ## Current Checkpoints
 
-- `20260309_runtime_remediation_cp18_verified`
-- `20260309_word_compare_bugfix_cp20_verified`
-- `20260309_mixed_pdf_ocr_cp23_verified`
-- `20260309_release_sync_cp25_verified`
-- `20260310_word_preview_highlight_cp27_verified`
-- `20260310_release_sync_cp29_verified`
-- `20260311_pyinstaller_packaging_fix_cp30_verified`
-- `v38_ui_refactor_cp31_20260313_140645`
-- `v37.7.x_name_recognition_x3_cp32_20260816`
-- `v37_8_manual_intervention_cp33_20260817_121549`
-
-Rollback references:
-
-- `rollback_journal.md`
-- `ROLLBACK_GUIDE.md`
-- `restore_checkpoint.sh`
+（无 — 历史 checkpoint 已随 rollback 工具链一同清理；项目以 `version.txt` 为单一版本源。）
 
 ---
 

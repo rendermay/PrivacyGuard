@@ -1,4 +1,4 @@
-# PrivacyGuard 脱敏卫士
+# SecureRedact 信息脱敏助手
 我这个比较懒，不会搞github，多多理解，哪天有空了 再好好研究，先传上去
 可以关注公众号联系：池州汪律的AI进化论 ，或者抖音搜索：池州有个汪律师
 
@@ -11,7 +11,7 @@ https://www.bilibili.com/video/BV1NPDYB4EP1?vd_source=53f4c6f7c7329987c843aa17df
 
 > 基于 Python + PyQt6 的 PDF / Word 文档智能脱敏工具
 
-**当前版本**: v37.7.6
+**当前版本**: v1.1.11
 **版本标识**: `37.7.6 - Full Convergence Remediation`
 **最后更新**: 2026-05-16
 **当前状态**: 全面修复完成，P1-P4 修复全部收口，基线测试 79/79 通过
@@ -46,14 +46,25 @@ https://www.bilibili.com/video/BV1NPDYB4EP1?vd_source=53f4c6f7c7329987c843aa17df
 ## 快速开始
 
 ```bash
-cd /Users/a49144/Desktop/codexhub/PrivacyGuardApp
+cd /Users/a49144/Desktop/codexhub/SecureRedactApp
 python3 main.py
 ```
+
+> **⚠️ v1.1.13+ 入口迁移提示 (PR-B0)**
+> `main.py` 已转为 **过渡期兼容 shim**,真正的运行时入口已迁至 `secureredact/main.py`。
+> 推荐使用新入口(后续 PR-B5 收口时 `main.py` 将被彻底移除):
+>
+> ```bash
+> python3 -m secureredact.main    # 新入口(推荐)
+> python3 main.py                  # 旧入口(过渡期,PR-B5 后停用)
+> ```
+>
+> 详见 `docs/refactor/b0-report.md` 与重构路线图。**请勿继续往 `main.py` 添加新代码**,所有新功能写到 `secureredact/` 对应子包。
 
 ### 语法检查
 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 ```
 
 ### 主回归测试
@@ -85,7 +96,7 @@ python3 -m unittest \
 4. 替换后预览融合：规则替换 + 手动脱敏 + 智能脱敏
 5. 运行时整改：
    - 路径校验统一
-   - `privacyguard` OCR 懒导入
+   - `secureredact` OCR 懒导入
    - 文本型 PDF 去重
    - Word 预览局部 DOM 更新
    - 设置持久化与版本来源统一
@@ -93,9 +104,9 @@ python3 -m unittest \
    - 修复首次智能脱敏后右侧“替换后预览”可能整块空白
    - 修复混合型 PDF 中图片 / 扫描区域漏脱敏
    - 修复“高级设置保存后”原文预览异常红色高亮串位
-   - 修复 Windows 打包后 `privacyguard.utils.security` 模块导入失败
+   - 修复 Windows 打包后 `secureredact.utils.security` 模块导入失败
 7. 当前基线同步：
-   - 版本号、文档、日志已统一到 `v37.7.4`
+   - 版本号、文档、日志已统一到 `v1.1.11`
    - `packaging/` 与 `docs/packaging/` 当前说明已同步到当前基线
 8. v38 UI 改造代码层收口：
    - 首页、PDF、Word、批量 Word、图片合并、高级设置已统一到同一套桌面级壳层语言
@@ -118,13 +129,9 @@ python3 -m unittest \
 
 1. `docs/current/STATUS.md`
 2. `docs/current/DEV_LOG.md`
-3. `docs/current/V38_UI_REFACTOR_PLAN.md`
-4. `CHANGELOG.md`
-5. `rollback_journal.md`
-6. `CLAUDE.md`
-7. `docs/guides/QUICK_START_FOR_CLAUDE_CODE.md`
-8. `docs/diary/20260309_2338_release_sync_diary.md`
-9. `docs/diary/20260311_pyinstaller_packaging_fix_diary.md`
+3. `CHANGELOG.md`
+4. `CLAUDE.md`
+5. `docs/guides/QUICK_START_FOR_CLAUDE_CODE.md`
 
 ---
 
@@ -141,23 +148,10 @@ python3 -m unittest \
 
 当前关键检查点：
 
-- `20260309_runtime_remediation_cp18_verified`
-- `20260309_word_compare_bugfix_cp20_verified`
-- `20260309_mixed_pdf_ocr_cp23_verified`
-- `20260309_release_sync_cp25_verified`
-- `20260310_word_preview_highlight_cp27_verified`
-- `20260310_release_sync_cp29_verified`
-- `20260311_pyinstaller_packaging_fix_cp30_verified`
-- `v38_ui_refactor_cp31_20260313_140645`
-
-参考：
-
-- `rollback_journal.md`
-- `ROLLBACK_GUIDE.md`
-- `restore_checkpoint.sh`
+（无 — 历史 checkpoint 已随 rollback 工具链一同清理；项目以 `version.txt` 为单一版本源。）
 
 ## releases-打包好的便携包，下载可用
-https://github.com/lizilaywer/PrivacyGuard/releases/tag/v37.7.4
+https://github.com/lizilaywer/SecureRedact/releases/tag/v1.1.11
 
 
 关注与我这边比较不懂又懒的小律师交流吧！

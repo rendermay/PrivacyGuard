@@ -1,0 +1,47 @@
+/* toolbar.qss — 工具栏 / 模式徽章 / 工具栏元数据
+   来自 main.py:6895-6927(toolbar.setStyleSheet + lbl_mode_badge.setStyleSheet)
+        + 7367-7376(toolbar_meta_style,供 lbl_zoom / lbl_page 共用)
+   v1.1.13 基线,严禁视觉漂移 */
+
+QFrame#toolbarRoot {
+    background-color: {surface};
+    border-bottom: 1px solid {border};
+}
+
+QFrame#toolbarGroup, QFrame#toolbarGroupStrong, QFrame#toolbarUtilityGroup {
+    background-color: transparent;
+    border: none;
+}
+
+QFrame#toolbarUtilityGroup {
+    background-color: transparent;
+    border: none;
+}
+
+QFrame#toolbarDivider {
+    background-color: {border};
+    border: none;
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+
+QLabel#toolbarMeta {
+    color: {text};
+    background-color: {hover};
+    border: 1px solid {border};
+    border-radius: 9px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    min-width: 54px;
+}
+
+QLabel#modeBadge {
+    background-color: {hover};
+    color: {primary};
+    border: 1px solid {border};
+    border-radius: 14px;
+    padding: 6px 12px;
+    font-size: {font_size_small}px;
+    font-weight: 700;
+}

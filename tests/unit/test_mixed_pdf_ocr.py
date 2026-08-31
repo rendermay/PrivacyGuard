@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
-from privacyguard.ocr.mixed_pdf import (
+from secureredact.ocr.mixed_pdf import (
     collect_embedded_image_clip_rects,
     collect_image_block_ocr_hits,
 )
@@ -78,7 +78,7 @@ class TestMixedPdfOcr(unittest.TestCase):
         )
 
         self.assertEqual(rendered, image_clip_rects)
-        # v37.7.x 方案 X: 输出 duck-typing QRectF, 兼容 tuple 比较
+        # v1.1.11 方案 X: 输出 duck-typing QRectF, 兼容 tuple 比较
         self.assertEqual(len(hit_rects), 1)
         hit = hit_rects[0]
         # 输出可能是 QRectF 或 _TupleRect (fallback), 都满足 .x() / .y() / .width() / .height()

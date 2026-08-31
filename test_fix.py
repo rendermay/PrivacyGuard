@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""v37.1 Windows 路径验证修复测试"""
+"""v1.1.11 Windows 路径验证修复测试"""
 
 import os
 import tempfile
 import platform
 
 def validate_safe_path(path, allowed_extensions=None):
-    """验证文件路径安全（v37.1: 跨平台兼容修复）"""
+    """验证文件路径安全（v1.1.11: 跨平台兼容修复）"""
     if not path:
         return False, "路径不能为空"
     if len(path) > 4096:
@@ -54,7 +54,7 @@ def validate_safe_path(path, allowed_extensions=None):
 
 if __name__ == "__main__":
     print("=" * 50)
-    print("v37.1 Windows 路径验证修复测试")
+    print("v1.1.11 Windows 路径验证修复测试")
     print("=" * 50)
     print(f"平台: {platform.system()}")
     print(f"临时目录: {tempfile.gettempdir()}")

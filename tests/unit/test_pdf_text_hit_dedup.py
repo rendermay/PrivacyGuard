@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 import unittest
 
-from privacyguard.ocr.text_pdf import collect_text_pdf_hit_boxes
+from secureredact.ocr.text_pdf import collect_text_pdf_hit_boxes
 
 
 class FakePage:

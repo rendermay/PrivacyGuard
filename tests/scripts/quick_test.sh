@@ -60,7 +60,7 @@ case $choice in
         ;;
     3)
         echo -e "${BLUE}启动应用 (打包模式)...${NC}"
-        open "dist/PrivacyGuard.app"
+        open "dist/SecureRedact.app"
         echo "应用已启动,请在 macOS 中使用"
         ;;
     4)

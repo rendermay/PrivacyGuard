@@ -2,8 +2,8 @@
 """WordWorker 黑/白名单测试."""
 import unittest
 
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
-from privacyguard.workers.word_worker import WordWorker
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.workers.word_worker import WordWorker
 
 
 class _WordFilterTest(unittest.TestCase):
@@ -39,12 +39,12 @@ class _WordFilterTest(unittest.TestCase):
 
     def test_trim_only_keeps_only_non_whitelisted_substring(self):
         """v38: trim_only=True 时, 整段 Word 命中被切成非白名单位置的子 match."""
-        from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+        from secureredact.redaction.black_white_list_store import BlackWhiteListStore
         BlackWhiteListStore.reset_singleton()
         store = BlackWhiteListStore.instance()
         store.load_permanent([], ["法定代表人"])
         store.set_trim_only(True)
-        from privacyguard.workers.word_worker import WordWorker
+        from secureredact.workers.word_worker import WordWorker
         w = WordWorker.__new__(WordWorker)
         hits = [{
             "pattern": "test", "rule_name": "test",

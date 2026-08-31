@@ -1,66 +1,38 @@
 # === 主题系统模块 ===
 # Windows-first 办公软件风格主题定义
 # 支持浅色/深色主题切换
+# PR-V1 Task 5: LIGHT/DARK 字典从硬编码改为从 secureredact.ui.styles.tokens 派生
+# (避免主题字段在两处定义产生 drift)
+
+from secureredact.ui.styles.tokens import LIGHT as _TOKENS_LIGHT, DARK as _TOKENS_DARK
+from dataclasses import asdict
 
 
 class Theme:
-    """主题颜色和样式定义"""
+    """主题颜色和样式定义。LIGHT/DARK 直接从 tokens 派生。"""
 
-    # 浅色主题（Windows / 中文办公场景优先）
-    LIGHT = {
-        "background": "#F7F8FA",
-        "surface": "#FFFFFF",
-        "primary": "#0F6CBD",
-        "secondary": "#5F6B7A",
-        "accent": "#0FA968",
-        "text": "#18212F",
-        "text_secondary": "#5F6B7A",
-        "border": "#E2E8F0",
-        "shadow": "rgba(18, 31, 53, 0.10)",
-        "info_bar": "#F9FBFD",
-        "scroll_area": "#F6F8FB",
-        "hover": "#EEF4FB",
-        "pressed": "#E3ECF8",
-        "success": "#0FA968",
-        "danger": "#D64545",
-        "warning": "#D9831F",
-    }
+    # 浅色主题(办公暖白版,PR-V4 完整落地;本 PR-V1 仅数据层对齐)
+    LIGHT = asdict(_TOKENS_LIGHT)
 
-    # 深色主题
-    DARK = {
-        "background": "#151C26",
-        "surface": "#1E2836",
-        "primary": "#56A8FF",
-        "secondary": "#9AA8BA",
-        "accent": "#34D399",
-        "text": "#F6F8FC",
-        "text_secondary": "#AAB5C5",
-        "border": "#324255",
-        "shadow": "rgba(0,0,0,0.30)",
-        "info_bar": "#1E2A3B",
-        "scroll_area": "#1A2330",
-        "hover": "#263241",
-        "pressed": "#314155",
-        "success": "#34D399",
-        "danger": "#FF6B6B",
-        "warning": "#FFB454",
-    }
+    # 深色主题(默认,LOGO Slate-900)
+    DARK = asdict(_TOKENS_DARK)
 
-    # 布局常量
-    BORDER_RADIUS = 12
-    BUTTON_RADIUS = 10
-    SPACING_SMALL = 8
-    SPACING_MEDIUM = 14
-    SPACING_LARGE = 22
+    # === 布局常量(保留向后兼容,逐步迁移到 secureredact.ui.styles.tokens) ===
+    # PR-V1 Task 5: 以下常量保留作为运行时别名,内部值委托给 tokens 模块
+    BORDER_RADIUS = 12            # 历史 alias,实际值用 RADIUS_LG
+    BUTTON_RADIUS = 10            # 历史 alias,实际值用 RADIUS_MD
+    SPACING_SMALL = 8             # alias → SPACING_SM
+    SPACING_MEDIUM = 14           # alias → SPACING_MD
+    SPACING_LARGE = 22            # alias → SPACING_LG
 
-    # 字体
+    # 字体(保留 alias)
     FONT_FAMILY = "'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', Arial, sans-serif"
     FONT_SIZE_SMALL = 12
     FONT_SIZE_NORMAL = 14
     FONT_SIZE_LARGE = 18
 
     # 动画
-    ANIMATION_DURATION = 200  # ms
+    ANIMATION_DURATION = 200      # alias → DURATION_NORMAL
 
     @staticmethod
     def get_theme(theme_name="light"):
@@ -69,15 +41,7 @@ class Theme:
 
     @staticmethod
     def adjust_color(hex_color, amount):
-        """调整颜色亮度
-
-        Args:
-            hex_color: 十六进制颜色值（如 #007AFF）
-            amount: 调整量（正数变亮，负数变暗）
-
-        Returns:
-            调整后的十六进制颜色值
-        """
+        """调整颜色亮度(保留,向后兼容)"""
         if hex_color.startswith('#'):
             hex_color = hex_color[1:]
         try:

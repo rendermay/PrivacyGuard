@@ -14,8 +14,8 @@ Wave 3 Task 5:
 import unittest
 from unittest.mock import MagicMock, patch
 
-from privacyguard.redaction.hit_ref import HitRef
-from privacyguard.redaction.override_store import HitOverrideStore
+from secureredact.redaction.hit_ref import HitRef
+from secureredact.redaction.override_store import HitOverrideStore
 
 
 def _hit_id(doc_hash="a1b2c3d4", location="paragraph_0",

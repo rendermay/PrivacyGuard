@@ -15,7 +15,7 @@ class WordWorkerSourceTest(unittest.TestCase):
     def test_match_dict_has_source_field(self):
         """jieba 启发式识别 (enable_name_recognition=True) 命中后,
         word_data[key]['ocr'] 中的 dict 应携带 source='jieba'."""
-        from privacyguard.workers.word_worker import WordWorker
+        from secureredact.workers.word_worker import WordWorker
 
         # 构造 fake word_doc
         class FakePara:

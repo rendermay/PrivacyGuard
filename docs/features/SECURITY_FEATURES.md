@@ -1,6 +1,6 @@
-# PrivacyGuard PDF 脱敏安全特性文档
+# SecureRedact PDF 脱敏安全特性文档
 
-**版本**: v37.5.0 (Seal Detection)
+**版本**: v1.1.11 (Seal Detection)
 **严重程度**: 高（历史漏洞已修复）
 **日期**: 2026-02-27
 **状态**: ✅ 已修复并验证
@@ -16,13 +16,13 @@
 - ❌ 查看原始敏感信息
 
 ### 影响
-v37.2.0 及之前所有版本
+v1.1.11 及之前所有版本
 
 ---
 
 ## 根本原因
 
-### 有问题的实现 (v37.2.0 及之前)
+### 有问题的实现 (v1.1.11 及之前)
 ```python
 annot = page.add_redact_annot(rect)  # 创建可编辑的 PDF 注释
 page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)  # 不修改图像
@@ -36,7 +36,7 @@ doc_save.save(fname)
 
 ---
 
-## 修复方案 (v37.3.0)
+## 修复方案 (v1.1.11)
 
 ### 安全加固后的实现
 ```python
@@ -110,7 +110,7 @@ doc_save.save(fname, garbage=4, deflate=True, clean=True, linear=True)
 ## 升级建议
 
 ### 必须升级
-所有使用 PrivacyGuard 进行敏感信息脱敏的用户都应立即升级到 v37.3.0 或更高版本。
+所有使用 SecureRedact 进行敏感信息脱敏的用户都应立即升级到 v1.1.11 或更高版本。
 
 ### 历史文件处理
 使用旧版本脱敏的 PDF 文件可能存在安全隐患，建议：
@@ -120,4 +120,4 @@ doc_save.save(fname, garbage=4, deflate=True, clean=True, linear=True)
 ---
 
 **修复完成时间**: 2026-02-22
-**版本**: v37.3.0 (PDF Security Fix)
+**版本**: v1.1.11 (PDF Security Fix)

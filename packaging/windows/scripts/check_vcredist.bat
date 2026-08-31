@@ -60,7 +60,7 @@ if "%MISSING%"=="1" (
     echo   [ERROR] VC++ Redistributable missing
 echo ========================================
     echo.
-    echo PrivacyGuard requires Visual C++ Redistributable.
+    echo SecureRedact requires Visual C++ Redistributable.
     echo.
     if "%MISSING_140_1%"=="1" (
         echo IMPORTANT: vcruntime140_1.dll is REQUIRED for OCR functionality.
@@ -73,7 +73,7 @@ echo ========================================
     echo Alternative link:
     echo https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
     echo.
-    echo After installation, restart PrivacyGuard.
+    echo After installation, restart SecureRedact.
     echo.
     pause
     exit /b 1
@@ -82,7 +82,7 @@ echo ========================================
     echo   [OK] All required VC++ runtime files found
 echo ========================================
     echo.
-    echo You can now run PrivacyGuard.
+    echo You can now run SecureRedact.
     echo.
     exit /b 0
 )

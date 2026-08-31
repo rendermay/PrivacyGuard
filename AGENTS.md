@@ -6,12 +6,12 @@ This file is the primary development guide for Codex and other coding agents wor
 
 ## Project Overview
 
-**Project**: PrivacyGuard 脱敏卫士  
-**Current Version**: v37.7.6 (`37.7.6 - Full Convergence Remediation`)  
-**Last Updated**: 2026-05-16  
-**Status**: v37.7.6 全面重复实现收敛完成；P1-P4 修复全部完成；基线测试 79/79 通过
+**Project**: SecureRedact 信息脱敏助手  
+**Current Version**: v1.1.11 (`1.1.11 - Whitelist Span Trim`)  
+**Last Updated**: 2026-08-20  
+**Status**: v1.1.11 白名单片段级豁免完成；全量回归 162 项 / 160 通过（2 项为 v1.1.11 起既有失败）
 
-PrivacyGuard is a Python + PyQt6 desktop application for intelligent redaction of PDF and Word documents.
+SecureRedact is a Python + PyQt6 desktop application for intelligent redaction of PDF and Word documents.
 
 ### Current active capabilities
 
@@ -39,12 +39,8 @@ When resuming work, read these files in order:
 
 1. `docs/current/STATUS.md`
 2. `docs/current/DEV_LOG.md`
-3. `docs/current/V38_UI_REFACTOR_PLAN.md`
-4. `CHANGELOG.md`
-5. `rollback_journal.md`
-6. `docs/current/PRIORITY_REMEDIATION_PLAN.md`
-7. `docs/diary/20260309_2338_release_sync_diary.md`
-8. `docs/diary/20260311_pyinstaller_packaging_fix_diary.md`
+3. `CHANGELOG.md`
+4. `docs/guides/QUICK_START_FOR_CLAUDE_CODE.md`
 
 ---
 
@@ -53,26 +49,26 @@ When resuming work, read these files in order:
 ### Main architecture
 
 - `main.py` is still the active runtime entry and remains monolithic.
-- `privacyguard/` contains shared modules and partial extractions, but not all runtime logic has moved there.
-- Avoid reintroducing drift between `main.py` and `privacyguard/*`.
+- `secureredact/` contains shared modules and partial extractions, but not all runtime logic has moved there.
+- Avoid reintroducing drift between `main.py` and `secureredact/*`.
 
 ### Version source
 
 - Single source of truth: `version.txt`
-- `main.py` and `privacyguard.__version__` both read from it
+- `main.py` and `secureredact.__version__` both read from it
 - Packaging defaults and version resources must stay aligned with `version.txt`
 
 ### Active config path
 
 - Runtime currently uses `SimpleConfig` in `main.py`
-- Shared config utilities also exist in `privacyguard/utils/config.py`
+- Shared config utilities also exist in `secureredact/utils/config.py`
 - Do not assume `ConfigManager` is the active runtime path unless you have explicitly switched the app over
 
 ### OCR dependency behavior
 
-- `privacyguard` package import is now lazy
+- `secureredact` package import is now lazy
 - `RapidOCR` must only initialize at actual OCR execution time
-- Do not add package-level eager OCR imports back into `privacyguard/__init__.py` or `privacyguard/workers/__init__.py`
+- Do not add package-level eager OCR imports back into `secureredact/__init__.py` or `secureredact/workers/__init__.py`
 
 ### Mixed PDF handling
 
@@ -82,7 +78,7 @@ When resuming work, read these files in order:
   2. embedded image block discovery via `page.get_text("dict")`
   3. image-block OCR
   4. local OCR box offset back into page coordinates
-- Shared logic lives in `privacyguard/ocr/mixed_pdf.py`
+- Shared logic lives in `secureredact/ocr/mixed_pdf.py`
 
 ---
 
@@ -122,17 +118,17 @@ Important:
 - `theme.py` - UI theme definitions
 - `version.txt` - single version source
 - `config.json` - local runtime config
-- `privacyguard/__init__.py` - package metadata + lazy exports
-- `privacyguard/ocr/text_pdf.py` - shared text-PDF hit collection
-- `privacyguard/ocr/mixed_pdf.py` - shared mixed-PDF image-block OCR helper
-- `privacyguard/workers/ocr_worker.py` - modular OCR worker
-- `privacyguard/workers/word_worker.py` - modular Word worker
-- `privacyguard/workers/image_merge.py` - modular image merge worker
-- `privacyguard/utils/doc_converter.py` - shared DOC→DOCX converter
-- `privacyguard/utils/config.py` - modular config manager
-- `privacyguard/utils/exceptions.py` - shared exception classes
-- `privacyguard/utils/temp_manager.py` - shared temp file manager
-- `privacyguard/utils/security.py` - shared path validation & resource_path
+- `secureredact/__init__.py` - package metadata + lazy exports
+- `secureredact/ocr/text_pdf.py` - shared text-PDF hit collection
+- `secureredact/ocr/mixed_pdf.py` - shared mixed-PDF image-block OCR helper
+- `secureredact/workers/ocr_worker.py` - modular OCR worker
+- `secureredact/workers/word_worker.py` - modular Word worker
+- `secureredact/workers/image_merge.py` - modular image merge worker
+- `secureredact/utils/doc_converter.py` - shared DOC→DOCX converter
+- `secureredact/utils/config.py` - modular config manager
+- `secureredact/utils/exceptions.py` - shared exception classes
+- `secureredact/utils/temp_manager.py` - shared temp file manager
+- `secureredact/utils/security.py` - shared path validation & resource_path
 
 ---
 
@@ -141,14 +137,14 @@ Important:
 ### Run app
 
 ```bash
-cd /Users/a49144/Desktop/codexhub/PrivacyGuardApp
+cd /Users/a49144/Desktop/codexhub/SecureRedactApp
 python3 main.py
 ```
 
 ### Compile check
 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 ```
 
 ### Main regression suite
@@ -202,20 +198,7 @@ packaging/windows/scripts/build_complete.bat
 
 ## Current Checkpoints
 
-- `20260309_runtime_remediation_cp18_verified`
-- `20260309_word_compare_bugfix_cp20_verified`
-- `20260309_mixed_pdf_ocr_cp23_verified`
-- `20260309_release_sync_cp25_verified`
-- `20260310_word_preview_highlight_cp27_verified`
-- `20260310_release_sync_cp29_verified`
-- `20260311_pyinstaller_packaging_fix_cp30_verified`
-- `v38_ui_refactor_cp31_20260313_140645`
-
-Rollback references:
-
-- `rollback_journal.md`
-- `ROLLBACK_GUIDE.md`
-- `restore_checkpoint.sh`
+（无 — 历史 checkpoint 已随 rollback 工具链一同清理；项目以 `version.txt` 为单一版本源。）
 
 ---
 

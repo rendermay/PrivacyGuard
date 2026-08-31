@@ -1,6 +1,6 @@
 # Claude Code 开发经验与技巧
 
-本文档记录使用 Claude Code 进行 PrivacyGuard 项目开发的经验总结。
+本文档记录使用 Claude Code 进行 SecureRedact 项目开发的经验总结。
 
 ---
 
@@ -147,22 +147,22 @@ def get_platform():
 
 **macOS (PyInstaller)**:
 ```python
-# PrivacyGuard.spec
+# SecureRedact.spec
 exe = EXE(
     ...
-    name='PrivacyGuard',
-    icon='PrivacyGuard.icns',
+    name='SecureRedact',
+    icon='SecureRedact.icns',
     target_arch='universal2',  # 支持 Intel 和 Apple Silicon
 )
 ```
 
 **Windows (PyInstaller)**:
 ```python
-# PrivacyGuard_windows.spec
+# SecureRedact_windows.spec
 exe = EXE(
     ...
-    name='PrivacyGuard',
-    icon='PrivacyGuard.ico',
+    name='SecureRedact',
+    icon='SecureRedact.ico',
     console=False,  # 不显示控制台窗口
 )
 ```
@@ -368,7 +368,7 @@ exe = EXE(
 
 ## 项目特定经验
 
-### PrivacyGuard 开发经验
+### SecureRedact 开发经验
 
 1. **PDF 处理**: 使用 PyMuPDF，注意内存管理
 2. **OCR 集成**: RapidOCR 效果好，但需要处理依赖

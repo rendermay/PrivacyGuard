@@ -1,0 +1,36 @@
+/* menu.qss — QMenu 强制浅色(避免系统深色主题下 popup 白底白字)
+   来自 main.py:6813-6840(原 _apply_light_theme 函数内,v1.1.11 注释保留)
+   v1.1.13 基线,严禁视觉漂移 */
+
+/* v1.1.11: 强制 QMenu 浅色 — 避免深色系统主题下 popup 菜单白底白字 */
+QMenu {
+    background-color: {surface};
+    color: {text};
+    border: 1px solid {border};
+    padding: 6px 0px;
+    font-family: {font_family};
+    font-size: {font_size_normal}px;
+}
+
+QMenu::item {
+    background-color: transparent;
+    color: {text};
+    padding: 6px 24px 6px 24px;
+    margin: 2px 4px;
+    border-radius: 4px;
+}
+
+QMenu::item:selected {
+    background-color: {hover};
+    color: {text};
+}
+
+QMenu::item:disabled {
+    color: {text_secondary};
+}
+
+QMenu::separator {
+    height: 1px;
+    background: {border};
+    margin: 4px 8px;
+}

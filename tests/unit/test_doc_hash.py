@@ -3,7 +3,7 @@
 import os
 import tempfile
 import unittest
-from privacyguard.redaction.doc_hash import compute_doc_hash
+from secureredact.redaction.doc_hash import compute_doc_hash
 
 
 class DocHashTest(unittest.TestCase):

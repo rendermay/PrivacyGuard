@@ -7,13 +7,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-class TestPrivacyGuardImports(unittest.TestCase):
+class TestSecureRedactImports(unittest.TestCase):
 
-    def test_import_privacyguard_without_rapidocr_runtime(self):
+    def test_import_secureredact_without_rapidocr_runtime(self):
         cached = {
             name: module
             for name, module in list(sys.modules.items())
-            if name == "privacyguard" or name.startswith("privacyguard.")
+            if name == "secureredact" or name.startswith("secureredact.")
         }
         for name in list(cached):
             sys.modules.pop(name, None)
@@ -27,10 +27,10 @@ class TestPrivacyGuardImports(unittest.TestCase):
 
         try:
             with patch("builtins.__import__", side_effect=guarded_import):
-                module = importlib.import_module("privacyguard")
+                module = importlib.import_module("secureredact")
         finally:
             for name in list(sys.modules):
-                if name == "privacyguard" or name.startswith("privacyguard."):
+                if name == "secureredact" or name.startswith("secureredact."):
                     sys.modules.pop(name, None)
             sys.modules.update(cached)
 

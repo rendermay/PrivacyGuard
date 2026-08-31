@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import MagicMock
 
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
 
 
 class IsTrimOnlyTest(unittest.TestCase):
@@ -36,7 +36,7 @@ class IsTrimOnlyTest(unittest.TestCase):
         config = MagicMock()
         config.get.return_value = "true"  # 字符串, 应回退
         BlackWhiteListStore.instance().bind_config(config)
-        with self.assertLogs("privacyguard.redaction.black_white_list_store",
+        with self.assertLogs("secureredact.redaction.black_white_list_store",
                              level="WARNING") as cm:
             self.assertTrue(BlackWhiteListStore.instance().is_trim_only())
         self.assertTrue(any("whitelist_trim_only" in m for m in cm.output))

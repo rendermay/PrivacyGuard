@@ -1,12 +1,12 @@
 #!/bin/bash
-# PrivacyGuard 项目清理脚本
+# SecureRedact 项目清理脚本
 # 清理临时文件，但保留旧备份
 # 用法: ./clean_project.sh
 
 set -e
 
 echo "======================================"
-echo "  PrivacyGuard 项目清理"
+echo "  SecureRedact 项目清理"
 echo "======================================"
 echo ""
 

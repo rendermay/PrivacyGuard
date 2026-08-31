@@ -1,0 +1,52 @@
+/* workbench.qss — 上下文条 / 引导标签 / 上下文消息
+   来自 main.py:6847-6889(原 workbench_panel.setStyleSheet)
+   v1.1.13 基线,严禁视觉漂移 */
+
+QFrame#workbenchPanel {
+    background-color: {surface};
+    border-bottom: 1px solid {border};
+}
+
+QLabel#workbenchTitle {
+    color: {text};
+    font-size: 16px;
+    font-weight: 700;
+    background-color: transparent;
+}
+
+QLabel#workbenchSubtitle {
+    color: {text_secondary};
+    font-size: 11px;
+    line-height: 1.4;
+    background-color: transparent;
+}
+
+QLabel#workbenchFocus {
+    background-color: #E9F1FB;
+    color: {primary};
+    border: 1px solid {border};
+    border-radius: 14px;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#workbenchHintTag {
+    background-color: #FBFCFE;
+    color: {text};
+    border: 1px solid {border};
+    border-radius: 10px;
+    padding: 7px 12px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#contextMessage {
+    background-color: {info_bar};
+    color: {text_secondary};
+    border: 1px solid {border};
+    border-radius: 10px;
+    padding: 7px 12px;
+    font-weight: 600;
+    font-size: {font_size_small}px;
+}

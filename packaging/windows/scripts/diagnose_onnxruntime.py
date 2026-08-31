@@ -179,7 +179,7 @@ def suggest_fixes():
 
 3. 对于 PyInstaller 打包问题:
    - 使用 diagnose_onnxruntime.py 确认所有 DLL 都存在
-   - 尝试使用 PrivacyGuard_windows_v2.spec 重新打包
+   - 尝试使用 SecureRedact_windows_v2.spec 重新打包
    - 确保打包环境和运行环境使用相同的 VC++ 版本
 
 4. 如果问题仍然存在，尝试降级 onnxruntime:
@@ -192,7 +192,7 @@ def suggest_fixes():
 """)
 
 if __name__ == '__main__':
-    print("PrivacyGuard onnxruntime 诊断工具")
+    print("SecureRedact onnxruntime 诊断工具")
     print(f"运行时间: {__import__('datetime').datetime.now()}")
 
     check_python_version()

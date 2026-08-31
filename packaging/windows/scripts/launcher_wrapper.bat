@@ -1,8 +1,8 @@
 @echo off
-:: PrivacyGuard Launcher Wrapper
+:: SecureRedact Launcher Wrapper
 :: Checks for VC++ runtime before launching the application
 chcp 65001 > nul 2>&1
-title PrivacyGuard
+title SecureRedact
 
 set "APP_DIR=%~dp0"
 cd /d "%APP_DIR%"
@@ -25,7 +25,7 @@ if not exist "C:\Windows\System32\msvcp140.dll" (
 if not "%MISSING_DLL%"=="" (
     echo.
     echo ========================================
-    echo   PrivacyGuard - Missing Dependencies
+    echo   SecureRedact - Missing Dependencies
     echo ========================================
     echo.
     echo ERROR: Required system libraries are missing.
@@ -41,11 +41,11 @@ if not "%MISSING_DLL%"=="" (
     echo Alternative: Search for "Visual C++ Redistributable" at:
     echo https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
     echo.
-    echo After installation, restart PrivacyGuard.
+    echo After installation, restart SecureRedact.
     echo.
     pause
     exit /b 1
 )
 
 :: Launch the application
-start "" "%~dp0PrivacyGuard.exe" %*
+start "" "%~dp0SecureRedact.exe" %*
