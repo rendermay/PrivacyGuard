@@ -62,6 +62,9 @@ tests/output/
 tests/ui/actual/
 tests/reports/*.html
 
+# PR-C2.x: visual baseline current renders (CI artifacts, regenerated every run)
+secureredact/ui/styles/baselines/_current_*.png
+
 # pytest coverage (local dev only — CI uses --cov=)
 .coverage
 .coverage.*

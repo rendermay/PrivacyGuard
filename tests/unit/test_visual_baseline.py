@@ -99,5 +99,81 @@ class TestCompareModuleExports(unittest.TestCase):
         self.assertIn("THRESHOLD", compare.__all__)
 
 
+class TestCurrentRenderRegression(unittest.TestCase):
+    """PR-C2.x Task 1.3: 视觉回归 assertion。
+
+    这些测试依赖 `scripts/render_visual_baseline.py` 在 CI 里先渲染出
+    `_current_*.png`,然后本测试做像素级对比。本地手动跑 unit suite 时
+    因为没有 _current 渲染物,会安全 skipTest,不阻塞回归。
+    """
+
+    def test_main_window_light_unchanged(self):
+        """main_window_light 当前快照与基线差异 < THRESHOLD(0.5%)。
+
+        CI 渲染由 `scripts/render_visual_baseline.py` 完成,本地不跑。
+        """
+        baseline = BASELINE_DIR / "main_window_light.png"
+        current = BASELINE_DIR / "_current_main_window_light.png"
+        if not baseline.exists():
+            self.skipTest("no baseline PNG (run _generate_baselines first)")
+        if not current.exists():
+            self.skipTest("no current render (run CI harness first)")
+        ratio, total, different = compute_diff(baseline, current)
+        self.assertLess(
+            ratio,
+            THRESHOLD,
+            f"regression: {different}/{total} pixels differ "
+            f"(ratio={ratio:.4f} > THRESHOLD={THRESHOLD})",
+        )
+
+    def test_main_window_dark_unchanged(self):
+        """main_window_dark 当前快照与基线差异 < THRESHOLD。"""
+        baseline = BASELINE_DIR / "main_window_dark.png"
+        current = BASELINE_DIR / "_current_main_window_dark.png"
+        if not baseline.exists():
+            self.skipTest("no baseline PNG (run _generate_baselines first)")
+        if not current.exists():
+            self.skipTest("no current render (run CI harness first)")
+        ratio, total, different = compute_diff(baseline, current)
+        self.assertLess(
+            ratio,
+            THRESHOLD,
+            f"regression: {different}/{total} pixels differ "
+            f"(ratio={ratio:.4f} > THRESHOLD={THRESHOLD})",
+        )
+
+    def test_settings_dialog_light_unchanged(self):
+        """settings_dialog_light 当前快照与基线差异 < THRESHOLD。"""
+        baseline = BASELINE_DIR / "settings_dialog_light.png"
+        current = BASELINE_DIR / "_current_settings_dialog_light.png"
+        if not baseline.exists():
+            self.skipTest("no baseline PNG (run _generate_baselines first)")
+        if not current.exists():
+            self.skipTest("no current render (run CI harness first)")
+        ratio, total, different = compute_diff(baseline, current)
+        self.assertLess(
+            ratio,
+            THRESHOLD,
+            f"regression: {different}/{total} pixels differ "
+            f"(ratio={ratio:.4f} > THRESHOLD={THRESHOLD})",
+        )
+
+    def test_settings_dialog_dark_unchanged(self):
+        """settings_dialog_dark 当前快照与基线差异 < THRESHOLD。"""
+        baseline = BASELINE_DIR / "settings_dialog_dark.png"
+        current = BASELINE_DIR / "_current_settings_dialog_dark.png"
+        if not baseline.exists():
+            self.skipTest("no baseline PNG (run _generate_baselines first)")
+        if not current.exists():
+            self.skipTest("no current render (run CI harness first)")
+        ratio, total, different = compute_diff(baseline, current)
+        self.assertLess(
+            ratio,
+            THRESHOLD,
+            f"regression: {different}/{total} pixels differ "
+            f"(ratio={ratio:.4f} > THRESHOLD={THRESHOLD})",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

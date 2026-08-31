@@ -71,3 +71,12 @@ jobs:
           python -m pytest -m "not slow" --continue-on-collection-errors
         # --continue-on-collection-errors 让 PyQt6 等可选依赖缺失的 test 优雅 skip,
         # 不让 CI 在缺依赖时整条挂掉
+
+      # PR-C2.x Task 1.3: 视觉基线回归
+      # 渲染当前 main_window / settings_dialog 到 baselines/_current_*.png,
+      # 然后跑 tests/unit/test_visual_baseline 内的 _unchanged 系列断言。
+      # PyQt6 已通过 requirements.txt 安装,offscreen 平台由脚本内部 setdefault。
+      - name: Visual regression
+        run: |
+          python scripts/render_visual_baseline.py
+          python -m unittest tests.unit.test_visual_baseline -v
