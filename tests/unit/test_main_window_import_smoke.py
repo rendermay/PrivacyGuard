@@ -64,8 +64,18 @@ class TestMainWindowImportSmoke(unittest.TestCase):
         main_module = sys.modules.get("main") or importlib.import_module("main")
         mw = getattr(main_module, "MainWindow", None)
         self.assertIsNotNone(mw, "main.MainWindow 不存在")
-        # 验证 mixin 都在 __mro__ 中
-        mixin_names = {m.split(".")[-1] for m in MIXIN_MODULES}
+        # 验证 mixin 都在 __mro__ 中(比对类名而非模块 basename)
+        # 原 bug: mixin_names = {module basename} vs mro_names = {类名},永远不等
+        mixin_class_names = set()
+        for modname in MIXIN_MODULES:
+            try:
+                m = importlib.import_module(modname)
+            except ImportError:
+                continue
+            for attr_name in dir(m):
+                attr = getattr(m, attr_name)
+                if isinstance(attr, type) and attr_name.startswith("MainWindow") and attr_name.endswith("Mixin"):
+                    mixin_class_names.add(attr_name)
         mro_names = {cls.__name__ for cls in mw.__mro__}
-        missing = mixin_names - mro_names
-        self.assertEqual(missing, set(), f"MainWindow 缺少这些 mixin: {missing}")
+        missing = mixin_class_names - mro_names
+        self.assertEqual(missing, set(), f"MainWindow 缺少这些 mixin 类: {missing}")

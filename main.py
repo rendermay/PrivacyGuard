@@ -34,7 +34,7 @@ from secureredact.ocr.mixed_pdf import (
 )
 from secureredact.ocr.text_pdf import collect_text_pdf_hit_boxes
 from secureredact.utils.security import validate_safe_path, resource_path
-from secureredact.utils.config import config  # PR-C6.4: 全局 config singleton 从 main.py 顶层迁出
+from secureredact.utils.config import config, SimpleConfig  # PR-C6.4: 全局 config singleton + SimpleConfig 从 main.py 顶层迁出
 from secureredact.redaction.rules_loader import (  # PR-C6.5: DEFAULT_RULES / META 从 main.py 迁出
     DEFAULT_RULES, DEFAULT_RULES_META, _v113_apply_rule_overrides,
 )
