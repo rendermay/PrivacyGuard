@@ -1,0 +1,45 @@
+/* button.qss — QPushButton + QToolButton 基底样式(5 状态)
+   Plan 2b PR-V2 Task 2.1
+   约束:
+   - 仅使用花括号 token 占位符,严禁裸 hex 字面量
+   - 5 状态:hover / pressed / disabled / focus / checked 全覆盖
+   - 字体/字号走 font_family / font_size_normal token
+   v1.1.13 基线,严禁视觉漂移 */
+
+QPushButton, QToolButton {
+    background-color: {surface};
+    color: {text};
+    border: 1px solid {border};
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-family: {font_family};
+    font-size: {font_size_normal}px;
+    min-height: 22px;
+}
+
+QPushButton:hover, QToolButton:hover {
+    background-color: {hover};
+    border-color: {primary};
+}
+
+QPushButton:pressed, QToolButton:pressed {
+    background-color: {pressed};
+    border-color: {primary};
+}
+
+QPushButton:disabled, QToolButton:disabled {
+    color: {text_secondary};
+    background-color: {info_bar};
+    border-color: {border};
+}
+
+QPushButton:focus, QToolButton:focus {
+    border-color: {primary};
+    outline: none;
+}
+
+QPushButton:checked, QToolButton:checked {
+    background-color: {primary};
+    color: {surface};
+    border-color: {primary};
+}
