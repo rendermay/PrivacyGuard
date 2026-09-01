@@ -1,0 +1,50 @@
+/* dock.qss — QDockWidget + QDockWidget::title 基底样式(5 状态)
+   Plan 2b PR-V2 Task 2.5
+
+   约束:
+   - 仅使用 {token} 占位符,严禁裸 hex 字面量
+   - title bar 覆盖 5 个状态:hover / pressed / disabled / focus(normal 用裸 QDockWidget::title)
+   - {dock_background} 占位符在 Glass 不可用时由 StylesheetLoader + Glass substitution 替换
+     (Agent 6 单独验证替换链路);此处文件源码层只关心占位符存在
+   - 字体/字号走 font_family / font_size_normal token
+   v1.1.13 基线,严禁视觉漂移 */
+
+QDockWidget {
+    background-color: {dock_background};
+    color: {text};
+    border: 1px solid {border};
+    font-family: {font_family};
+    font-size: {font_size_normal}px;
+}
+
+QDockWidget::title {
+    background-color: {surface};
+    color: {text};
+    border-bottom: 1px solid {border};
+    padding: 6px 12px;
+    font-family: {font_family};
+    font-size: {font_size_normal}px;
+    font-weight: 600;
+}
+
+QDockWidget::title:hover {
+    background-color: {hover};
+    color: {text};
+}
+
+QDockWidget::title:pressed {
+    background-color: {pressed};
+    color: {text};
+}
+
+QDockWidget::title:disabled {
+    background-color: {surface};
+    color: {text_secondary};
+    border-bottom-color: {border};
+}
+
+QDockWidget::title:focus {
+    background-color: {hover};
+    color: {primary};
+    border-bottom-color: {primary};
+}
