@@ -1,27 +1,14 @@
 /* workspace.qss — 主工作区容器样式(main_container 全部 widget)
    来自 main.py:6932-7319(原 main_container.setStyleSheet)
-   v1.1.13 基线,严禁视觉漂移 */
+   v1.1.13 基线,严禁视觉漂移
 
-                QFrame#workspaceCard {{
-                    background-color: {surface};
-                    border: 1px solid {border};
-                    border-radius: 18px;
-                }}
-                QFrame#batchWorkspaceCard, QFrame#mergeWorkspaceCard {{
-                    background-color: {surface};
-                    border: 1px solid {border};
-                    border-radius: 18px;
-                }}
-                QFrame#batchDetailSection {{
-                    background-color: #FBFCFE;
-                    border: 1px solid {border};
-                    border-radius: 16px;
-                }}
-                QFrame#previewWorkspaceCard {{
-                    background-color: #FBFCFE;
-                    border: none;
-                    border-radius: 18px;
-                }}
+   PR-V2 Task 2.7:
+   - 移除卡片定义(workspace / batch / merge / preview / batchStep /
+     batchMetric / idleStart / idleSupport / 路由卡及其 tone 变体)→
+     已在 card.qss 集中维护。
+   - 保留:所有非卡片选择器(标题、副标题、标签、徽章、表格、列表、
+     routeCardAccent / routeCardMeta 等 workspace 专属样式)。 */
+
                 QWidget#previewStage {{
                     background-color: transparent;
                     border: none;
@@ -117,11 +104,6 @@
                     background-color: transparent;
                     border: none;
                 }}
-                QFrame#idleStartCard, QFrame#idleSupportCard {{
-                    background-color: #F9FBFE;
-                    border: 1px solid {border};
-                    border-radius: 18px;
-                }}
                 QLabel#idleStartTitle {{
                     color: {text};
                     font-size: 13px;
@@ -189,11 +171,6 @@
                     border: none;
                     padding: 0;
                 }}
-                QFrame#batchStepCard, QFrame#batchMetricCard {{
-                    background-color: #FCFDFF;
-                    border: 1px solid {border};
-                    border-radius: 15px;
-                }}
                 QLabel#batchStepTitle {{
                     color: {text};
                     font-size: 12px;
@@ -217,27 +194,6 @@
                     font-size: 18px;
                     font-weight: 700;
                     background-color: transparent;
-                }}
-                QFrame#routeCard {{
-                    background-color: #FCFDFF;
-                    border: 1px solid {border};
-                    border-radius: 16px;
-                }}
-                QFrame#routeCard[routeTone="pdf"] {{
-                    background-color: #F7FBFF;
-                    border-color: #D7E8F8;
-                }}
-                QFrame#routeCard[routeTone="word"] {{
-                    background-color: #F6FBF8;
-                    border-color: #D9EEE3;
-                }}
-                QFrame#routeCard[routeTone="batch"] {{
-                    background-color: #FFF9F2;
-                    border-color: #F1E1C7;
-                }}
-                QFrame#routeCard[routeTone="image"] {{
-                    background-color: #F8FAFC;
-                    border-color: #E0E7EF;
                 }}
                 QFrame#routeCardAccent {{
                     border: none;
