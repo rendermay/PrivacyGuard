@@ -1,0 +1,296 @@
+/* input.qss — 输入类组件 5 状态 + :read-only
+   v1.1.13 PR-V2 Task 2.2
+
+   覆盖组件:
+     - QLineEdit / QTextEdit / QPlainTextEdit   (文本输入)
+     - QSpinBox / QDoubleSpinBox                (数值输入)
+     - QComboBox + QAbstractItemView            (下拉)
+     - QSlider (groove:horizontal / handle:horizontal)
+     - QCheckBox / QCheckBox::indicator
+     - QRadioButton / QRadioButton::indicator
+
+   状态集(5 状态 + readonly):
+     :hover / :focus / :pressed / :disabled / :checked
+     :read-only (文本/数值输入专用)
+
+   颜色全部走 token 占位符(loader._PLACEHOLDER_RE 替换) — 禁止 hex 字面量。
+   视觉基线对齐原 dialog.py:2158-2225 的内嵌 QSS(PR-V4 阶段将整段迁入)。
+*/
+
+
+/* ============================================================== */
+/* QLineEdit / QTextEdit / QPlainTextEdit 共用基类样式             */
+/* ============================================================== */
+
+QLineEdit,
+QTextEdit,
+QPlainTextEdit,
+QSpinBox,
+QDoubleSpinBox,
+QComboBox {
+    background-color: {surface};
+    color: {text};
+    border: 1px solid {border};
+    border-radius: 6px;
+    padding: 6px 8px;
+    selection-background-color: {primary};
+    selection-color: {surface};
+}
+
+QLineEdit {
+    min-height: 22px;
+    padding: 6px 8px;
+}
+
+QTextEdit,
+QPlainTextEdit {
+    padding: 8px;
+}
+
+/* hover:边框用 primary 暗示可点击/可聚焦 */
+QLineEdit:hover,
+QTextEdit:hover,
+QPlainTextEdit:hover,
+QSpinBox:hover,
+QDoubleSpinBox:hover,
+QComboBox:hover {
+    border: 1px solid {primary};
+    background-color: {surface};
+}
+
+/* focus:主色边框 + 内阴影拟焦点环 */
+QLineEdit:focus,
+QTextEdit:focus,
+QPlainTextEdit:focus,
+QSpinBox:focus,
+QDoubleSpinBox:focus,
+QComboBox:focus {
+    border: 1px solid {primary};
+    background-color: {surface};
+}
+
+/* pressed:ComboBox 下拉箭头按下;数值框 up/down 按钮按下 */
+QSpinBox:pressed,
+QDoubleSpinBox:pressed,
+QComboBox:pressed,
+QLineEdit:pressed,
+QTextEdit:pressed,
+QPlainTextEdit:pressed {
+    background-color: {pressed};
+}
+
+/* disabled:前景与边框淡灰,背景透到 surface */
+QLineEdit:disabled,
+QTextEdit:disabled,
+QPlainTextEdit:disabled,
+QSpinBox:disabled,
+QDoubleSpinBox:disabled,
+QComboBox:disabled {
+    color: {text_secondary};
+    background-color: {scroll_area};
+    border: 1px solid {border};
+}
+
+/* read-only:文本输入类只读(灰色背景但文字仍可读) */
+QLineEdit:read-only,
+QTextEdit:read-only,
+QPlainTextEdit:read-only {
+    background-color: {info_bar};
+    color: {text_secondary};
+}
+
+
+/* ============================================================== */
+/* QSpinBox / QDoubleSpinBox 的上下箭头按钮                       */
+/* ============================================================== */
+
+QSpinBox::up-button,
+QDoubleSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 18px;
+    border-left: 1px solid {border};
+    border-bottom: 1px solid {border};
+    border-top-right-radius: 6px;
+    background-color: {surface};
+}
+
+QSpinBox::down-button,
+QDoubleSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 18px;
+    border-left: 1px solid {border};
+    border-bottom-right-radius: 6px;
+    background-color: {surface};
+}
+
+QSpinBox::up-button:hover,
+QSpinBox::down-button:hover,
+QDoubleSpinBox::up-button:hover,
+QDoubleSpinBox::down-button:hover {
+    background-color: {hover};
+}
+
+QSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed,
+QDoubleSpinBox::up-button:pressed,
+QDoubleSpinBox::down-button:pressed {
+    background-color: {pressed};
+}
+
+
+/* ============================================================== */
+/* QComboBox 下拉箭头与弹出视图                                    */
+/* ============================================================== */
+
+QComboBox::drop-down {
+    border: none;
+    width: 24px;
+}
+
+QComboBox::down-arrow {
+    width: 10px;
+    height: 10px;
+}
+
+/* 弹出下拉视图:QComboBox 直接子选择器在弹出时会以 QComboBox QAbstractItemView 出现 */
+QComboBox QAbstractItemView,
+QComboBox QAbstractItemView:enabled {
+    background-color: {surface};
+    color: {text};
+    selection-background-color: {primary};
+    selection-color: {surface};
+    border: 1px solid {border};
+    border-radius: 4px;
+    padding: 2px;
+    outline: 0;
+}
+
+QComboBox QAbstractItemView:disabled {
+    color: {text_secondary};
+    background-color: {scroll_area};
+}
+
+
+/* ============================================================== */
+/* QSlider(水平)                                                  */
+/* ============================================================== */
+
+QSlider {
+    background-color: transparent;
+}
+
+QSlider::groove:horizontal {
+    border: none;
+    height: 4px;
+    background-color: {border};
+    border-radius: 2px;
+}
+
+QSlider::sub-page:horizontal {
+    background-color: {primary};
+    border-radius: 2px;
+}
+
+QSlider::handle:horizontal {
+    background-color: {primary};
+    border: none;
+    width: 16px;
+    height: 16px;
+    margin: -6px 0;
+    border-radius: 8px;
+}
+
+QSlider::handle:horizontal:hover {
+    background-color: {pressed};
+}
+
+QSlider::handle:horizontal:pressed {
+    background-color: {hover};
+}
+
+QSlider::groove:horizontal:disabled,
+QSlider::sub-page:horizontal:disabled,
+QSlider::handle:horizontal:disabled {
+    background-color: {border};
+}
+
+
+/* ============================================================== */
+/* QCheckBox / QRadioButton                                       */
+/* ============================================================== */
+
+QCheckBox,
+QRadioButton {
+    color: {text};
+    background-color: transparent;
+    spacing: 6px;
+}
+
+QCheckBox:hover,
+QRadioButton:hover {
+    color: {primary};
+}
+
+QCheckBox:focus,
+QRadioButton:focus {
+    color: {primary};
+}
+
+QCheckBox:disabled,
+QRadioButton:disabled {
+    color: {text_secondary};
+}
+
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid {border};
+    border-radius: 3px;
+    background-color: {surface};
+}
+
+QCheckBox::indicator:hover {
+    border: 1px solid {primary};
+}
+
+QCheckBox::indicator:pressed {
+    background-color: {pressed};
+}
+
+QCheckBox::indicator:checked {
+    background-color: {primary};
+    border: 1px solid {primary};
+}
+
+QCheckBox::indicator:disabled {
+    background-color: {scroll_area};
+    border: 1px solid {border};
+}
+
+QRadioButton::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid {border};
+    border-radius: 8px;
+    background-color: {surface};
+}
+
+QRadioButton::indicator:hover {
+    border: 1px solid {primary};
+}
+
+QRadioButton::indicator:pressed {
+    background-color: {pressed};
+}
+
+QRadioButton::indicator:checked {
+    background-color: {primary};
+    border: 1px solid {primary};
+}
+
+QRadioButton::indicator:disabled {
+    background-color: {scroll_area};
+    border: 1px solid {border};
+}
