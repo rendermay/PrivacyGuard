@@ -30,7 +30,7 @@ class TestImageChannelNameInjection(unittest.TestCase):
 
     def test_extract_person_names_recognizes_zhou_qiang(self):
         """jieba 识别器应能从起诉状文本中识别出 '周强'."""
-        from privacyguard.pii.name_recognizer import extract_person_names
+        from secureredact.pii.name_recognizer import extract_person_names
         names = extract_person_names(
             "民事起诉状\n原告：周强，男，1985年3月5日生，汉族。\n"
             "著作权人周强在贵州省版权局完成作品登记。\n"
@@ -40,7 +40,7 @@ class TestImageChannelNameInjection(unittest.TestCase):
 
     def test_image_block_ocr_hits_match_person_name_when_in_patterns(self):
         """图片通道命中: 一旦 '周强' 被注入 all_patterns, OCR 出的 '原告：周强' 行应被命中."""
-        from privacyguard.ocr.mixed_pdf import collect_image_block_ocr_hits
+        from secureredact.ocr.mixed_pdf import collect_image_block_ocr_hits
 
         class FakeRect:
             def __init__(self, x, y, w, h):
@@ -103,9 +103,9 @@ class TestImageChannelNameInjection(unittest.TestCase):
         """OCRWorker.run 对 page_text='' 的扫描型页,enable_name_recognition=True 时
         必须仍然把 jieba 识别的人名追加到 all_patterns (并让 image 通道命中)."""
         # patch QThread.__init__ 避免 Qt 副作用
-        with patch("privacyguard.workers.ocr_worker.QThread.__init__",
+        with patch("secureredact.workers.ocr_worker.QThread.__init__",
                    new=lambda self: None):
-            from privacyguard.workers.ocr_worker import OCRWorker
+            from secureredact.workers.ocr_worker import OCRWorker
 
             worker = OCRWorker(
                 pdf_path=None,
@@ -129,7 +129,7 @@ class TestImageChannelNameInjection(unittest.TestCase):
 
         # jieba 注入逻辑测试:
         # 模拟修复后的 OCRWorker 内部函数, 应该把识别结果注入 patterns
-        from privacyguard.pii.name_recognizer import extract_person_names
+        from secureredact.pii.name_recognizer import extract_person_names
         # 实际场景: page_text 为空时, jieba 拿不到文本 → 修复方案是用 OCR 全页识别喂给 jieba
         # 这里测试识别器自身对"原告：周强"等典型短语的识别能力
         for snippet in (
@@ -149,11 +149,11 @@ class TestImageChannelNameInjection(unittest.TestCase):
 
 
 class TestScanPdfWatermarkPageTextRegression(unittest.TestCase):
-    """regression v37.x: CamScanner 等扫描 PDF 在 page_text 仅含页码水印
+    """regression v1.1.11: CamScanner 等扫描 PDF 在 page_text 仅含页码水印
     (如 '1\\n', 非空但极短) 时, OCRWorker 必须仍然触发全页 OCR 喂给 jieba,
     否则姓名注入静默失效 — page 上所有人名都不会脱敏.
 
-    修复点: privacyguard/workers/ocr_worker.py _process_page 的 jieba 兜底
+    修复点: secureredact/workers/ocr_worker.py _process_page 的 jieba 兜底
     触发条件 `not jieba_source_text` 必须放宽为 `len(jieba_source_text.strip()) < 阈值`,
     否则 page_text="1\\n" 时 jieba 拿到 "1" → 0 个人名.
     """
@@ -162,9 +162,9 @@ class TestScanPdfWatermarkPageTextRegression(unittest.TestCase):
         """_process_page 应在 page_text 仅含 '1\\n' (扫描 PDF 页码水印) 时
         调用全页 OCR 并把识别文本喂给 jieba, 最终 image 通道命中姓名."""
         # patch QThread.__init__ 避免 Qt 副作用, 同时替换 page_result_signal
-        with patch("privacyguard.workers.ocr_worker.QThread.__init__",
+        with patch("secureredact.workers.ocr_worker.QThread.__init__",
                    new=lambda self: None):
-            from privacyguard.workers.ocr_worker import OCRWorker
+            from secureredact.workers.ocr_worker import OCRWorker
 
             worker = OCRWorker(
                 pdf_path=None,
@@ -243,7 +243,7 @@ class TestScanPdfWatermarkPageTextRegression(unittest.TestCase):
             )
 
         with patch(
-            "privacyguard.workers.ocr_worker.collect_image_block_ocr_hits"
+            "secureredact.workers.ocr_worker.collect_image_block_ocr_hits"
         ) as mock_collect:
             def fake_collect(page, patterns, scan_scale, **_):
                 # 断言 patterns 中包含 jieba 抽出的姓名 (兜底必须触发)

@@ -16,7 +16,7 @@
   <rect x="80" y="102" width="79" height="28" rx="14" fill="url(#bar)"/>
   <rect x="89" y="111" width="54" height="4" rx="2" fill="white"/>
   <rect x="89" y="118" width="46" height="4" rx="2" fill="white" fill-opacity="0.85"/>
-  <text x="252" y="112" fill="#182536" font-size="68" font-weight="800" font-family="Segoe UI Variable, Segoe UI, Microsoft YaHei UI, sans-serif">PrivacyGuard</text>
+  <text x="252" y="112" fill="#182536" font-size="68" font-weight="800" font-family="Segoe UI Variable, Segoe UI, Microsoft YaHei UI, sans-serif">SecureRedact</text>
   <text x="252" y="175" fill="#31445C" font-size="42" font-weight="700" font-family="Segoe UI Variable, Segoe UI, Microsoft YaHei UI, sans-serif">脱敏卫士</text>
   <text x="252" y="232" fill="#5B6F88" font-size="28" font-weight="500" font-family="Segoe UI Variable, Segoe UI, Microsoft YaHei UI, sans-serif">本地离线 · 文档隐私保护 · 面向法律场景</text>
 </svg>

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PrivacyGuard 项目进度查询工具
+SecureRedact 项目进度查询工具
 快速获取版本信息、Git 状态和开发进度
 """
 
@@ -202,7 +202,7 @@ class ProgressChecker:
 
     def run(self):
         """运行检查"""
-        self.print_header("PrivacyGuard 项目进度")
+        self.print_header("SecureRedact 项目进度")
 
         # 打印各种信息
         self.print_version_info()

@@ -1,0 +1,19 @@
+/* progress.qss — 进度条
+   来自 main.py:7388-7401(原 progress.setStyleSheet)
+   v1.1.13 基线,严禁视觉漂移 */
+
+QProgressBar {
+    background-color: #E5E5EA;
+    border: none;
+    border-radius: 3px;
+    color: #1D1D1F;
+    font-weight: 600;
+    font-size: 12px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #007AFF, stop:1 #34C759);
+    border-radius: 3px;
+}

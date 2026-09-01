@@ -16,7 +16,7 @@ def create_test_pdf():
 
     # 标题
     c.setFont("Helvetica-Bold", 24)
-    c.drawString(100, height - 100, "PrivacyGuard 脱敏测试文档")
+    c.drawString(100, height - 100, "SecureRedact 脱敏测试文档")
 
     # 内容
     c.setFont("Helvetica", 14)
@@ -53,12 +53,12 @@ def create_test_pdf():
         "",
         "测试说明",
         "-" * 30,
-        "本文档用于测试 PrivacyGuard 的",
+        "本文档用于测试 SecureRedact 的",
         "智能脱敏功能。",
         "请确保以上所有敏感信息",
         "都能被正确识别和脱敏。",
         "",
-        "版本: v1.0",
+        "版本: v1.1.11",
         "创建日期: 2026年2月8日",
     ]
 

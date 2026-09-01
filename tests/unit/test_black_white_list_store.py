@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """BlackWhiteListStore 单例逻辑测试."""
 import unittest
-from privacyguard.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.redaction.black_white_list_store import BlackWhiteListStore
 
 
 class BlackWhiteListStoreTest(unittest.TestCase):

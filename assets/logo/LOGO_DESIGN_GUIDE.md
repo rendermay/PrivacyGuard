@@ -1,7 +1,7 @@
-# PrivacyGuard 脱敏卫士 Logo 设计规范
+# SecureRedact 信息脱敏助手 Logo 设计规范
 
 > 参考阿里巴巴、腾讯等国内大厂软件图标设计标准
-> 版本: v1.0 | 日期: 2026-03-17
+> 版本: v1.1.11 | 日期: 2026-03-17
 
 ---
 
@@ -158,7 +158,7 @@ assets/logo/
 ├── macos/                     # macOS 专用
 │   └── AppIcon.icns
 ├── linux/                     # Linux 专用
-│   └── privacyguard.png
+│   └── secureredact.png
 ├── marketing/                 # 营销物料
 │   ├── app_store.png
 │   ├── og_image.png
@@ -249,7 +249,7 @@ app.setWindowIcon(QIcon(icon_path))
 - **腾讯文档**: 蓝色，文档+协作元素
 - **腾讯会议**: 蓝紫色渐变，摄像头意象
 
-### 8.3 PrivacyGuard 差异化
+### 8.3 SecureRedact 差异化
 - 比钉钉更稳重（安全工具属性）
 - 比企业微信更专业（聚焦文档处理）
 - 融入"隐私保护"的视觉暗示（盾牌+马赛克）
@@ -260,8 +260,8 @@ app.setWindowIcon(QIcon(icon_path))
 
 | 日期 | 版本 | 内容 |
 |------|------|------|
-| 2026-03-17 | v1.0 | 初始设计规范 |
-| 2026-03-17 | v2.0 | 简化设计：蓝色圆角方块 + 大号 PG 字母 |
+| 2026-03-17 | v1.1.11 | 初始设计规范 |
+| 2026-03-17 | v1.1.11 | 简化设计：蓝色圆角方块 + 大号 PG 字母 |
 
 ---
 

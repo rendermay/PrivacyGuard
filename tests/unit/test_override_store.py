@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """HitOverrideStore 单例逻辑测试."""
 import unittest
-from privacyguard.redaction.override_store import HitOverrideStore
-from privacyguard.redaction.hit_ref import HitRef, Override
+from secureredact.redaction.override_store import HitOverrideStore
+from secureredact.redaction.hit_ref import HitRef, Override
 
 
 def _ref(text="周强", source="jieba", location="p_3", start=10, end=12, doc_hash="a1b2c3d4"):

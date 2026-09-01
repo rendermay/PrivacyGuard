@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """HitRef 不可变标识与 hit_id 稳定性测试."""
 import unittest
-from privacyguard.redaction.hit_ref import HitRef
+from secureredact.redaction.hit_ref import HitRef
 
 
 class HitRefTest(unittest.TestCase):
@@ -45,7 +45,7 @@ class HitRefTest(unittest.TestCase):
             HitRef("a", "b", 0, 1, "t", "INVALID_SOURCE")
 
     def test_hitref_accepts_v37_9_sources(self):
-        """v37.9.0: 黑名单 (blacklist) 与人工 (manual) 必须是合法 source.
+        """v1.1.11: 黑名单 (blacklist) 与人工 (manual) 必须是合法 source.
 
         历史 bug: VALID_SOURCES 只包含 (rule, ocr, jieba, seal),
         导致 _hit_to_ref 在处理 source='blacklist' 时抛 ValueError,

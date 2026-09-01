@@ -1,11 +1,11 @@
 #!/bin/bash
-# PrivacyGuard 完整打包脚本 (macOS)
+# SecureRedact 完整打包脚本 (macOS)
 # 包含清理、构建、清理打包目录、签名、创建 DMG
 
 set -euo pipefail
 
 echo "======================================"
-echo "  PrivacyGuard 完整打包脚本 (macOS)"
+echo "  SecureRedact 完整打包脚本 (macOS)"
 echo "  版本: from version.txt"
 echo "======================================"
 echo ""
@@ -14,7 +14,7 @@ echo ""
 PROJECT_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$PROJECT_DIR"
 
-APP_NAME="PrivacyGuard"
+APP_NAME="SecureRedact"
 VERSION=$(tr -d '[:space:]' < "$PROJECT_DIR/version.txt")
 DIST_DIR="$PROJECT_DIR/dist"
 BUILD_DIR="$PROJECT_DIR/build"
@@ -28,7 +28,7 @@ PYINSTALLER_CONFIG_DIR="$BUILD_DIR/.pyinstaller-cache"
 
 create_plain_dmg() {
     local temp_dir
-    temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/privacyguard_dmg.XXXXXX")"
+    temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/secureredact_dmg.XXXXXX")"
     rm -f "$DMG_PATH"
     cp -R "$APP_PATH" "$temp_dir/"
     ln -s /Applications "$temp_dir/Applications"
@@ -62,7 +62,7 @@ if [ -z "$VENV_PATH" ]; then
     echo "[ERROR] 虚拟环境不存在! (期望 venvmac 或 venv)"
     exit 1
 fi
-if [ ! -f "$CONFIG_DIR/PrivacyGuard.spec" ]; then
+if [ ! -f "$CONFIG_DIR/SecureRedact.spec" ]; then
     echo "[ERROR] PyInstaller spec 文件不存在!"
     exit 1
 fi
@@ -104,7 +104,7 @@ fi
 
 export PYINSTALLER_CONFIG_DIR
 echo "[INFO] 使用本地 PyInstaller 缓存: $PYINSTALLER_CONFIG_DIR"
-python3 -m PyInstaller --clean --noconfirm "$CONFIG_DIR/PrivacyGuard.spec"
+python3 -m PyInstaller --clean --noconfirm "$CONFIG_DIR/SecureRedact.spec"
 
 if [ $? -ne 0 ]; then
     echo ""

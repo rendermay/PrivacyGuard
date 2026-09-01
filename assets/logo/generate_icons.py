@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PrivacyGuard Logo 图标生成脚本
+SecureRedact Logo 图标生成脚本
 自动生成各平台所需的图标尺寸
 
 使用方法:
@@ -269,7 +269,7 @@ def generate_linux_icons():
         
         for size in linux_sizes:
             src = base_dir / "export" / str(size) / f"logo_default_{size}.png"
-            dst = linux_dir / f"privacyguard_{size}x{size}.png"
+            dst = linux_dir / f"secureredact_{size}x{size}.png"
             
             if src.exists():
                 Image.open(src).save(dst, 'PNG')
@@ -277,7 +277,7 @@ def generate_linux_icons():
         
         # 同时创建一个默认名称的
         src = base_dir / "export" / "256" / "logo_default_256.png"
-        dst = linux_dir / "privacyguard.png"
+        dst = linux_dir / "secureredact.png"
         if src.exists():
             Image.open(src).save(dst, 'PNG')
             print(f"  ✓ 默认图标: {dst}")
@@ -313,7 +313,7 @@ def generate_marketing_assets():
         # 尝试添加文字
         try:
             # 使用默认字体
-            draw.text((600, 200), "PrivacyGuard 脱敏卫士", 
+            draw.text((600, 200), "SecureRedact 信息脱敏助手", 
                      fill='white', anchor='mm', font_size=60)
             draw.text((600, 280), "智能文档脱敏工具", 
                      fill='white', anchor='mm', font_size=32)
@@ -337,7 +337,7 @@ def print_summary():
     files_to_check = [
         ("Windows ICO", base_dir / "windows" / "app_icon.ico"),
         ("macOS ICNS", base_dir / "macos" / "AppIcon.icns"),
-        ("Linux PNG", base_dir / "linux" / "privacyguard.png"),
+        ("Linux PNG", base_dir / "linux" / "secureredact.png"),
         ("App Store 图标", base_dir / "marketing" / "app_store_icon.png"),
     ]
     
@@ -359,11 +359,11 @@ def print_summary():
     print("\n打包引用指南:")
     print("  Windows: assets/logo/windows/app_icon.ico")
     print("  macOS:   assets/logo/macos/AppIcon.icns")
-    print("  Linux:   assets/logo/linux/privacyguard.png")
+    print("  Linux:   assets/logo/linux/secureredact.png")
 
 def main():
     """主函数"""
-    print("PrivacyGuard Logo 图标生成器")
+    print("SecureRedact Logo 图标生成器")
     print("=" * 50)
     
     if not check_dependencies():

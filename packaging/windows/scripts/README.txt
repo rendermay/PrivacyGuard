@@ -1,8 +1,8 @@
 ================================================================================
-                    PrivacyGuard Windows 打包脚本说明
+                    SecureRedact Windows 打包脚本说明
 ================================================================================
 
-当前发布基线：v37.7.4
+当前发布基线：v1.1.11
 版本来源：`version.txt`
 输出目录：
 - `dist/`
@@ -27,21 +27,21 @@
 --------------------------------------------------------------------------------
 作用：构建便携版（不生成安装器）
 输出：
-- `dist/PrivacyGuard/PrivacyGuard.exe`
-- `dist/PrivacyGuard/launcher_wrapper.bat`
-- `releases/windows/PrivacyGuard-<version>.exe.sha256`
+- `dist/SecureRedact/SecureRedact.exe`
+- `dist/SecureRedact/launcher_wrapper.bat`
+- `releases/windows/SecureRedact-<version>.exe.sha256`
 
 --------------------------------------------------------------------------------
 3_build_with_setup.bat
 --------------------------------------------------------------------------------
 作用：构建 EXE + 安装程序（需 Inno Setup）
 输出：
-- `dist/PrivacyGuard/PrivacyGuard.exe`
-- `releases/windows/PrivacyGuard-<version>-Setup.exe`
+- `dist/SecureRedact/SecureRedact.exe`
+- `releases/windows/SecureRedact-<version>-Setup.exe`
 - 对应 `.sha256`
 
 说明：脚本会将 `version.txt` 版本通过 `/DMyAppVersion=<version>` 注入
-`packaging/windows/config/PrivacyGuard_Setup.iss`，避免版本号漂移。
+`packaging/windows/config/SecureRedact_Setup.iss`，避免版本号漂移。
 
 正式发布时：
 - 便携版执行 `build_complete.bat`
@@ -57,8 +57,8 @@
 --------------------------------------------------------------------------------
 作用：完整构建（环境校验 + 构建 + 清理 + ZIP + SHA256）
 输出：
-- `releases/windows/PrivacyGuard-v<version>-Windows-Portable.zip`
-- `releases/windows/PrivacyGuard-v<version>-Windows-Portable.zip.sha256`
+- `releases/windows/SecureRedact-v<version>-Windows-Portable.zip`
+- `releases/windows/SecureRedact-v<version>-Windows-Portable.zip.sha256`
 
 --------------------------------------------------------------------------------
  其他脚本
@@ -74,7 +74,7 @@
 ================================================================================
 
 - 安装器构建时通过 `/DMyAppVersion=<version>` 从 `version.txt` 注入版本号
-- 当前 EXE 版本资源：`37.7.4.0`
+- 当前 EXE 版本资源：`1.1.11.0`
 - PyInstaller 打包模块导入失败修复已纳入当前 Windows 打包链路说明
 - 当前 Windows 打包脚本已统一改为使用当前环境中的 PyInstaller 和项目内缓存
 - `scripts/` 目录已清理历史兼容与解除阻止脚本，仅保留当前正式主链与必要诊断工具

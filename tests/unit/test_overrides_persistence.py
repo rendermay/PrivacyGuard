@@ -6,8 +6,8 @@ import tempfile
 import shutil
 import unittest
 
-from privacyguard.redaction.override_store import HitOverrideStore
-from privacyguard.redaction.hit_ref import HitRef
+from secureredact.redaction.override_store import HitOverrideStore
+from secureredact.redaction.hit_ref import HitRef
 
 
 class OverridesPersistenceTest(unittest.TestCase):
@@ -37,7 +37,7 @@ class OverridesPersistenceTest(unittest.TestCase):
 
     def test_clean_stale_removes_only_old(self):
         """clean_stale_permanent 仅保留 cutoff 之内的 promoted_at。"""
-        from privacyguard.redaction.override_store import clean_stale_permanent
+        from secureredact.redaction.override_store import clean_stale_permanent
         items = [
             {"hit_id": "a|p|0|2|jieba", "doc_hash": "a", "location": "p",
              "start": 0, "end": 2, "text": "x", "source": "jieba",

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# PrivacyGuard macOS 应用公证脚本
+# SecureRedact macOS 应用公证脚本
 # 说明: 将应用提交到 Apple 进行公证（Notarization）
 #
 
@@ -13,7 +13,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-APP_NAME="PrivacyGuard"
+APP_NAME="SecureRedact"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
 

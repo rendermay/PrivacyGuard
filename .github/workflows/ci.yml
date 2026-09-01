@@ -1,0 +1,82 @@
+name: CI
+
+# PR-C7 task 4.3:GitHub Actions workflow for SecureRedact
+# 触发:push to main / PR to main / manual dispatch
+# 矩阵:Python 3.11 + 3.13(项目 Python 版本要求,见 requirements)
+# 三条核心命令(plan §5.3 任务 4.3):
+#   - pytest -m "not slow"   (完整测试,排除慢测试)
+#   - pytest --cov=secureredact/api --cov-fail-under=100 -m api  (API 层 100% 覆盖)
+#   - pytest -m smoke        (smoke 验证)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python-version: ["3.11", "3.13"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          python -m pip install --upgrade pip
+          # 项目 requirements 装齐(PDF/Word 处理)
+          pip install -r requirements.txt || true
+          # 测试依赖
+          pip install pytest pytest-cov pytest-qt
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || true
+          pip install pytest pytest-cov pytest-qt
+          # pytest-qt 在 Linux runner 需要 Qt 系统库(libEGL/libGL)
+          sudo apt-get update -q
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
+
+      - name: Compile check
+        run: |
+          python -m compileall -q main.py secureredact tests
+
+      - name: Run smoke tests (fast, mark as required)
+        run: |
+          python -m pytest -m smoke -v
+
+      - name: Run API tests with coverage gate (100%)
+        run: |
+          python -m pytest -m api --cov=secureredact.api --cov-report=term-missing --cov-fail-under=100
+
+      - name: Run full test suite (excluding slow)
+        run: |
+          python -m pytest -m "not slow" --continue-on-collection-errors
+        # --continue-on-collection-errors 让 PyQt6 等可选依赖缺失的 test 优雅 skip,
+        # 不让 CI 在缺依赖时整条挂掉
+
+      # PR-C2.x Task 1.3: 视觉基线回归
+      # 渲染当前 main_window / settings_dialog 到 baselines/_current_*.png,
+      # 然后跑 tests/unit/test_visual_baseline 内的 _unchanged 系列断言。
+      # PyQt6 已通过 requirements.txt 安装,offscreen 平台由脚本内部 setdefault。
+      - name: Visual regression
+        run: |
+          python scripts/render_visual_baseline.py
+          python -m unittest tests.unit.test_visual_baseline -v

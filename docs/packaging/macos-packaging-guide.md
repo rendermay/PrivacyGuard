@@ -1,4 +1,4 @@
-# PrivacyGuard macOS 打包指南
+# SecureRedact macOS 打包指南
 
 > 当前 active macOS 打包流程说明。本文档以 `packaging/macos/` 下现有脚本和配置为准。
 
@@ -6,7 +6,7 @@
 
 ## 当前发布基线
 
-- 当前版本：`v37.7.4`
+- 当前版本：`v1.1.11`
 - 版本标识：`37.7.4 - Release Audit and Final Polish`
 - 版本唯一来源：项目根目录 `version.txt`
 
@@ -17,15 +17,15 @@
 ### 推荐完整流程
 
 ```bash
-cd /Users/a49144/Desktop/codexhub/PrivacyGuardApp
+cd /Users/a49144/Desktop/codexhub/SecureRedactApp
 bash packaging/macos/scripts/build_complete.sh
 ```
 
 输出：
 
-- 优先：`releases/macos/PrivacyGuard-<version>-macOS.dmg`
-- 优先：`releases/macos/PrivacyGuard-<version>-macOS.dmg.sha256`
-- 回退：`releases/macos/PrivacyGuard.app`
+- 优先：`releases/macos/SecureRedact-<version>-macOS.dmg`
+- 优先：`releases/macos/SecureRedact-<version>-macOS.dmg.sha256`
+- 回退：`releases/macos/SecureRedact.app`
 
 这是当前 **macOS 正式发布默认入口**。
 
@@ -37,8 +37,8 @@ bash packaging/macos/scripts/build_macos_app.sh
 
 输出：
 
-- `dist/PrivacyGuard.app`
-- `releases/macos/PrivacyGuard-<version>-macOS.dmg`
+- `dist/SecureRedact.app`
+- `releases/macos/SecureRedact-<version>-macOS.dmg`
 
 ---
 
@@ -89,7 +89,7 @@ build/.pyinstaller-cache
 ## 版本来源
 
 - `version.txt` 是唯一版本源
-- `packaging/macos/config/PrivacyGuard.spec` 从 `version.txt` 动态读取：
+- `packaging/macos/config/SecureRedact.spec` 从 `version.txt` 动态读取：
   - `CFBundleVersion`
   - `CFBundleShortVersionString`
 
@@ -117,7 +117,7 @@ bash packaging/macos/scripts/sign_macos_app.sh
 方式一，优先推荐 keychain profile：
 
 ```bash
-export PRIVACYGUARD_NOTARY_PROFILE="privacyguard-notary"
+export PRIVACYGUARD_NOTARY_PROFILE="secureredact-notary"
 bash packaging/macos/scripts/notarize_macos_app.sh
 ```
 
@@ -139,10 +139,10 @@ bash packaging/macos/scripts/notarize_macos_app.sh
 - 本轮已验证完整脚本执行到 `.app` 产物生成和发布目录落盘
 - 当前默认正式入口已收口为：`bash packaging/macos/scripts/build_complete.sh`
 - 当前机器上的真实结果：
-  - `build_complete.sh` 已成功生成 `dist/PrivacyGuard.app`
+  - `build_complete.sh` 已成功生成 `dist/SecureRedact.app`
   - 当前环境缺少 `create-dmg`
   - `hdiutil: create failed - 设备未配置`
-  - 脚本已按预期保底复制 `releases/macos/PrivacyGuard.app`
+  - 脚本已按预期保底复制 `releases/macos/SecureRedact.app`
 - 如果要对外正式分发，仍建议做 Developer ID 签名与公证
 
 ---
@@ -151,7 +151,7 @@ bash packaging/macos/scripts/notarize_macos_app.sh
 
 - `version.txt` 已更新
 - `build_complete.sh` 已成功执行
-- `releases/macos/PrivacyGuard-<version>-macOS.dmg` 已生成，或已按回退逻辑生成 `releases/macos/PrivacyGuard.app`
+- `releases/macos/SecureRedact-<version>-macOS.dmg` 已生成，或已按回退逻辑生成 `releases/macos/SecureRedact.app`
 - 若 `.dmg` 已生成，对应 `.sha256` 已生成
 - 本机至少成功打开一次 `.app` 或挂载一次 `.dmg`
 - 若用于外发，签名与公证流程已跑通

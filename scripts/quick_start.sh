@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# PrivacyGuard 快速启动脚本
+# SecureRedact 快速启动脚本
 # 提供常用开发命令的快捷方式
 # ============================================================================
 
@@ -20,7 +20,7 @@ cd "$PROJECT_DIR"
 print_header() {
     echo ""
     echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║${NC}        $(printf '%58s' "PrivacyGuard 快速启动")${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}        $(printf '%58s' "SecureRedact 快速启动")${CYAN}║${NC}"
     echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
@@ -44,7 +44,7 @@ get_version() {
 
 # 启动应用
 start_app() {
-    echo -e "${BLUE}>>> 启动 PrivacyGuard...${NC}"
+    echo -e "${BLUE}>>> 启动 SecureRedact...${NC}"
     python main.py
 }
 

@@ -3,11 +3,11 @@ setlocal enabledelayedexpansion
 :: Note: chcp 65001 can cause echo commands to fail silently on some systems
 :: Using default codepage (936 for Chinese Windows) for better compatibility
 chcp 936 > nul 2>&1
-title PrivacyGuard Build
+title SecureRedact Build
 
 echo.
 echo ========================================
-echo   PrivacyGuard Windows Build Script
+echo   SecureRedact Windows Build Script
 echo   Version: from version.txt
 echo ========================================
 echo.
@@ -29,7 +29,7 @@ if not exist "%PROJECT_DIR%\main.py" (
 )
 echo [OK] Project directory: %PROJECT_DIR%
 
-set "APP_NAME=PrivacyGuard"
+set "APP_NAME=SecureRedact"
 
 :: Convert all paths to absolute
 for %%i in ("%SCRIPT_DIR%..\config") do set "CONFIG_DIR=%%~fi"
@@ -85,10 +85,10 @@ if not defined VERSION (
 )
 
 :: Check spec file
-echo [DEBUG] Checking: %CONFIG_DIR%\PrivacyGuard_windows.spec
-if not exist "%CONFIG_DIR%\PrivacyGuard_windows.spec" (
+echo [DEBUG] Checking: %CONFIG_DIR%\SecureRedact_windows.spec
+if not exist "%CONFIG_DIR%\SecureRedact_windows.spec" (
     echo [ERROR] PyInstaller spec file not found
-    echo [PATH] %CONFIG_DIR%\PrivacyGuard_windows.spec
+    echo [PATH] %CONFIG_DIR%\SecureRedact_windows.spec
     pause
     exit /b 1
 )
@@ -174,7 +174,7 @@ echo.
 
 pushd "%PROJECT_DIR%"
 call "%VENV_PATH%\Scripts\activate.bat"
-python -m PyInstaller --clean --noconfirm "%CONFIG_DIR%\PrivacyGuard_windows.spec"
+python -m PyInstaller --clean --noconfirm "%CONFIG_DIR%\SecureRedact_windows.spec"
 popd
 
 if errorlevel 1 (
@@ -259,7 +259,7 @@ echo.
 echo [Phase 7/8] Verifying build...
 
 set "VERIFY_FAIL=0"
-for %%F in (PrivacyGuard.exe) do (
+for %%F in (SecureRedact.exe) do (
     if exist "%DIST_DIR%\%APP_NAME%\%%F" (
         echo   [OK] %%F exists
     ) else (
@@ -326,7 +326,7 @@ echo   - Checksum: %RELEASE_DIR%\%ZIP_NAME%.sha256
 echo.
 echo Usage:
 echo   1. Extract ZIP to any directory
-echo   2. Run PrivacyGuard.exe or launcher_wrapper.bat
+echo   2. Run SecureRedact.exe or launcher_wrapper.bat
 echo   3. No installation required
 echo.
 

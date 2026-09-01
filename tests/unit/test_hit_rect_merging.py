@@ -21,7 +21,7 @@
 import unittest
 from types import SimpleNamespace
 
-from privacyguard.ocr.mixed_pdf import collect_image_block_ocr_hits
+from secureredact.ocr.mixed_pdf import collect_image_block_ocr_hits
 
 
 # 真实 Page 0 的 box + 文本 (来自实测):
@@ -160,7 +160,7 @@ class TestHitRectMerging(unittest.TestCase):
         patterns = [r'(?<!\d)1[3-9]\d{9}(?!\d)']
 
         # 直接测试合并函数: 给两个不同 y 的 line_box + 同 span rect
-        from privacyguard.ocr.mixed_pdf import merge_adjacent_hit_rects
+        from secureredact.ocr.mixed_pdf import merge_adjacent_hit_rects
         annotated = [
             (ocr_results[0].box, (861.2, 1362.0, 210.8, 49.0)),  # 第 1 行
             (ocr_results[1].box, (861.0, 1497.0, 210.0, 49.0)),  # 第 2 行
@@ -230,7 +230,7 @@ class TestHitRectMerging(unittest.TestCase):
             def width(self): return self._w
             def height(self): return self._h
 
-        from privacyguard.ocr.mixed_pdf import merge_adjacent_hit_rects
+        from secureredact.ocr.mixed_pdf import merge_adjacent_hit_rects
         annotated = [
             ([[778.0, 1365.0], [1072.0, 1362.0], [1073.0, 1408.0], [778.0, 1411.0]],
              FakeQRectF(779.0, 1362.0, 62.5, 49.0)),       # QRectF, 不是 tuple
@@ -250,7 +250,7 @@ class TestHitRectMerging(unittest.TestCase):
         """main.py:11338 _deduplicate_rects 用 r.x() / r.y() / r.width() / r.height() 调用,
         merge_adjacent_hit_rects 输出必须满足这个 duck-typing 协议.
         回归保护: 之前返回 tuple 时崩溃."""
-        from privacyguard.ocr.mixed_pdf import merge_adjacent_hit_rects
+        from secureredact.ocr.mixed_pdf import merge_adjacent_hit_rects
         annotated = [
             ([[778.0, 1365.0], [1072.0, 1362.0], [1073.0, 1408.0], [778.0, 1411.0]],
              (779.0, 1362.0, 62.5, 49.0)),
@@ -280,7 +280,7 @@ class TestHitRectMerging(unittest.TestCase):
     def test_merge_output_supports_main_py_dedup_with_tuple_input(self):
         """main.py 实际传过来的是 QRectF (tuple 输入也被 _rect_to_tuple 兼容),
         但验证即使输入是 tuple, 输出也要满足 .x() 协议."""
-        from privacyguard.ocr.mixed_pdf import merge_adjacent_hit_rects
+        from secureredact.ocr.mixed_pdf import merge_adjacent_hit_rects
         annotated = [
             ([[0.0, 0.0], [300.0, 0.0], [300.0, 30.0], [0.0, 30.0]],
              (10.0, 5.0, 50.0, 20.0)),

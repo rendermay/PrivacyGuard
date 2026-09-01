@@ -12,7 +12,7 @@ from typing import Dict, List
 
 
 # 复刻 DEFAULT_RULES 中"扩展规则"的 pattern
-# 一旦 main.py 或 privacyguard/utils/config.py 修改了这里使用的 pattern,
+# 一旦 main.py 或 secureredact/utils/config.py 修改了这里使用的 pattern,
 # 本测试会立刻失败, 提醒维护者同步更新.
 _EXPECTED_PATTERNS: Dict[str, str] = {
     "地址（含门牌号）": (
@@ -27,11 +27,14 @@ _EXPECTED_PATTERNS: Dict[str, str] = {
         r"[\d\w]{7,8}"
         r"(?!\d)"
     ),
-    # 同时兼容半角":"和全角"："冒号
+    # 同时兼容半角":"和全角"："冒号 + 末尾正向 lookahead 限定后续必须是
+    # 人名边界 (助词 / 标点 / 空白 / 字符串结尾). 修复 v1.1.13:
+    # '法定代表人继续主张权利' 中旧 pattern 贪婪吞 '继续主张' 当人名 mask.
     "法定代表人": (
         r"法定代表人\s*[::：]?\s*"
         r"[一-龥]{2,4}"
         r"(?:·[一-龥]{2,4})?"
+        r"(?=[的之及与和按于在跟同向对为由被让等,，。；;）)\]】\s]|$)"
     ),
 }
 
@@ -114,9 +117,69 @@ class TestRedactionRulePatterns(unittest.TestCase):
         text = "曹炳志在庭上陈述"
         self.assertEqual(self.compiled["法定代表人"].findall(text), [])
 
+    # ---- 法定代表人: 边界收紧 (v1.1.13 regression) ----
+
+    def test_legal_rep_does_not_match_followed_by_common_verb(self):
+        """regression v1.1.13: 法定代表人后续接 '继续主张' 等普通动词时
+        不应匹配 (旧 pattern 贪婪吞 '继续主张' 4 字当作人名 mask).
+
+        场景: '向乙方及其法定代表人继续主张权利' → '向乙方及其法********权利'
+        期望: pattern 完全不匹配, 不脱敏.
+        """
+        for text in (
+            "向乙方及其法定代表人继续主张权利",
+            "法定代表人继续主张权利",
+            "法定代表人张三继续主张权利",
+            "法定代表人张三继承权利",
+            "法定代表人张三承担违约责任",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(
+                    self.compiled["法定代表人"].findall(text), [],
+                    f"pattern 不应吞普通动词, 实得 "
+                    f"{self.compiled['法定代表人'].findall(text)} for {text!r}",
+                )
+
+    def test_legal_rep_matches_followed_by_particle(self):
+        """后续接助词 '的/之/与/和/...' 应匹配 — 这是合法的 '标识 + 人名 + 助词' 句式."""
+        for text in (
+            "法定代表人张三的职责",
+            "法定代表人张三与李四",
+            "法定代表人张三和周强",
+        ):
+            with self.subTest(text=text):
+                m = self.compiled["法定代表人"].findall(text)
+                self.assertEqual(len(m), 1, f"未匹配 {text!r}")
+                # 必须包含人名部分, 不吞后续助词
+                self.assertIn("张三", m[0])
+
+    def test_legal_rep_matches_followed_by_punctuation(self):
+        """后续接标点应匹配."""
+        for text in (
+            "法定代表人张三。",
+            "法定代表人张三，",
+            "法定代表人张三；",
+            "法定代表人张三的",
+        ):
+            with self.subTest(text=text):
+                m = self.compiled["法定代表人"].findall(text)
+                self.assertEqual(len(m), 1, f"未匹配 {text!r}")
+                self.assertIn("张三", m[0])
+
+    def test_legal_rep_matches_at_end_of_text(self):
+        """字符串末尾边界 — 后续空白 / 字符串结尾应匹配."""
+        for text in (
+            "法定代表人张三",
+            "法定代表人欧阳娜娜",
+            "法定代表人: 曹炳志",
+        ):
+            with self.subTest(text=text):
+                m = self.compiled["法定代表人"].findall(text)
+                self.assertEqual(len(m), 1, f"未匹配 {text!r}")
+
 
 class TestMainDefaultRulesExtended(unittest.TestCase):
-    """验证 main.py / privacyguard.utils.config / config.json 三处规则集合对齐."""
+    """验证 main.py / secureredact.utils.config / config.json 三处规则集合对齐."""
 
     EXPECTED_EXTENSIONS: List[str] = [
         "地址（含门牌号）",
@@ -129,7 +192,7 @@ class TestMainDefaultRulesExtended(unittest.TestCase):
         return DEFAULT_RULES
 
     def _load_module_default_config(self):
-        from privacyguard.utils.config import DEFAULT_CONFIG  # type: ignore
+        from secureredact.utils.config import DEFAULT_CONFIG  # type: ignore
         return DEFAULT_CONFIG["redaction"]["default_rules"]
 
     def test_main_default_rules_contains_extensions(self):
@@ -145,7 +208,7 @@ class TestMainDefaultRulesExtended(unittest.TestCase):
             self.assertTrue(cfg[name].get("pattern"), f"模块规则 {name} pattern 为空")
 
     def test_three_way_alignment(self):
-        """main.py / privacyguard.utils.config / config.json 名称集合一致."""
+        """main.py / secureredact.utils.config / config.json 名称集合一致."""
         cfg_json_path = Path(__file__).resolve().parents[2] / "config.json"
         with open(cfg_json_path, "r", encoding="utf-8") as f:
             cfg_json = json.load(f)
@@ -162,6 +225,88 @@ class TestMainDefaultRulesExtended(unittest.TestCase):
             self.assertIn(name, main_names, f"main.py 缺少 {name}")
             self.assertIn(name, module_names, f"DEFAULT_CONFIG 缺少 {name}")
             self.assertIn(name, json_names, f"config.json 缺少 {name}")
+
+
+class TestDateTimeRuleDisabled(unittest.TestCase):
+    """日期时间规则默认 enabled=false (用户决策 v1.1.13: 选 B 不脱敏).
+
+    决策背景: 抵账协议0522 报告 '2026年4月1日' 被全 9 字 mask 为 *********,
+    过度脱敏. 用户选择禁用整条规则, 不再做日期脱敏 (日期信息保留).
+    """
+
+    def _load_config(self) -> dict:
+        cfg_json_path = Path(__file__).resolve().parents[2] / "config.json"
+        with open(cfg_json_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_date_time_disabled_in_config_json(self):
+        cfg = self._load_config()
+        rule = cfg["redaction"]["default_rules"].get("日期时间", {})
+        self.assertEqual(rule.get("enabled"), False,
+            "config.json 中 '日期时间' 规则应 enabled=false, 实得 "
+            f"{rule.get('enabled')}")
+
+    def test_date_time_disabled_in_template(self):
+        template_path = (
+            Path(__file__).resolve().parents[2] / "config.json.template"
+        )
+        with open(template_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        rule = cfg["redaction"]["default_rules"].get("日期时间", {})
+        self.assertEqual(rule.get("enabled"), False,
+            "config.json.template 中 '日期时间' 规则应 enabled=false, 实得 "
+            f"{rule.get('enabled')}")
+
+
+class TestV113CodeLayerRuleOverrides(unittest.TestCase):
+    """v1.1.13 代码层强制规则覆盖 — 不依赖磁盘 config.json 漂移.
+
+    修复背景: 即使磁盘 config.json 中 '日期时间.enabled=true' 或
+    '法定代表人.pattern' 被改回旧版, 代码层 (_v113_apply_rule_overrides)
+    仍强制以下行为:
+      1) '日期时间' 规则强制从 DEFAULT_RULES 移除 (默认禁用)
+      2) '法定代表人' pattern 强制覆盖为带正向 lookahead 的版本
+    本测试通过 main.py 源码静态检查覆盖逻辑, 避免 import main.py
+    触发 PyQt6 DLL 加载 (测试环境受限).
+    """
+
+    @staticmethod
+    def _read_main_src() -> str:
+        return Path(__file__).resolve().parents[2].joinpath("main.py").read_text(
+            encoding="utf-8"
+        )
+
+    def test_v113_override_function_defined(self):
+        """_v113_apply_rule_overrides 必须在 main.py 定义."""
+        src = self._read_main_src()
+        self.assertIn("def _v113_apply_rule_overrides():", src,
+            "main.py 必须定义 _v113_apply_rule_overrides 函数")
+
+    def test_v113_override_removes_date_time(self):
+        """override 必须从 DEFAULT_RULES 移除 '日期时间'."""
+        src = self._read_main_src()
+        self.assertIn('DEFAULT_RULES.pop("日期时间", None)', src,
+            "_v113_apply_rule_overrides 必须 pop '日期时间'")
+        self.assertIn('DEFAULT_RULES_META.pop("日期时间", None)', src,
+            "META 也需清理对应 mask 配置")
+
+    def test_v113_override_replaces_legal_rep_pattern(self):
+        """override 必须把 '法定代表人' pattern 替换为带 lookahead 版本."""
+        src = self._read_main_src()
+        # lookhead 边界集合的关键片段必须存在
+        self.assertIn("[的之及与和按于在跟同向对为由被让等", src,
+            "_v113_apply_rule_overrides 必须覆盖 '法定代表人' pattern 为带 lookahead 版本")
+        self.assertIn("DEFAULT_RULES[\"法定代表人\"]", src,
+            "_v113_apply_rule_overrides 必须显式赋值 '法定代表人'")
+
+    def test_v113_override_called_in_both_config_paths(self):
+        """override 必须在 if config 分支和 else fallback 分支都被调用."""
+        src = self._read_main_src()
+        count = src.count("_v113_apply_rule_overrides()")
+        # 至少 3 次: 1 次定义 + 1 次 if 分支调用 + 1 次 else 分支调用
+        self.assertGreaterEqual(count, 3,
+            f"_v113_apply_rule_overrides 应被调用至少 2 次 (if/else 两个分支), "
+            f"源码实际出现次数: {count}")
 
 
 class TestPlaintiffNameRedaction(unittest.TestCase):

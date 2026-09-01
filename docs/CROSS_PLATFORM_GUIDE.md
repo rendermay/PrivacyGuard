@@ -1,4 +1,4 @@
-# PrivacyGuard 跨平台开发与发布指南
+# SecureRedact 跨平台开发与发布指南
 
 > 本文档描述当前项目在 macOS / Windows 两个平台上的真实开发与打包策略。
 
@@ -28,8 +28,8 @@
 - 负责 `.exe` / 安装包构建
 - 验证 VC++ 运行库、onnxruntime、安装器行为
 - 主要输出：
-  - `PrivacyGuard-v<version>-Windows-Portable.zip`
-  - `PrivacyGuard-<version>-Setup.exe`
+  - `SecureRedact-v<version>-Windows-Portable.zip`
+  - `SecureRedact-<version>-Setup.exe`
 
 ---
 
@@ -54,7 +54,7 @@
 
 ## 当前版本与打包策略
 
-- 当前版本：`v37.7.4`
+- 当前版本：`v1.1.11`
 - 版本标识：`37.7.4 - Release Audit and Final Polish`
 - 版本唯一来源：`version.txt`
 
@@ -82,7 +82,7 @@ packaging\windows\scripts\3_build_with_setup.bat
 
 1. 不要再从 `main.py` 硬读版本号，统一读 `version.txt`
 2. 不要在 macOS 上假定 Windows 运行库问题已经被覆盖
-3. 不要让 `main.py` 和 `privacyguard/*` 的核心逻辑继续漂移
+3. 不要让 `main.py` 和 `secureredact/*` 的核心逻辑继续漂移
 4. 打包文档优先阅读：
    - `docs/packaging/README.md`
    - `docs/packaging/windows-packaging-guide.md`
@@ -95,7 +95,7 @@ packaging\windows\scripts\3_build_with_setup.bat
 ### 开发日常
 
 ```bash
-python3 -m compileall -q main.py privacyguard tests
+python3 -m compileall -q main.py secureredact tests
 python3 -m unittest \
   tests.unit.test_mixed_pdf_ocr \
   tests.test_path_validation \
@@ -132,7 +132,7 @@ python3 -m unittest \
   - `.app` 构建成功
   - 当前环境缺少 `create-dmg`
   - `hdiutil` 本次未成功创建 DMG
-  - 脚本已按回退逻辑复制 `releases/macos/PrivacyGuard.app`
+  - 脚本已按回退逻辑复制 `releases/macos/SecureRedact.app`
 - Windows：
   - 已完成脚本链、spec、版本资源、Inno Setup 配置与文档一致性复核
   - 当前机器为 macOS，未实际执行 `.bat` 与安装包链路

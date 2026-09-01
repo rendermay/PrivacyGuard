@@ -37,10 +37,6 @@ dist/
 *.log
 *.bak
 
-# Test outputs
-tests/reports/*.html
-tests/output/
-
 # Local config
 .env
 .env.local
@@ -61,12 +57,35 @@ claude-*-cwd
 jieba.cache
 pdf/
 
+# Test outputs
+tests/output/
+tests/ui/actual/
+tests/reports/*.html
+
+# PR-C2.x: visual baseline current renders (CI artifacts, regenerated every run)
+secureredact/ui/styles/baselines/_current_*.png
+
+# pytest coverage (local dev only — CI uses --cov=)
+.coverage
+.coverage.*
+*.coverage
+
+# Local dev scratch files (temp test dumps, design explorations)
+AI_Revolution.html
+用户使用手册.html
+
+# Scripts temp output (regression/e2e/diff dumps — scripts/*.py and *.sh kept)
+scripts/e2e_*.txt
+scripts/regression_*.txt
+scripts/diff_output.txt
+scripts/redact_dossier.py
+
 # Release binaries (keep source, not built artifacts)
 releases/**/*.dmg
 releases/**/*.zip
 releases/**/*.exe
 releases/**/*.sha256
-releases/macos/PrivacyGuard.app/
+releases/macos/SecureRedact.app/
 
 # Windows build
 venv_win/

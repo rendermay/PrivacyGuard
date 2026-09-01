@@ -1,6 +1,6 @@
-# PrivacyGuard Logo 图标使用指南
+# SecureRedact Logo 图标使用指南
 
-> 本目录包含 PrivacyGuard 脱敏卫士的完整图标资源
+> 本目录包含 SecureRedact 信息脱敏助手的完整图标资源
 > 生成日期: 2026-03-17
 
 ---
@@ -27,8 +27,8 @@ assets/logo/
 ├── macos/                     # macOS 专用
 │   └── AppIcon.icns          # macOS 应用程序图标
 ├── linux/                     # Linux 专用
-│   ├── privacyguard.png      # 默认图标 (256x256)
-│   └── privacyguard_{size}x{size}.png  # 各尺寸图标
+│   ├── secureredact.png      # 默认图标 (256x256)
+│   └── secureredact_{size}x{size}.png  # 各尺寸图标
 ├── marketing/                 # 营销物料
 │   ├── app_store_icon.png    # App Store 图标 (1024x1024)
 │   └── banner_basic.png      # 基础横幅 (1200x400)
@@ -45,13 +45,13 @@ assets/logo/
 
 #### Windows
 ```python
-# packaging/windows/config/PrivacyGuard_windows.spec
+# packaging/windows/config/SecureRedact_windows.spec
 exe = EXE(
     pyz,
     a.scripts,
     [],
     exclude_binaries=True,
-    name='PrivacyGuard',
+    name='SecureRedact',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -63,12 +63,12 @@ exe = EXE(
 
 #### macOS
 ```python
-# packaging/macos/config/PrivacyGuard.spec
+# packaging/macos/config/SecureRedact.spec
 app = BUNDLE(
     coll,
-    name='PrivacyGuard.app',
+    name='SecureRedact.app',
     icon='../../assets/logo/macos/AppIcon.icns',  # <-- 使用此路径
-    bundle_identifier='com.privacyguard.app',
+    bundle_identifier='com.secureredact.app',
 )
 ```
 
@@ -150,7 +150,7 @@ ls -la windows/ macos/ linux/
 - **图标元素**: 白色 (#FFFFFF)
 
 ### 图形元素
-- **PG 字母**: PrivacyGuard 的缩写，大号白色文字
+- **PG 字母**: SecureRedact 的缩写，大号白色文字
 - **蓝色圆角方块**: 简洁现代的背景，象征信任与安全
 
 ### 风格
@@ -171,7 +171,7 @@ ls -la windows/ macos/ linux/
 - [x] `assets/logo/macos/AppIcon.icns` - macOS 图标
 - [x] `packaging/windows/config/*.spec` - Windows spec 文件引用正确
 - [x] `packaging/macos/config/*.spec` - macOS spec 文件引用正确
-- [x] `packaging/windows/config/PrivacyGuard_Setup.iss` - Windows 安装器图标路径正确
+- [x] `packaging/windows/config/SecureRedact_Setup.iss` - Windows 安装器图标路径正确
 - [x] `packaging/windows/scripts/build_complete.bat` - 构建脚本图标检查路径正确
 - [x] `main.py` - 应用启动时加载图标（已添加）
 
@@ -179,7 +179,7 @@ ls -la windows/ macos/ linux/
 
 ## 📝 版权与许可
 
-PrivacyGuard 脱敏卫士 Logo 是项目的专有标识。
+SecureRedact 信息脱敏助手 Logo 是项目的专有标识。
 
 ---
 

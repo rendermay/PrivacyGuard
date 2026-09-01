@@ -117,14 +117,14 @@ echo ""
 echo "----------------------------------------"
 echo "测试 6: 已打包应用检查"
 echo "----------------------------------------"
-APP_BUNDLE="$APP_DIR/dist/PrivacyGuard.app"
+APP_BUNDLE="$APP_DIR/dist/SecureRedact.app"
 if [ -d "$APP_BUNDLE" ]; then
     echo -e "${GREEN}✓ 已打包应用存在${NC}"
     echo "  路径: $APP_BUNDLE"
     echo "  启动命令: open \"$APP_BUNDLE\""
 else
     echo -e "${YELLOW}⚠ 已打包应用不存在${NC}"
-    echo "  如需打包,运行: pyinstaller PrivacyGuard.spec"
+    echo "  如需打包,运行: pyinstaller SecureRedact.spec"
 fi
 echo ""
 
