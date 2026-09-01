@@ -1,0 +1,134 @@
+/* card.qss — QFrame 卡片变体样式(Plan 2b PR-V2 Task 2.4)
+
+   覆盖 8 个 QFrame#xxxCard 变体(workspace / batch / merge / preview /
+   batchStep / batchMetric / routeCard 等),提供 4 个交互状态:
+   - 基态(normal)
+   - :hover(轻微颜色提示)
+   - :pressed / :active(按下反馈)
+   - :disabled(禁用)
+   - :focus(键盘焦点)
+
+   颜色策略:
+   - 全部走 token 占位符,严禁 hex 字面量(Plan 2b 约束)
+   - {card_background} 是玻璃特效 token:由 glass.get_glass_substitution()
+     在 GLASS_AVAILABLE=False 时替换为 rgba 半透明兜底值,Agent 6 (toolbar
+     refactor) 会扩展 loader.py 合并该替换链。
+   - {surface} / {border} / {text} / {hover} / {pressed} / {info_bar} /
+     {primary} 等基础 token 由 tokens.py 提供。
+
+   v1.1.13 基线,严禁视觉漂移。
+*/
+
+/* === 基态:8 个卡片变体的默认样式 === */
+
+QFrame#workspaceCard,
+QFrame#batchWorkspaceCard,
+QFrame#mergeWorkspaceCard {
+    background-color: {surface};
+    border: 1px solid {border};
+    border-radius: 18px;
+}
+
+QFrame#batchDetailSection {
+    background-color: {card_background};
+    border: 1px solid {border};
+    border-radius: 16px;
+}
+
+QFrame#previewWorkspaceCard {
+    background-color: {card_background};
+    border: none;
+    border-radius: 18px;
+}
+
+QFrame#idleStartCard,
+QFrame#idleSupportCard {
+    background-color: {card_background};
+    border: 1px solid {border};
+    border-radius: 18px;
+}
+
+QFrame#batchStepCard,
+QFrame#batchMetricCard {
+    background-color: {card_background};
+    border: 1px solid {border};
+    border-radius: 15px;
+}
+
+QFrame#routeCard {
+    background-color: {card_background};
+    border: 1px solid {border};
+    border-radius: 16px;
+}
+
+/* === 悬停态:hover(轻微背景提亮,边框不变) === */
+
+QFrame#workspaceCard:hover,
+QFrame#batchWorkspaceCard:hover,
+QFrame#mergeWorkspaceCard:hover,
+QFrame#batchDetailSection:hover,
+QFrame#previewWorkspaceCard:hover,
+QFrame#idleStartCard:hover,
+QFrame#idleSupportCard:hover,
+QFrame#batchStepCard:hover,
+QFrame#batchMetricCard:hover,
+QFrame#routeCard:hover {
+    background-color: {hover};
+}
+
+/* === 按下/激活态:pressed / active === */
+
+QFrame#workspaceCard:pressed,
+QFrame#workspaceCard:active,
+QFrame#batchWorkspaceCard:pressed,
+QFrame#batchWorkspaceCard:active,
+QFrame#mergeWorkspaceCard:pressed,
+QFrame#mergeWorkspaceCard:active,
+QFrame#batchDetailSection:pressed,
+QFrame#batchDetailSection:active,
+QFrame#previewWorkspaceCard:pressed,
+QFrame#previewWorkspaceCard:active,
+QFrame#idleStartCard:pressed,
+QFrame#idleStartCard:active,
+QFrame#idleSupportCard:pressed,
+QFrame#idleSupportCard:active,
+QFrame#batchStepCard:pressed,
+QFrame#batchStepCard:active,
+QFrame#batchMetricCard:pressed,
+QFrame#batchMetricCard:active,
+QFrame#routeCard:pressed,
+QFrame#routeCard:active {
+    background-color: {pressed};
+}
+
+/* === 禁用态:disabled(灰阶 + info_bar 背景) === */
+
+QFrame#workspaceCard:disabled,
+QFrame#batchWorkspaceCard:disabled,
+QFrame#mergeWorkspaceCard:disabled,
+QFrame#batchDetailSection:disabled,
+QFrame#previewWorkspaceCard:disabled,
+QFrame#idleStartCard:disabled,
+QFrame#idleSupportCard:disabled,
+QFrame#batchStepCard:disabled,
+QFrame#batchMetricCard:disabled,
+QFrame#routeCard:disabled {
+    color: {text_secondary};
+    background-color: {info_bar};
+    border-color: {border};
+}
+
+/* === 焦点态:focus(键盘可达,主色边框) === */
+
+QFrame#workspaceCard:focus,
+QFrame#batchWorkspaceCard:focus,
+QFrame#mergeWorkspaceCard:focus,
+QFrame#batchDetailSection:focus,
+QFrame#previewWorkspaceCard:focus,
+QFrame#idleStartCard:focus,
+QFrame#idleSupportCard:focus,
+QFrame#batchStepCard:focus,
+QFrame#batchMetricCard:focus,
+QFrame#routeCard:focus {
+    border: 1px solid {primary};
+}
