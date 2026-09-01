@@ -1,0 +1,92 @@
+/* tab.qss — QTabWidget + QTabBar 5 状态样式
+   来自 SettingsDialog / Workbench 内嵌 QTabWidget setStyleSheet
+   v1.1.13 基线,严禁视觉漂移
+
+   状态维度(normal / :hover / :selected / :disabled / :focus):
+   - normal:  QTabBar::tab 默认规则体
+   - :hover:  鼠标悬停
+   - :selected: 当前激活
+   - :disabled: 灰态不可点
+   - :focus:  键盘焦点描边
+
+   注意:Qt 选择器大小写敏感,QSS 大写选择器不会被 _PLACEHOLDER_RE
+   ([a-z_][a-z0-9_]*) 误匹配,token 占位符全小写安全。
+*/
+
+QTabWidget {
+    background-color: {surface};
+    color: {text};
+}
+
+/* === 内容区容器(决定 tab 页主体边框/背景) === */
+QTabWidget::pane {
+    border: 1px solid {border};
+    background-color: {surface};
+    border-radius: 4px;
+    top: -1px;  /* 与 tab 底部无缝衔接 */
+}
+
+/* === Tab 头部区域 === */
+QTabWidget::tab-bar {
+    alignment: left;
+    background-color: transparent;
+}
+
+/* === Tab 标签:normal === */
+QTabBar::tab {
+    background-color: {background};
+    color: {text};
+    border: 1px solid {border};
+    border-bottom: none;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    padding: 6px 14px;
+    margin-right: 2px;
+    min-width: 80px;
+    font-family: {font_family};
+}
+
+/* === Tab 标签:hover === */
+QTabBar::tab:hover {
+    background-color: {hover};
+    color: {text};
+    border-color: {primary};
+}
+
+/* === Tab 标签:selected(当前激活) === */
+QTabBar::tab:selected {
+    background-color: {surface};
+    color: {primary};
+    border-color: {border};
+    border-bottom: 2px solid {primary};
+    font-weight: 700;
+}
+
+/* === Tab 标签:disabled(不可点) === */
+QTabBar::tab:disabled {
+    background-color: {background};
+    color: {text_secondary};
+    border-color: {border};
+    /* opacity 在 QSS 里不可用,用 color 弱化代替 */
+}
+
+/* === Tab 标签:focus(键盘焦点) === */
+QTabBar::tab:focus {
+    outline: none;
+    border: 2px solid {primary};
+    background-color: {pressed};
+}
+
+/* === 关闭按钮(可选,出现在带 closeButton 的 QTabBar) === */
+QTabBar::close-button {
+    image: none;
+    subcontrol-position: right;
+    width: 12px;
+    height: 12px;
+    margin: 2px;
+}
+
+QTabBar::close-button:hover {
+    background-color: {hover};
+    border-radius: 2px;
+}
