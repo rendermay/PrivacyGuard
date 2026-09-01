@@ -260,7 +260,8 @@ class TestStylesheetsDirectory(unittest.TestCase):
 
     def test_all_six_qss_files_exist(self):
         styles_dir = Path(__file__).resolve().parents[2] / "secureredact" / "ui" / "styles"
-        for filename in ("base.qss", "menu.qss", "workbench.qss",
+        for filename in ("base.qss", "button.qss", "input.qss", "tab.qss",
+                          "card.qss", "dock.qss", "menu.qss", "workbench.qss",
                           "toolbar.qss", "workspace.qss", "progress.qss"):
             path = styles_dir / filename
             self.assertTrue(path.is_file(), f"missing: {path}")
@@ -282,15 +283,15 @@ class TestScopesConfiguration(unittest.TestCase):
         self.assertIn("main", SCOPES)
 
     def test_scopes_main_includes_all_files(self):
-        """main scope 应包含全部 6 个 .qss 文件(基线完整性)。"""
+        """main scope 应包含全部 11 个 .qss 文件(基线完整性,PR-V2 扩展后)。"""
         main_files = SCOPES["main"]
-        self.assertEqual(len(main_files), 6)
-        self.assertIn("base.qss", main_files)
-        self.assertIn("menu.qss", main_files)
-        self.assertIn("workbench.qss", main_files)
-        self.assertIn("toolbar.qss", main_files)
-        self.assertIn("workspace.qss", main_files)
-        self.assertIn("progress.qss", main_files)
+        self.assertEqual(len(main_files), 11)
+        for expected in (
+            "base.qss", "button.qss", "input.qss", "tab.qss",
+            "card.qss", "dock.qss", "menu.qss", "workbench.qss",
+            "toolbar.qss", "workspace.qss", "progress.qss",
+        ):
+            self.assertIn(expected, main_files)
 
 
 class TestDarkThemeInternalAPI(unittest.TestCase):

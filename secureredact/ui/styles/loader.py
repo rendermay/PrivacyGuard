@@ -19,6 +19,7 @@ import re
 from pathlib import Path
 from typing import Iterable, Sequence
 
+from .glass import get_glass_substitution
 from .tokens import get_substitution_map
 
 
@@ -30,6 +31,11 @@ STYLES_DIR = Path(__file__).resolve().parent
 SCOPES: dict[str, tuple[str, ...]] = {
     "main": (
         "base.qss",
+        "button.qss",
+        "input.qss",
+        "tab.qss",
+        "card.qss",
+        "dock.qss",
         "menu.qss",
         "workbench.qss",
         "toolbar.qss",
@@ -37,8 +43,8 @@ SCOPES: dict[str, tuple[str, ...]] = {
         "progress.qss",
     ),
     "workbench": ("workbench.qss",),
-    "toolbar": ("toolbar.qss",),
-    "workspace": ("workspace.qss",),
+    "toolbar": ("base.qss", "button.qss", "toolbar.qss"),
+    "workspace": ("base.qss", "card.qss", "workspace.qss"),
     "progress": ("progress.qss",),
 }
 
@@ -53,9 +59,23 @@ def _load_qss(filename: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _build_mapping(theme_name: str) -> dict[str, str]:
+    """合并主题 token + Glass 降级占位符映射。
+
+    - 主题 token 由 `tokens.get_substitution_map(theme_name)` 提供
+      (16 颜色 + 3 字体 = 19 个键)
+    - Glass 降级占位符(`card_background` / `dock_background`)由
+      `glass.get_glass_substitution()` 提供;GLASS_AVAILABLE=True 时返回空,
+      调用方继续使用主题 token(若该 token 已在主题映射中存在则会被覆盖)。
+    """
+    mapping: dict[str, str] = dict(get_substitution_map(theme_name))
+    mapping.update(get_glass_substitution())
+    return mapping
+
+
 def _substitute(text: str, theme_name: str) -> str:
     """把 {token} 占位符替换为对应主题的实际值,未识别的占位符保留原样。"""
-    mapping = get_substitution_map(theme_name)
+    mapping = _build_mapping(theme_name)
     return _PLACEHOLDER_RE.sub(
         lambda m: mapping.get(m.group(1), m.group(0)),
         text,
@@ -77,7 +97,7 @@ def render_stylesheet(
     """
     if files is None:
         files = SCOPES["main"]
-    mapping = get_substitution_map(theme_name)
+    mapping = _build_mapping(theme_name)
     parts = [_load_qss(f) for f in files]
     combined = "\n\n".join(parts)
     return _PLACEHOLDER_RE.sub(

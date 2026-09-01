@@ -2,9 +2,9 @@
    Plan 2b PR-V2 Task 2.5
 
    约束:
-   - 仅使用 {token} 占位符,严禁裸 hex 字面量
+   - 仅使用 token 占位符,严禁裸 hex 字面量
    - title bar 覆盖 5 个状态:hover / pressed / disabled / focus(normal 用裸 QDockWidget::title)
-   - {dock_background} 占位符在 Glass 不可用时由 StylesheetLoader + Glass substitution 替换
+   - dock_background 占位符在 Glass 不可用时由 StylesheetLoader + Glass substitution 替换
      (Agent 6 单独验证替换链路);此处文件源码层只关心占位符存在
    - 字体/字号走 font_family / font_size_normal token
    v1.1.13 基线,严禁视觉漂移 */
