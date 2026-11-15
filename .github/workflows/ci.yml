@@ -79,7 +79,14 @@ jobs:
       # 渲染当前 main_window / settings_dialog 到 baselines/_current_*.png,
       # 然后跑 tests/unit/test_visual_baseline 内的 _unchanged 系列断言。
       # PyQt6 已通过 requirements.txt 安装,offscreen 平台由脚本内部 setdefault。
+      #
+      # P0-6: 像素级基线只在生成基线的同一平台成立 —— 基线由 Windows 生成,
+      #   Linux runner 的字体渲染与 Windows 有 2.5%~3.4% 的固有差异,
+      #   超过 0.5% 阈值 -> 永久红灯(实测 main_window 在 ubuntu 差 2.5%/3.4%)。
+      #   故视觉回归只在 Windows 上跑; Ubuntu 仍跑前面的 compile / smoke /
+      #   覆盖率门禁 / 全量测试。
       - name: Visual regression
+        if: matrix.os == 'windows-latest'
         run: |
           python scripts/render_visual_baseline.py
           python -m unittest tests.unit.test_visual_baseline -v
