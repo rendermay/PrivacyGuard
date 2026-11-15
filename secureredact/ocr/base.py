@@ -3,10 +3,19 @@ OCR 引擎基类和数据结构
 提供统一的 OCR 结果格式，无论使用哪个引擎
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional
-import numpy as np
+from typing import TYPE_CHECKING, List, Optional
+
+if TYPE_CHECKING:  # pragma: no cover - 仅用于类型标注
+    # P0-6: numpy 只在类型标注里用到, 改为 TYPE_CHECKING 导入。
+    # 之前模块级 import numpy 会把 numpy 拖进 secureredact.api 的导入链,
+    # 在 CI 的 coverage 预导入场景下触发 numpy 2.4 的
+    # "cannot load module more than once per process" 硬错误,
+    # 导致 api 覆盖率门禁整条链路失败(实测 api.py 覆盖率掉到 5%)。
+    import numpy as np
 
 
 @dataclass

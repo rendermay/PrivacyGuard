@@ -40,7 +40,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           # 项目 requirements 装齐(PDF/Word 处理)
-          pip install -r requirements.txt || true
+          # P0-6: 去掉 || true —— 依赖装不上必须让 CI 失败,
+          #   否则缺 PyQt6/PyMuPDF 时整批用例变 skip, CI 照样变绿(静默失效)。
+          pip install -r requirements.txt
           # 测试依赖
           pip install pytest pytest-cov pytest-qt
 
@@ -48,7 +50,8 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt || true
+          # P0-6: 去掉 || true —— 依赖装不上必须让 CI 失败(见 Windows 步骤同项说明)
+          pip install -r requirements.txt
           pip install pytest pytest-cov pytest-qt
           # pytest-qt 在 Linux runner 需要 Qt 系统库(libEGL/libGL)
           sudo apt-get update -q

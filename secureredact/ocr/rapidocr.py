@@ -5,9 +5,15 @@ RapidOCR 引擎实现
 - 默认引擎
 """
 
+from __future__ import annotations
+
 import os
-from typing import List
-import numpy as np
+from typing import TYPE_CHECKING, List
+
+if TYPE_CHECKING:  # pragma: no cover - 仅用于类型标注
+    # P0-6: numpy 只在类型标注里用到, 改为 TYPE_CHECKING 导入,
+    # 避免把 numpy 拖进 secureredact.api 的导入链(见 ocr/base.py 同项说明)。
+    import numpy as np
 
 from .base import BaseOCREngine, OCRResult, CharInfo
 
