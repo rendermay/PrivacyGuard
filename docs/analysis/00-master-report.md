@@ -1,7 +1,7 @@
 # SecureRedact 项目全量分析报告
 
 > **分析日期**：2026-11-12
-> **分析对象**：工作目录 `G:\Project\SecureRedact\.agents\worktrees\dsh-3eb2fb3e-5817`
+> **分析对象**：工作目录 `<repo root>`
 > **分支 / 提交**：`dsh-3eb2fb3e-5817` @ `3a62724`（`docs(refactor): PR-V2 完成报告`）
 > **版本基线**：`version.txt` = **1.1.13**（CHANGELOG 顶部另有未发布的 1.1.14 条目）
 > **分析方法**：4 路并行只读分析（架构 / 进度 / 测试CI / 打包发布）+ 主线独立复核（git 历史、依赖图、运行时实测）

@@ -1,6 +1,6 @@
 # SecureRedact 打包发布与依赖健康度分析报告
 
-> 分析对象：`G:\Project\SecureRedact\.agents\worktrees\dsh-3eb2fb3e-5817`
+> 分析对象：`<repo root>`
 > 分析日期：2026-11-12
 > 版本基准：`version.txt` = **1.1.13**（`1.1.13 - Name Context Injection`）
 > 本报告为只读分析，未修改任何项目文件（仅新增本报告）。

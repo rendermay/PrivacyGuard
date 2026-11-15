@@ -1,7 +1,7 @@
 # SecureRedact 开发进度与重构路线图分析报告
 
 > 分析日期: 2026-11-12
-> 分析对象: `G:\Project\SecureRedact\.agents\worktrees\dsh-3eb2fb3e-5817`(分支 `dsh-3eb2fb3e-5817`,与 `rename/secureredact` 同 tip `3a62724`)
+> 分析对象: `<repo root>`(分支 `dsh-3eb2fb3e-5817`,与 `rename/secureredact` 同 tip `3a62724`)
 > 版本基线: `version.txt` = **1.1.13**(注:CHANGELOG 最新条目为 1.1.14,详见第 3 节)
 > 代码规模: `main.py` 253 行 / `secureredact/` 65 个 Python 模块 / `tests/unit/` 53 个测试文件、561 个用例
 > 证据来源: `git log`(304 commits / 8 个分支)、`docs/refactor/` 17 份报告、`docs/planning/` 3 份计划、`docs/superpowers/` 4 份计划与 Spec、`CLAUDE.md` / `AGENTS.md` / `STATUS.md` / `CHANGELOG.md` / `PROJECT_INDEX.md` / `.project_info`、以及本机代码实测(grep / pytest 子集)

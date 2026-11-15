@@ -1,9 +1,9 @@
 # SecureRedact 测试与 CI 质量分析报告
 
-- **分析对象**：工作目录 `G:\Project\SecureRedact\.agents\worktrees\dsh-3eb2fb3e-5817`
+- **分析对象**：工作目录 `<repo root>`
 - **分支 / 提交**：`dsh-3eb2fb3e-5817` @ `3a62724`（`docs(refactor): PR-V2 完成报告 — 6 类组件 .qss + 复用`）
 - **分析日期**：2026-11-12
-- **执行环境**：Windows · Python 3.13.5 (`C:\Users\rende\AppData\Local\Programs\Python\Python313`) · pytest 9.1.1 · pytest-cov 6.2.1 · PyQt6 6.11.0 · PyMuPDF 1.26.4 · rapidocr-onnxruntime 1.2.3 · jieba 0.42.1 · mammoth 1.12.1
+- **执行环境**：Windows · Python 3.13.5 (`<python install dir>`) · pytest 9.1.1 · pytest-cov 6.2.1 · PyQt6 6.11.0 · PyMuPDF 1.26.4 · rapidocr-onnxruntime 1.2.3 · jieba 0.42.1 · mammoth 1.12.1
 - **运行方式**：`QT_QPA_PLATFORM=offscreen`、`PYTHONIOENCODING=utf-8`
 - **约束遵守**：未修改任何被测源码、未修改任何既有测试文件；本报告 + 临时脚本/产物全部位于 `docs/analysis/`
 
@@ -234,10 +234,10 @@ ERROR: Coverage failure: total of 92 is less than fail-under=100
 
 | # | 失败用例 | 原因 |
 |---|---|---|
-| D1 | `test_path_validation.py::test_extension_whitelist_case_insensitive` | 用 `C:\Users\Admin\test.DOCX`，在本机（家目录 `C:\Users\rende`）落到"路径不在允许范围内"，根本没走到扩展名大小写判断 |
+| D1 | `test_path_validation.py::test_extension_whitelist_case_insensitive` | 用 `C:\Users\Admin\test.DOCX`，在本机（家目录 `<user home>`）落到"路径不在允许范围内"，根本没走到扩展名大小写判断 |
 | D2 | `test_path_validation.py::test_windows_backslash_path_allowed_on_windows` | 同上，`C:\Users\Admin\test.docx` 不在本机允许目录内 |
 | D3 | `test_path_validation.py::test_prefix_bypass_path_rejected` | 期望错误含"不在允许范围"，实际先命中"路径包含危险字符: `'`'" —— 测试 patch `platform.system()="Darwin"`，但 `os.path.expanduser("~")` 在 Windows 上仍返回带反斜杠的路径 |
-| D4 | `test_path_validation.py::test_temp_path_allowed` | 期望通过，实际"路径包含危险字符" —— patch 成 Darwin 后 `tempfile.gettempdir()` 仍返回 `C:\Users\rende\AppData\Local\Temp` |
+| D4 | `test_path_validation.py::test_temp_path_allowed` | 期望通过，实际"路径包含危险字符" —— patch 成 Darwin 后 `tempfile.gettempdir()` 仍返回 `<temp dir>` |
 
 > ⚠️ **CI 含义**：D3/D4 在 Ubuntu runner 上会通过（`gettempdir()` = `/tmp`），在 Windows runner 上必失败。D1/D2 在**任何**机器上都失败（家目录写死 `C:\Users\Admin`）。这 4 例是"Windows 专属红灯 + 路径写死"的混合问题。
 
