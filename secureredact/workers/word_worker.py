@@ -12,12 +12,17 @@ from typing import Dict, List, Optional
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from secureredact.redaction.black_white_list_store import BlackWhiteListStore
+from secureredact.redaction.conflict_resolver import resolve_rule_conflicts  # P0-5: 规则冲突消解
 from secureredact.redaction.whitelist_split import _split_text_by_whitelist
 from secureredact.utils.masking import apply_mask_for_rule, apply_name_mask
 from secureredact.utils.masking import apply_mask_for_rule
 
 # 常量定义
-PROGRESS_UPDATE_INTERVAL = 0.05
+# P0-5 修复: 原为硬编码 0.05,导致 config.json 的 ocr.progress_update_interval
+#             形同虚设。改回 config 派生(默认值不变)。
+from secureredact.utils.config import config as _config  # noqa: E402
+
+PROGRESS_UPDATE_INTERVAL = _config.get("ocr.progress_update_interval", 0.05)
 
 
 class WordWorker(QThread):
@@ -224,6 +229,12 @@ class WordWorker(QThread):
                 if m['source'] != 'jieba' or
                 not any(rs <= m['start'] and m['end'] <= re_ for rs, re_ in rule_ranges)
             ]
+
+            # P0-5 修复: 规则冲突消解 —— 同一段文本被多条规则命中时只保留优先级最高的一条。
+            #   典型场景: 18 位身份证号会同时命中「身份证号 / 统一社会信用代码 / 银行卡号」
+            #   (字符集高度重叠) -> 命中数翻 3 倍、遮蔽边界不一致、命中统计失真。
+            #   只对数字类标识符规则生效, 其他规则行为完全不变。
+            matches = resolve_rule_conflicts(matches)
 
         return matches
 

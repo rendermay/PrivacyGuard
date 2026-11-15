@@ -15,11 +15,12 @@ def _read_version():
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except OSError:
-        return "1.1.12"
+        # P0-5: fallback must stay in sync with version.txt.
+        # Guarded by tests/unit/test_version_fallback_sync.py to prevent drift.
+        return "1.1.15"
 
 
 __version__ = _read_version()
-__app_name__ = "SecureRedact 信息脱敏助手"
 
 # 导出工具模块（使用绝对导入，修复 PyInstaller 打包问题）
 from secureredact.utils import (
@@ -33,6 +34,13 @@ from secureredact.utils import (
     validate_safe_path,
     resource_path,
 )
+
+# P0-5: global config singleton (built by secureredact.utils.config at package import).
+# Used to make ZOOM_MIN / ZOOM_MAX / APP_NAME config-derived instead of hardcoded.
+from secureredact.utils.config import config as _config_singleton  # noqa: E402
+
+# P0-5: app name from config (was hardcoded -> window title and feedback dialog disagreed).
+__app_name__ = _config_singleton.get("app.name", "SecureRedact 信息脱敏助手")
 
 # PR-C4 业务 API 层(plan §2.3 任务 1.3)
 # 注意:这会触发 api.py 顶层 import PyQt6,因为 batch_redact_word 同步化依赖
@@ -105,19 +113,17 @@ __all__ = [
 WORD_RULE_SCHEMA_VERSION = 1
 
 # PR-C6.2:ZOOM_MIN / ZOOM_MAX 从 main.py 顶层迁出。
-# 原 main.py 用 config.get("ocr.zoom_min", 0.5) / config.get("ocr.zoom_max", 4.0),
-# 此处接受失去运行时可配置性(plan §4.3 任务 N — UI 内部常量末批)。
-# 如需恢复可配置,后续可在 secureredact/utils/runtime_config.py 提供 SimpleConfig
-# singleton 后再切回 config 派生。
-ZOOM_MIN = 0.5
-ZOOM_MAX = 4.0
+# P0-5 修复: 原实现硬编码 0.5/4.0,导致 config.json 的 ocr.zoom_min/zoom_max
+#             形同虚设(改配置不生效)。现改回 config 派生 —— config singleton
+#             由 secureredact.utils.config 在包导入时建立,无额外 IO 开销。
+ZOOM_MIN = _config_singleton.get("ocr.zoom_min", 0.5)
+ZOOM_MAX = _config_singleton.get("ocr.zoom_max", 4.0)
 
 # PR-C6.3:APP_NAME / VERSION 从 main.py 顶层迁出。
-# APP_NAME 原 main.py 派生: config.get("app.name", "SecureRedact 信息脱敏助手")
-# VERSION 原 main.py 派生: VERSION = APP_VERSION, APP_VERSION = read_app_version()
-# 此处 APP_NAME 硬编码(默认值与原 config 一致),
-# VERSION 走 read_app_version()(读 version.txt,已存在 secureredact.__version__ 来源)。
-APP_NAME = "SecureRedact 信息脱敏助手"
+# P0-5 修复: 原实现硬编码应用名,导致 config.json 的 app.name 只影响窗口标题、
+#             不影响从 secureredact 导入 APP_NAME 的调用点(如反馈对话框),
+#             同屏出现两个名字。现统一为 config 派生。
+APP_NAME = _config_singleton.get("app.name", "SecureRedact 信息脱敏助手")
 
 
 def VERSION():

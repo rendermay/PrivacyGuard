@@ -36,6 +36,14 @@ import tempfile
 from pathlib import Path
 
 
+# 允许从任意 cwd 直接运行(`python scripts/render_visual_baseline.py`):
+# CI 就是这么调的,脚本必须自己把仓库根加入 sys.path,
+# 否则 `import secureredact...` 会抛 ModuleNotFoundError: No module named 'secureredact'。
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
+
 # 必须在所有 Qt / PyQt6 import 之前设置 offscreen
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 

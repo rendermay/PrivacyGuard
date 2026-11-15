@@ -16,8 +16,14 @@ class TestAppConfig(unittest.TestCase):
         self.assertEqual(read_app_version(), expected)
 
     def test_read_app_version_falls_back_to_current_release(self):
+        """version.txt 缺失时, fallback 必须等于 version.txt 的内容(不能漂移)。
+
+        P0-5: 原断言硬编码 "1.1.12",而 version.txt 已是 1.1.13 ——
+        打包路径异常时 UI 会显示旧版本号。现改为与 version.txt 动态对齐。
+        """
+        expected = (Path(__file__).resolve().parents[2] / "version.txt").read_text(encoding="utf-8").strip()
         with patch("main.Path.read_text", side_effect=OSError):
-            self.assertEqual(read_app_version(), "1.1.12")
+            self.assertEqual(read_app_version(), expected)
 
     def test_simple_config_save_persists_multiple_values(self):
         fd, temp_path = tempfile.mkstemp(suffix=".json")

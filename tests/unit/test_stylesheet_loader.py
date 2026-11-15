@@ -6,14 +6,16 @@ v1.1.13 PR-B1 (QSS 集中化) 回归测试
 - get_substitution_map() 返回 16 颜色 + 3 字体 共 19 个键
 - render_stylesheet() 替换所有占位符,无残留
 - _PLACEHOLDER_RE 不误伤 QSS 自身 { ... } 规则体
-- main.py 中 _apply_light_theme 已大幅瘦身(QSS 字符串数量减少 ≥ 80%)
+- secureredact/ui/main_window/theme.py 中 _apply_theme 已大幅瘦身(QSS 字符串数量减少 ≥ 80%)
 - DARK 主题内部 API 通(render("dark") 不报错,含 dark 主色)
 """
 
 import re
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+import secureredact.ui.styles.glass as glass
 from secureredact.ui.styles import (
     DARK,
     FONT_FAMILY,
@@ -27,7 +29,15 @@ from secureredact.ui.styles import (
 )
 from secureredact.ui.styles.loader import _PLACEHOLDER_RE, SCOPES
 
-MAIN_PY = Path(__file__).resolve().parents[2] / "main.py"
+# PR-C1 起主题 mixin 从 main.py 迁至 secureredact/ui/main_window/theme.py
+# (main.py 现为过渡期 shim, 不再承载 QSS / 主题实现)
+THEME_PY = (
+    Path(__file__).resolve().parents[2]
+    / "secureredact"
+    / "ui"
+    / "main_window"
+    / "theme.py"
+)
 
 
 # Tokens 数据集完整 16 字段(Light/Dark 共用)
@@ -143,16 +153,48 @@ class TestThemeMapping(unittest.TestCase):
 class TestRenderStylesheet(unittest.TestCase):
     """render_stylesheet 渲染正确性。"""
 
+    # 说明: glass.GLASS_AVAILABLE 是**导入期求值**的模块级全局,取值依赖
+    # "导入 glass 的那一刻是否已存在 QApplication 实例":
+    #   - 已有实例 → platformName() 返回 'offscreen' → 判定玻璃不可用(降级)
+    #   - 无实例   → platformName() 返回 'windows'   → 判定玻璃可用
+    # 这让 QSS 渲染结果依赖 import 顺序(历史上手工全量跑时因先前有 GUI 测试
+    # 创建过 QApplication 而恰好走到降级分支)。此处显式固定该前置条件,
+    # 消除顺序依赖 —— 断言强度不变, 只是把原本隐式的前提显式化。
+    def _render_fallback(self, theme_name: str) -> str:
+        """在玻璃降级模式(CI / headless 实际走的路径)下渲染样式表。"""
+        with patch.object(glass, "GLASS_AVAILABLE", False):
+            return render_stylesheet(theme_name)
+
     def test_render_light_no_residual_tokens(self):
         """light 主题:渲染后无任何 [a-z_]+ 形态的占位符残留。"""
-        qss = render_stylesheet("light")
+        qss = self._render_fallback("light")
         # 我们的占位符正则: [a-z_][a-z0-9_]*,且不在 CSS 规则体内部(规则体里都是大写选择器)
         residual = _PLACEHOLDER_RE.findall(qss)
         self.assertEqual(residual, [], f"residual placeholders: {set(residual)}")
 
     def test_render_dark_no_residual_tokens(self):
         """dark 主题:同上,无残留占位符。"""
-        qss = render_stylesheet("dark")
+        qss = self._render_fallback("dark")
+        residual = _PLACEHOLDER_RE.findall(qss)
+        self.assertEqual(residual, [], f"residual placeholders: {set(residual)}")
+
+    def test_render_with_glass_available_has_no_residual_tokens(self):
+        """
+        [P0-5 FIXED] Glass-available mode (desktop) must also leave no
+        residual placeholder in the final stylesheet.
+
+        Regression: get_glass_substitution() returns {} when
+        GLASS_AVAILABLE=True, and card_background / dock_background are
+        not among the 19 theme tokens -- so the final QSS used to keep a
+        literal {card_background} placeholder, which Qt cannot parse ->
+        card / dock panel backgrounds were lost.
+
+        Fix: loader._build_mapping() setdefault-falls-back the two
+        placeholders to theme tokens; glass._detect_glass() now requires a
+        real QApplication instance so headless envs are not misdetected.
+"""
+        with patch.object(glass, "GLASS_AVAILABLE", True):
+            qss = render_stylesheet("light")
         residual = _PLACEHOLDER_RE.findall(qss)
         self.assertEqual(residual, [], f"residual placeholders: {set(residual)}")
 
@@ -215,27 +257,42 @@ class TestRegexPrecision(unittest.TestCase):
             self.assertIsNone(m, f"误匹配大写/连字符 token: {bad}")
 
 
-class TestMainPyQssReduction(unittest.TestCase):
-    """main.py 中 QSS 集中化收益断言。"""
+class TestThemeQssReduction(unittest.TestCase):
+    """主题 mixin 中 QSS 集中化收益断言。
 
-    def test_apply_light_theme_under_80_lines(self):
-        """_apply_light_theme 函数体行数 < 80(原 615 行,要求 < 50 但 docstring/局部样式占位)。"""
-        source = MAIN_PY.read_text(encoding="utf-8")
+    PR-C1 起主题 mixin 从 main.py 迁至 secureredact/ui/main_window/theme.py,
+    方法由 _apply_light_theme(self) 统一为 _apply_theme(self, name=None)
+    (同时支持 light / dark / system 三种主题);PR-B0 后 main.py 仅为过渡期
+    shim, 不再承载主题实现。
+
+    断言锚点随之更新 —— 断言强度不变, 只是指向真实实现所在文件。
+    (原锚点在 main.py 中定位不到方法, 导致断言静默退化)
+    """
+
+    def _apply_theme_body(self) -> str:
+        """提取 theme.py 中 _apply_theme 方法体源码(用于静态断言)。"""
+        source = THEME_PY.read_text(encoding="utf-8")
         # 锁定函数体起止
-        start = source.find("    def _apply_light_theme(self):")
-        self.assertNotEqual(start, -1)
-        end = source.find("    def __init__(self):", start)
-        self.assertNotEqual(end, -1)
-        body = source[start:end]
-        line_count = body.count("\n")
-        self.assertLess(line_count, 80, f"_apply_light_theme 函数体 {line_count} 行,期望 < 80")
+        start = source.find("    def _apply_theme(self, name=None):")
+        self.assertNotEqual(
+            start, -1,
+            "secureredact/ui/main_window/theme.py 应定义 "
+            "_apply_theme(self, name=None)")
+        end = source.find("    def set_theme(self, name):", start)
+        self.assertNotEqual(
+            end, -1,
+            "theme.py 中 _apply_theme 之后应定义 set_theme(self, name)")
+        return source[start:end]
 
-    def test_apply_light_theme_no_long_fstring_blocks(self):
-        """原 _apply_light_theme 中的大块 f-string(QSS)不应再出现。"""
-        source = MAIN_PY.read_text(encoding="utf-8")
-        start = source.find("    def _apply_light_theme(self):")
-        end = source.find("    def __init__(self):", start)
-        body = source[start:end]
+    def test_apply_theme_under_80_lines(self):
+        """_apply_theme 函数体行数 < 80(原 main.py 中 _apply_light_theme 有 615 行)。"""
+        body = self._apply_theme_body()
+        line_count = body.count("\n")
+        self.assertLess(line_count, 80, f"_apply_theme 函数体 {line_count} 行,期望 < 80")
+
+    def test_apply_theme_no_long_fstring_blocks(self):
+        """原主题方法中的大块 f-string(QSS)不应再出现。"""
+        body = self._apply_theme_body()
         # 标志性字符串:原 600+ 行 QSS 包含这些
         for marker in (
             'QFrame#workbenchPanel {{',
@@ -244,15 +301,15 @@ class TestMainPyQssReduction(unittest.TestCase):
         ):
             self.assertNotIn(marker, body, f"原 QSS 块未迁移: {marker!r}")
 
-    def test_apply_light_theme_calls_loader(self):
-        """_apply_light_theme 必须调用 StylesheetLoader.apply(self, "light", scope="main")。"""
-        source = MAIN_PY.read_text(encoding="utf-8")
-        start = source.find("    def _apply_light_theme(self):")
-        end = source.find("    def __init__(self):", start)
-        body = source[start:end]
+    def test_apply_theme_calls_loader(self):
+        """_apply_theme 必须通过 StylesheetLoader 应用样式(scope="main")。"""
+        body = self._apply_theme_body()
         self.assertIn("StylesheetLoader", body)
         self.assertIn('"light"', body)
         self.assertIn('scope="main"', body)
+        # 额外:必须真的用当前窗口实例调用 loader.apply(self, ...)
+        self.assertIn("loader.apply(self,", body,
+            "_apply_theme 必须调用 loader.apply(self, ...) 应用样式")
 
 
 class TestStylesheetsDirectory(unittest.TestCase):

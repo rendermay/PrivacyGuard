@@ -82,21 +82,35 @@ else
     print_warn "未找到虚拟环境，使用系统 Python"
 fi
 
-# 检查 PyInstaller
-if ! python3 -c "import PyInstaller" 2>/dev/null; then
-    print_info "安装 PyInstaller"
-    python3 -m pip install pyinstaller
-fi
+# 安装/校验锁定版构建依赖 (P0-5: pyinstaller + pyinstaller-hooks-contrib 必须锁版本)
+# jieba 的 5MB 词典(jieba/dict.txt)只能靠 hooks-contrib 的 hook-jieba.py 进包，
+# 缺失则打包版中文姓名识别静默失效且无任何报错。
+print_info "安装锁定版构建依赖 (packaging/requirements-build.txt)"
+python3 -m pip install -r "${PROJECT_ROOT}/packaging/requirements-build.txt"
 
 # 检查图标文件
-if [ ! -f "${MACOS_DIR}/assets/SecureRedact.icns" ]; then
-    print_error "未找到图标文件: SecureRedact.icns"
+# 注意: 必须与 spec 中 BUNDLE(icon=...) 传入的路径保持一致。
+# packaging/macos/config/SecureRedact.spec 用的是项目根 assets/logo/macos/AppIcon.icns
+# （旧的 packaging/macos/assets/PrivacyGuard.icns 是重命名前的遗留副本，spec 未引用）。
+# 之前这里检查的是 assets/SecureRedact.icns —— 该文件从不存在，脚本会在此行 100% exit 1。
+APP_ICON="${PROJECT_ROOT}/assets/logo/macos/AppIcon.icns"
+APP_ICON_NAME="$(basename "${APP_ICON}")"
+if [ ! -f "${APP_ICON}" ]; then
+    print_error "未找到图标文件: ${APP_ICON}"
     exit 1
 fi
+print_info "应用图标: ${APP_ICON}"
 
 # 检查 spec 文件
 if [ ! -f "${MACOS_DIR}/config/SecureRedact.spec" ]; then
     print_error "未找到打包配置文件: SecureRedact.spec"
+    exit 1
+fi
+
+# 校验 spec 的 datas 路径（不实际打包）
+# version.txt / config.json 必须打进应用目录，否则运行时版本号与配置会退化。
+if ! python3 "${PROJECT_ROOT}/packaging/verify_spec_datas.py"; then
+    print_error "Spec 校验失败: 请检查 packaging/macos/config/SecureRedact.spec 的 datas 条目"
     exit 1
 fi
 
@@ -145,7 +159,10 @@ fi
 REQUIRED_FILES=(
     "Contents/MacOS/${APP_NAME}"
     "Contents/Info.plist"
-    "Contents/Resources/${APP_NAME}.icns"
+    # PyInstaller 的 BUNDLE 会把 icns 原样拷贝到 Contents/Resources/<icns 文件名>
+    # (osx.py: shutil.copyfile(self.icon, .../Contents/Resources/basename(self.icon)))
+    # 因此这里必须是 AppIcon.icns，而不是 ${APP_NAME}.icns。
+    "Contents/Resources/${APP_ICON_NAME}"
 )
 
 for file in "${REQUIRED_FILES[@]}"; do
@@ -154,6 +171,24 @@ for file in "${REQUIRED_FILES[@]}"; do
         exit 1
     fi
 done
+
+# P0-1: version.txt 必须随包分发（缺失会落 fallback "1.1.12"，与 Info.plist 版本不一致）
+if [ -f "${APP_PATH}/Contents/Resources/version.txt" ] || [ -f "${APP_PATH}/Contents/Frameworks/version.txt" ]; then
+    print_info "version.txt 存在"
+else
+    print_error "version.txt 未打进 .app"
+    print_error "请检查 packaging/macos/config/SecureRedact.spec 的 datas 是否包含 version.txt"
+    exit 1
+fi
+
+# P0-2: config.json 必须随包分发（应用目录）
+if [ -f "${APP_PATH}/Contents/Resources/config.json" ] || [ -f "${APP_PATH}/Contents/Frameworks/config.json" ]; then
+    print_info "config.json 存在"
+else
+    print_error "config.json 未打进 .app"
+    print_error "请检查 packaging/macos/config/SecureRedact.spec 的 datas 是否包含 config.json"
+    exit 1
+fi
 
 print_info ".app 结构验证通过"
 

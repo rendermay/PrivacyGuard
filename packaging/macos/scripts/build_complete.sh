@@ -74,6 +74,14 @@ if ! command -v create-dmg &> /dev/null; then
 else
     CREATE_DMG_AVAILABLE=true
 fi
+echo "[INFO] 校验 PyInstaller spec 的 datas 路径..."
+if ! python3 packaging/verify_spec_datas.py; then
+    echo ""
+    echo "[ERROR] Spec 校验失败!"
+    echo "         请检查 packaging/macos/config/SecureRedact.spec 的 datas 条目"
+    echo "         version.txt / config.json 必须打进应用目录"
+    exit 1
+fi
 echo "[OK] 环境检查通过"
 echo ""
 
@@ -97,10 +105,13 @@ echo ""
 
 source "$VENV_PATH/bin/activate"
 
-if ! python3 -c "import PyInstaller" 2>/dev/null; then
-    echo "[INFO] 当前环境未安装 PyInstaller，正在安装..."
-    python3 -m pip install pyinstaller
-fi
+# P0-5: 锁定构建期依赖版本(pyinstaller + pyinstaller-hooks-contrib)。
+# 之前的 "pip install pyinstaller" 不带版本约束，会装成当天最新版，与
+# requirements.txt 里固定的 pyinstaller==6.18.0 不一致 -> 构建不可复现。
+# pyinstaller-hooks-contrib 未固定更危险：jieba 的 5MB 词典(dict.txt)只能靠
+# 它的 hook-jieba.py 进包，缺失则打包版中文姓名识别静默失效。
+echo "[INFO] 校验/安装锁定版构建依赖..."
+python3 -m pip install -r "$PROJECT_DIR/packaging/requirements-build.txt"
 
 export PYINSTALLER_CONFIG_DIR
 echo "[INFO] 使用本地 PyInstaller 缓存: $PYINSTALLER_CONFIG_DIR"
@@ -135,6 +146,38 @@ if [ -f "$APP_PATH/Contents/Resources/assets/donate_qrcode.png" ]; then
     echo "  [OK] assets/donate_qrcode.png 存在"
 else
     echo "  [WARN] assets/donate_qrcode.png 不存在 (打赏功能将不可用)"
+fi
+
+# P0-1: version.txt 必须随包分发。
+# 冻结后 secureredact/__init__.py 与 secureredact/ui/main_window/window.py
+# 都用 Path(__file__).parent../version.txt 读版本；缺失时落 fallback "1.1.12"，
+# 与 Info.plist 的 CFBundleVersion 不一致。
+# macOS 下 DATA 落在 Contents/Resources，并在 Contents/Frameworks(=sys._MEIPASS)
+# 建立同名符号链接，两处都检查以防布局变化。
+if [ -f "$APP_PATH/Contents/Resources/version.txt" ] || [ -f "$APP_PATH/Contents/Frameworks/version.txt" ]; then
+    echo "  [OK] version.txt 存在"
+else
+    echo "  [FAIL] version.txt 未打进 .app"
+    echo "         请检查 packaging/macos/config/SecureRedact.spec 的 datas 是否包含 version.txt"
+    exit 1
+fi
+
+# P0-2: config.json 必须随包分发（应用目录）
+if [ -f "$APP_PATH/Contents/Resources/config.json" ] || [ -f "$APP_PATH/Contents/Frameworks/config.json" ]; then
+    echo "  [OK] config.json 存在"
+else
+    echo "  [FAIL] config.json 未打进 .app"
+    echo "         请检查 packaging/macos/config/SecureRedact.spec 的 datas 是否包含 config.json"
+    exit 1
+fi
+
+# GPL-3.0 分发要求: .app 内必须带许可证全文
+if [ -f "$APP_PATH/Contents/Resources/LICENSE" ]; then
+    echo "  [OK] LICENSE 存在"
+else
+    echo "  [FAIL] LICENSE 未打进 .app"
+    echo "         请检查 packaging/macos/config/SecureRedact.spec 的 datas 是否包含 LICENSE"
+    exit 1
 fi
 
 echo "[OK] 验证通过"

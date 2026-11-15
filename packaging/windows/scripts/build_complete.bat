@@ -20,10 +20,13 @@ set "PROJECT_DIR=%SCRIPT_DIR%..\..\.."
 for %%i in ("%PROJECT_DIR%") do set "PROJECT_DIR=%%~fi"
 
 :: Verify project directory exists
-if not exist "%PROJECT_DIR%\main.py" (
+:: 入口文件：阶段 B5 收口后根 main.py 会被移除，入口迁到 secureredact\main.py，
+:: 因此这里两个都接受。
+if not exist "%PROJECT_DIR%\main.py" if not exist "%PROJECT_DIR%\secureredact\main.py" (
     echo [ERROR] Cannot find project directory
     echo [HINT] Expected: %PROJECT_DIR%
     echo [HINT] Make sure script is in packaging\windows\scripts\
+    echo [HINT] Entry point not found: main.py or secureredact\main.py
     pause
     exit /b 1
 )
@@ -105,9 +108,10 @@ if not exist "%ICON_PATH%" (
 )
 echo [OK] icon file found
 
-:: Check main.py
-if not exist "%PROJECT_DIR%\main.py" (
-    echo [ERROR] main.py not found
+:: Check entry point
+:: main.py 是过渡期 shim；阶段 B5 收口后会被移除，入口是 secureredact\main.py。
+if not exist "%PROJECT_DIR%\main.py" if not exist "%PROJECT_DIR%\secureredact\main.py" (
+    echo [ERROR] Entry point not found (main.py or secureredact\main.py)
     pause
     exit /b 1
 )
@@ -154,6 +158,19 @@ if errorlevel 1 (
     exit /b 1
 )
 echo [OK] All dependencies verified
+echo.
+
+echo [Phase 3.2/8] Verifying PyInstaller spec data files...
+python "%PROJECT_DIR%\packaging\verify_spec_datas.py"
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Spec verification failed!
+    echo [HINT] Check datas entries in packaging\windows\config\SecureRedact_windows.spec
+    echo [HINT] version.txt / config.json must be packaged into the application directory
+    pause
+    exit /b 1
+)
+echo [OK] Spec verification passed
 echo.
 
 echo [Phase 3.5/8] Generating version resource...
@@ -272,6 +289,27 @@ if exist "%DIST_DIR%\%APP_NAME%\assets\donate_qrcode.png" (
     echo   [OK] assets\donate_qrcode.png exists
 ) else (
     echo   [WARN] assets\donate_qrcode.png not found
+)
+
+:: P0-1: version.txt 必须随包分发
+:: 冻结后 secureredact\__init__.py 与 secureredact\ui\main_window\window.py
+:: 都用 Path(__file__).parent..\version.txt 读版本；缺失时落 fallback "1.1.12"，
+:: 与 EXE 版本资源(version_info.txt)不一致 -> 窗口标题/关于窗口/EXE 属性三处打架。
+if exist "%DIST_DIR%\%APP_NAME%\version.txt" (
+    echo   [OK] version.txt exists
+) else (
+    echo   [FAIL] version.txt not found in dist
+    echo   [HINT] Check datas in packaging\windows\config\SecureRedact_windows.spec
+    set "VERIFY_FAIL=1"
+)
+
+:: P0-2: config.json 必须随包分发（应用目录）
+if exist "%DIST_DIR%\%APP_NAME%\config.json" (
+    echo   [OK] config.json exists
+) else (
+    echo   [FAIL] config.json not found in dist
+    echo   [HINT] Check datas in packaging\windows\config\SecureRedact_windows.spec
+    set "VERIFY_FAIL=1"
 )
 
 if "%VERIFY_FAIL%"=="1" (

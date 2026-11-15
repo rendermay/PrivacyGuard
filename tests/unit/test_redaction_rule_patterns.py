@@ -266,25 +266,35 @@ class TestV113CodeLayerRuleOverrides(unittest.TestCase):
     仍强制以下行为:
       1) '日期时间' 规则强制从 DEFAULT_RULES 移除 (默认禁用)
       2) '法定代表人' pattern 强制覆盖为带正向 lookahead 的版本
-    本测试通过 main.py 源码静态检查覆盖逻辑, 避免 import main.py
-    触发 PyQt6 DLL 加载 (测试环境受限).
+
+    实现位置: PR-C6.5 起 _v113_apply_rule_overrides 及其 DEFAULT_RULES /
+    DEFAULT_RULES_META 构建从 main.py 迁至
+    secureredact/redaction/rules_loader.py(PR-B0 后 main.py 仅为 shim)。
+    本测试的断言锚点随之更新到 rules_loader.py —— 断言强度不变, 只是
+    指向真实实现所在文件。仍采用源码静态检查, 避免 import 触发
+    PyQt6 DLL 加载 (测试环境受限)。
     """
 
     @staticmethod
-    def _read_main_src() -> str:
-        return Path(__file__).resolve().parents[2].joinpath("main.py").read_text(
-            encoding="utf-8"
-        )
+    def _read_rules_loader_src() -> str:
+        """读取 secureredact/redaction/rules_loader.py 源码。"""
+        return (
+            Path(__file__).resolve().parents[2]
+            / "secureredact"
+            / "redaction"
+            / "rules_loader.py"
+        ).read_text(encoding="utf-8")
 
     def test_v113_override_function_defined(self):
-        """_v113_apply_rule_overrides 必须在 main.py 定义."""
-        src = self._read_main_src()
+        """_v113_apply_rule_overrides 必须在 rules_loader.py 定义."""
+        src = self._read_rules_loader_src()
         self.assertIn("def _v113_apply_rule_overrides():", src,
-            "main.py 必须定义 _v113_apply_rule_overrides 函数")
+            "secureredact/redaction/rules_loader.py 必须定义 "
+            "_v113_apply_rule_overrides 函数")
 
     def test_v113_override_removes_date_time(self):
         """override 必须从 DEFAULT_RULES 移除 '日期时间'."""
-        src = self._read_main_src()
+        src = self._read_rules_loader_src()
         self.assertIn('DEFAULT_RULES.pop("日期时间", None)', src,
             "_v113_apply_rule_overrides 必须 pop '日期时间'")
         self.assertIn('DEFAULT_RULES_META.pop("日期时间", None)', src,
@@ -292,7 +302,7 @@ class TestV113CodeLayerRuleOverrides(unittest.TestCase):
 
     def test_v113_override_replaces_legal_rep_pattern(self):
         """override 必须把 '法定代表人' pattern 替换为带 lookahead 版本."""
-        src = self._read_main_src()
+        src = self._read_rules_loader_src()
         # lookhead 边界集合的关键片段必须存在
         self.assertIn("[的之及与和按于在跟同向对为由被让等", src,
             "_v113_apply_rule_overrides 必须覆盖 '法定代表人' pattern 为带 lookahead 版本")
@@ -301,12 +311,25 @@ class TestV113CodeLayerRuleOverrides(unittest.TestCase):
 
     def test_v113_override_called_in_both_config_paths(self):
         """override 必须在 if config 分支和 else fallback 分支都被调用."""
-        src = self._read_main_src()
-        count = src.count("_v113_apply_rule_overrides()")
-        # 至少 3 次: 1 次定义 + 1 次 if 分支调用 + 1 次 else 分支调用
-        self.assertGreaterEqual(count, 3,
-            f"_v113_apply_rule_overrides 应被调用至少 2 次 (if/else 两个分支), "
-            f"源码实际出现次数: {count}")
+        src = self._read_rules_loader_src()
+        # 独立调用点(整行只有函数调用, 不含 def 行与 docstring 中的提及):
+        # if config 分支 1 次 + else fallback 分支 1 次
+        call_sites = [
+            m.start()
+            for m in re.finditer(
+                r"^\s{4}_v113_apply_rule_overrides\(\)\s*$", src, re.M
+            )
+        ]
+        self.assertGreaterEqual(
+            len(call_sites), 2,
+            "_v113_apply_rule_overrides 应在 if config 与 else fallback 两个分支"
+            f"各调用一次, 源码实际独立调用点数: {len(call_sites)}")
+        # 两个调用点之间必须出现 else: → 证明两个调用点分属不同分支
+        between = src[call_sites[0]:call_sites[1]]
+        self.assertIn(
+            "else:", between,
+            "两个 _v113_apply_rule_overrides 调用点必须分别位于 "
+            "'if config:' 分支与 'else:' fallback 分支")
 
 
 class TestPlaintiffNameRedaction(unittest.TestCase):

@@ -25,10 +25,15 @@ from PyQt6.QtWidgets import (
 from secureredact.redaction.hit_ref import HitRef
 
 
-# DEBUG_MODE:与 main.py:318 行为对齐(仅读 env,不读 config.advanced.debug_mode)。
-# 配置项默认 False,生产无影响;调试场景若 config 已显式 DEBUG=true 但 env 未设,
-# 本模块读 env 拿到 false,造成 DEBUG 输出静默化。后续 PR-B2.x 阶段统一收口。
-DEBUG_MODE = os.getenv("PRIVACYGUARD_DEBUG", "False").lower() == "true"
+# DEBUG_MODE: P0-5 修复 —— 原实现只读 env,导致 config.advanced.debug_mode=true
+# 时本模块拿到 False(调试输出被静默化)。现与 window.py / main.py 统一语义:
+#   env 显式开启 OR config 开启,任一为真即为真。
+from secureredact.utils.config import config as _config  # noqa: E402
+
+DEBUG_MODE = (
+    os.getenv("PRIVACYGUARD_DEBUG", "False").lower() == "true"
+    or bool(_config.get("advanced.debug_mode", False))
+)
 
 
 class SinglePageCanvas(QLabel):

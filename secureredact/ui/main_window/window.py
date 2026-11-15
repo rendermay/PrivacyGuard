@@ -118,7 +118,9 @@ def read_app_version():
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except OSError:
-        return "1.1.12"
+        # P0-5: fallback must stay in sync with version.txt.
+        # Guarded by tests/unit/test_version_fallback_sync.py to prevent drift.
+        return "1.1.15"
 
 
 # === 软件配置 ===
@@ -127,7 +129,13 @@ APP_NAME = config.get("app.name", "SecureRedact 信息脱敏助手") if config e
 APP_VERSION = read_app_version()
 VERSION = APP_VERSION
 # v1.1.11: 从配置读取，失败时使用硬编码后备
-DEBUG_MODE = os.getenv('PRIVACYGUARD_DEBUG', 'False').lower() == 'true' if not config else config.get("advanced.debug_mode", False)
+# P0-5 修复: 原三元表达式的语义是「config 存在就只看 config, 完全忽略 env」,
+#             导致 PRIVACYGUARD_DEBUG=true 在 config 存在时被静默忽略。
+#             现统一为「env 开启 OR config 开启」, 与 canvas.py 一致。
+DEBUG_MODE = (
+    os.getenv('PRIVACYGUARD_DEBUG', 'False').lower() == 'true'
+    or bool(config.get("advanced.debug_mode", False) if config else False)
+)
 
 
 # === 主窗口 ===
@@ -201,7 +209,12 @@ class MainWindow(MainWindowToolbarMixin, MainWindowWorkbenchMixin, MainWindowWor
             self.current_blacklist = config.get("redaction.blacklist", []) or []
             self.current_whitelist = config.get("redaction.whitelist", []) or []
             # PR-C1: 主题(PR-B1 DARK API 通后启用)
-            self.theme_name = config.get("app.theme", "light")
+            # P0-5 修复: 配置键统一到 ui.theme —— 出厂 config.json / DEFAULT_CONFIG 里
+            #             的主题键是 ui.theme, 但代码读的是 app.theme(不存在) ->
+            #             永远退回 "light", 用户设的主题从来没被读过。
+            #             "auto" 归一为 "system"(跟随系统外观)。
+            _theme_raw = config.get("ui.theme", "light") or "light"
+            self.theme_name = "system" if _theme_raw == "auto" else _theme_raw
             # v1.1.11: 移除 OCR 引擎配置，只使用 RapidOCR
         else:
             min_width, min_height = 900, 600

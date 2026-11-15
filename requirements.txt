@@ -25,5 +25,9 @@ sympy==1.14.0
 typing_extensions==4.15.0
 beautifulsoup4==4.14.3
 pyinstaller==6.18.0
+# P0-5: hooks-contrib 必须锁版 —— jieba 的 5MB 中文词典只靠它的 hook-jieba.py 进包,
+#   该 hook 缺失/改名时打包版姓名识别会静默失效(无任何用户可见报错)。
+#   与 packaging/requirements-build.txt 保持同一版本源。
+pyinstaller-hooks-contrib==2026.10
 psutil>=5.9.0
 jieba==0.42.1

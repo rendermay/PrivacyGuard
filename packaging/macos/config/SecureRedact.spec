@@ -38,8 +38,17 @@ a = Analysis(
     datas=[
         # 包含主题文件
         (os.path.join(project_root, 'theme.py'), '.'),
-        # 包含配置文件
+        # 包含配置文件（应用目录 = sys._MEIPASS）
+        # 注: macOS .app 中 sys._MEIPASS == Contents/Frameworks；
+        # PyInstaller 会把 DATA 落到 Contents/Resources 并在 Contents/Frameworks
+        # 建立同名符号链接，因此该文件在两处都可读。
         (os.path.join(project_root, 'config.json'), '.'),
+        # P0-1: 包含版本文件 —— 冻结后 Path(__file__).parent../version.txt 必须存在，
+        # 否则落 fallback "1.1.12"，与 Info.plist 的 CFBundleVersion 不一致。
+        (os.path.join(project_root, 'version.txt'), '.'),
+        # GPL-3.0 分发要求: 许可证全文必须随 .app 一起分发
+        # (Windows 侧由 build_complete.bat / SecureRedact_Setup.iss 负责拷贝)
+        (os.path.join(project_root, 'LICENSE'), '.'),
         # 包含 assets 目录（二维码图片等）
         (os.path.join(project_root, 'assets'), 'assets'),
     ] + onnx_datas + rapid_datas + bs4_datas + soupsieve_datas + lxml_datas,

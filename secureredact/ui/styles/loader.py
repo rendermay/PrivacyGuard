@@ -70,6 +70,15 @@ def _build_mapping(theme_name: str) -> dict[str, str]:
     """
     mapping: dict[str, str] = dict(get_substitution_map(theme_name))
     mapping.update(get_glass_substitution())
+
+    # P0-5 修复: glass 可用时 get_glass_substitution() 返回空 dict,
+    #   而 card_background / dock_background 不在 19 键主题 token 表中 ->
+    #   两个占位符会原样残留在最终 QSS 里(background-color: {card_background};),
+    #   Qt 解析失败 -> 卡片 / 停靠面板背景色失效。
+    #   这里用主题 token 兜底, 保证占位符永远有值(不做 override,
+    #   glass 降级时仍用 rgba 半透明兜底值)。
+    mapping.setdefault("card_background", mapping.get("surface", "#FFFFFF"))
+    mapping.setdefault("dock_background", mapping.get("background", "#F7F8FA"))
     return mapping
 
 

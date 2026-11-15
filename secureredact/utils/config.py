@@ -1,15 +1,124 @@
 """
 SecureRedact 配置管理模块
 
+v1.1.13-P0: 修复「配置双源分裂」— 统一配置文件路径解析
 v1.1.11: 配置系统实现 - 支持 JSON 配置文件、热重载、向后兼容
 """
 
 import json
 import os
+import sys
 import threading
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from pathlib import Path
 
+
+# =====================================================================
+# P0-1 配置文件路径解析（修复「配置双源分裂」）
+# =====================================================================
+#
+# 历史问题:
+#   SimpleConfig 默认路径 = secureredact/utils/../config.json
+#                          -> secureredact/config.json  (只含 redaction 子集)
+#   ConfigManager 默认路径 = 仓库根/config.json          (完整配置)
+#   => 两套系统读的不是同一个文件, 用户在根 config.json 里的设置运行时读不到,
+#      且打包版(只把根 config.json 打进包)配置 100% 丢失。
+#
+# 修复后的统一解析规则(见 resolve_config_paths):
+#   1) 出厂基线(只读): 应用目录/config.json
+#        - 开发树   : 仓库根/config.json
+#        - 冻结 one-file  : sys._MEIPASS/config.json  (解包目录)
+#        - 冻结 one-folder: exe 同级目录/config.json
+#   2) 写入目标: 可写的应用目录; 不可写(Program Files)或 one-file 冻结时
+#      -> ~/.secureredact/config.json
+#   3) 读取时: 出厂基线 < 用户配置(后者覆盖前者)
+#
+# 这样保证: 开发树 / 便携包 / 安装版 / one-file 四种形态读到的都是同一份
+#           「出厂默认 + 用户覆盖」语义, 不再有第二份配置文件。
+
+
+def _app_dir() -> str:
+    """应用根目录。
+
+    - 开发树: secureredact/utils/config.py -> 仓库根
+    - PyInstaller 冻结: 优先 sys._MEIPASS(one-file 临时解包目录),
+      否则 exe 所在目录(one-folder 模式)
+    """
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            return os.path.abspath(meipass)
+        return os.path.dirname(os.path.abspath(sys.executable))
+    # secureredact/utils/config.py -> secureredact/utils -> secureredact -> 仓库根
+    return os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+
+
+def _user_config_dir() -> str:
+    """用户配置目录: ~/.secureredact"""
+    return os.path.join(os.path.expanduser("~"), ".secureredact")
+
+
+def _user_config_path() -> str:
+    """用户配置文件路径: ~/.secureredact/config.json"""
+    return os.path.join(_user_config_dir(), "config.json")
+
+
+def _is_writable_dir(path: str) -> bool:
+    """判断目录是否可写(尽力而为, 异常按不可写处理)。"""
+    try:
+        return os.path.isdir(path) and os.access(path, os.W_OK)
+    except OSError:
+        return False
+
+
+def resolve_config_paths() -> Tuple[str, Optional[str]]:
+    """解析配置文件路径。
+
+    Returns:
+        (write_path, base_path)
+        - write_path: 写入目标(一定是可写位置)
+        - base_path : 出厂基线(只读), 与 write_path 相同时为 None
+
+    调用方必须用这两个路径构造「读基线 + 读用户 + 写用户」的三段式,
+    详见 SimpleConfig.load() / save()。
+    """
+    app_dir = _app_dir()
+    frozen = getattr(sys, "frozen", False)
+    meipass = getattr(sys, "_MEIPASS", None) if frozen else None
+
+    # --- 出厂基线(只读) ---
+    base_path: Optional[str] = None
+    if frozen and meipass:
+        candidate = os.path.join(meipass, "config.json")
+        if os.path.exists(candidate):
+            base_path = candidate
+    else:
+        candidate = os.path.join(app_dir, "config.json")
+        if os.path.exists(candidate):
+            base_path = candidate
+
+    # --- 写入目标 ---
+    if frozen and meipass:
+        # one-file: 写入解包目录会随进程退出丢失 -> 用用户目录
+        write_path = _user_config_path()
+    elif _is_writable_dir(app_dir):
+        write_path = os.path.join(app_dir, "config.json")
+    else:
+        # 安装到 Program Files 等只读位置 -> 用用户目录
+        write_path = _user_config_path()
+
+    # 读写同路径时不需要独立基线(开发树 / 便携包场景)
+    if write_path == base_path:
+        base_path = None
+
+    try:
+        os.makedirs(os.path.dirname(write_path), exist_ok=True)
+    except OSError:
+        pass
+
+    return write_path, base_path
 
 class ConfigError(Exception):
     """配置错误基类"""
@@ -244,21 +353,13 @@ class ConfigManager:
         self._initialized = True
 
     def _get_default_config_path(self) -> str:
-        """获取默认配置文件路径"""
-        # 首先尝试应用目录
-        app_dir = Path(__file__).parent.parent.parent
-        config_path = app_dir / "config.json"
+        """获取默认配置文件路径。
 
-        # 如果应用目录不可写或不存在，使用用户目录
-        try:
-            if not os.access(app_dir, os.W_OK):
-                raise PermissionError
-        except (OSError, PermissionError):
-            user_dir = Path.home() / ".secureredact"
-            user_dir.mkdir(exist_ok=True)
-            config_path = user_dir / "config.json"
-
-        return str(config_path)
+        v1.1.13-P0: 与 SimpleConfig 共用 resolve_config_paths(),
+        保证两套配置系统指向同一个文件(消除配置双源分裂)。
+        """
+        write_path, _ = resolve_config_paths()
+        return write_path
 
     def _load_config(self) -> None:
         """加载配置文件，合并默认配置和用户配置"""
@@ -638,8 +739,13 @@ class SimpleConfig:
     def __init__(self, config_path=None):
         self._config = {}
         if config_path is None:
-            config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'config.json')
-        self._config_path = config_path
+            # P0-1: 统一路径解析(开发树=仓库根 / 冻结=应用目录 / 只读安装=用户目录)
+            write_path, base_path = resolve_config_paths()
+            self._config_path = write_path
+            self._base_config_path = base_path
+        else:
+            self._config_path = config_path
+            self._base_config_path = None
         self.load()
 
     @staticmethod
@@ -660,13 +766,23 @@ class SimpleConfig:
     def load(self):
         """加载配置文件并补齐默认键。
 
+        v1.1.13-P0: 三段式读取 —— 出厂基线(只读) < 用户/写入路径配置(覆盖),
+        消除「开发树读根 config.json / 打包版读不到」的双源分裂。
         v1.1.12: 额外从 DEFAULT_CONFIG(本模块内嵌)合并缺失的 default_rules 字段,
         避免 disk 配置被外部操作擦除 mask_* 等扩展字段时丢失功能。
         """
+        self._config = {}
         try:
+            # 1) 出厂基线(只读; 只读安装形态下随包出厂配置在此)
+            if self._base_config_path and os.path.exists(self._base_config_path):
+                with open(self._base_config_path, 'r', encoding='utf-8') as f:
+                    self._config = json.load(f)
+            # 2) 用户/写入路径上的配置(覆盖基线)
             if os.path.exists(self._config_path):
                 with open(self._config_path, 'r', encoding='utf-8') as f:
-                    self._config = json.load(f)
+                    user_config = json.load(f)
+                if isinstance(user_config, dict):
+                    self._config = self._deep_merge(self._config, user_config)
         except (OSError, IOError, json.JSONDecodeError) as e:
             print(f"[配置系统] 加载配置失败: {e}")
 

@@ -5,6 +5,7 @@ import os
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -15,8 +16,15 @@ from secureredact.utils.security import validate_safe_path
 
 class TestPathValidation(unittest.TestCase):
     def test_windows_backslash_path_allowed_on_windows(self):
+        """Windows 平台下反斜杠路径分隔符不应被判为危险字符。
+
+        路径必须落在允许目录内(家目录),否则会先命中"路径不在允许范围内",
+        根本走不到分隔符判定 —— 故用真实家目录而非写死的 Windows 用户目录
+        (后者在任何机器上都不在允许目录内)。
+        """
         with patch("secureredact.utils.security.platform.system", return_value="Windows"):
-            ok, msg = validate_safe_path(r"C:\Users\Admin\test.docx", [".doc", ".docx"])
+            docx_path = str(Path.home() / "test.docx")
+            ok, msg = validate_safe_path(docx_path, [".doc", ".docx"])
             self.assertTrue(ok, msg)
 
     def test_windows_backslash_path_rejected_on_non_windows(self):
@@ -39,8 +47,14 @@ class TestPathValidation(unittest.TestCase):
             self.assertIn("危险序列", msg)
 
     def test_extension_whitelist_case_insensitive(self):
+        """扩展名白名单应大小写不敏感(.DOCX == .docx)。
+
+        路径必须落在允许目录内(家目录),否则会先命中"路径不在允许范围内",
+        根本没走到扩展名判断 —— 故用真实家目录而非写死的 Windows 用户目录。
+        """
         with patch("secureredact.utils.security.platform.system", return_value="Windows"):
-            ok, msg = validate_safe_path(r"C:\Users\Admin\test.DOCX", [".doc", ".docx"])
+            docx_path = str(Path.home() / "test.DOCX")
+            ok, msg = validate_safe_path(docx_path, [".doc", ".docx"])
             self.assertTrue(ok, msg)
 
     def test_outside_allowed_directory_rejected(self):
@@ -50,14 +64,30 @@ class TestPathValidation(unittest.TestCase):
             self.assertIn("不在允许范围", msg)
 
     def test_temp_path_allowed(self):
-        with patch("secureredact.utils.security.platform.system", return_value="Darwin"):
-            temp_path = os.path.join(tempfile.gettempdir(), "secureredact_test.docx")
+        """临时目录下的路径应被允许(非 Windows 分支)。
+
+        validate_safe_path 用原生 os.path 语义做归一化,因此在 Windows 上
+        模拟 Darwin 时必须同时把 gettempdir() 换成 POSIX 形态的 /tmp ——
+        否则 os.path.join 会拼出带反斜杠的 Windows 路径,先命中"危险字符",
+        走不到临时目录放行逻辑。路径本身也用 POSIX 形态 /tmp/xxx。
+        """
+        with patch("secureredact.utils.security.platform.system", return_value="Darwin"), \
+             patch("secureredact.utils.security.tempfile.gettempdir", return_value="/tmp"):
+            temp_path = "/tmp/secureredact_test.docx"
             ok, msg = validate_safe_path(temp_path, [".docx"])
             self.assertTrue(ok, msg)
 
     def test_prefix_bypass_path_rejected(self):
-        with patch("secureredact.utils.security.platform.system", return_value="Darwin"):
-            fake_sibling = os.path.abspath(os.path.expanduser("~")) + "_evil/test.docx"
+        """家目录同前缀的兄弟目录(/home/testuser_evil)不得被前缀绕过。
+
+        非 Windows 分支必须用 POSIX 形态路径:Windows 上 os.path.expanduser("~")
+        返回带反斜杠的 Windows 用户目录,会先命中"危险字符"而走不到范围判定。
+        故同时把 expanduser() 换成 POSIX 家目录,保持前后一致。
+        """
+        with patch("secureredact.utils.security.platform.system", return_value="Darwin"), \
+             patch("secureredact.utils.security.os.path.expanduser",
+                   return_value="/home/testuser"):
+            fake_sibling = "/home/testuser_evil/test.docx"
             ok, msg = validate_safe_path(fake_sibling, [".docx"])
             self.assertFalse(ok)
             self.assertIn("不在允许范围", msg)

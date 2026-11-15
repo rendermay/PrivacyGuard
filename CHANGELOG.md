@@ -4,6 +4,90 @@
 
 ---
 
+## [1.1.15] - 2026-11-15 — 配置路径统一 + 发布就绪收口
+
+> 本次发布把阶段 B/C/V 重构(66 个 commit)从工作分支合入 `main` 并首次打正式 tag。
+> 核心目标是消除「代码写完但用户用不了 / 打包版残缺 / CI 长期全红」三类阻塞。
+
+### Fixed
+
+- **🔴 配置双源分裂(最高优先级)**: `SimpleConfig` 的默认路径此前指向
+  `secureredact/config.json`(只含 `redaction` 子集), 而 `ConfigManager` 指向仓库根
+  `config.json`。运行时实际用 `SimpleConfig` → **用户在根 `config.json` 里的所有设置
+  运行期读不到**, 且打包版只打进根配置 → 配置 100% 丢失。
+  - 新增 `secureredact/utils/config.py::resolve_config_paths()` 统一路径解析:
+    开发树 = 仓库根 / 冻结 = `_MEIPASS` / 只读安装 = `~/.secureredact`
+  - `SimpleConfig` 改为三段式读取: 出厂基线(只读) < 用户配置(覆盖) > 写回可写位置
+  - `ConfigManager` 改用同一解析函数, 两套系统不再读不同文件
+  - **删除 `secureredact/config.json`**(双源元凶; 内容是根配置的子集, 无信息丢失)
+  - 连带修复: `redaction.name_context.extra_tokens` 等此前读不到的配置项重新生效
+- **🔴 打包版版本号错乱**: 三个 PyInstaller spec 的 `datas` 都没包含 `version.txt` →
+  冻结后落到 fallback `1.1.12`, 而 EXE 属性是真实版本 → 「窗口标题 / 关于窗口 /
+  EXE 属性」三处版本号互相打架。现三份 spec 均补 `version.txt`;
+  `SecureRedact_Setup.iss` 默认版本同步; `main.py` / `secureredact/__init__.py` /
+  `ui/main_window/window.py` 三处版本 fallback 统一为 `1.1.15`。
+- **🔴 主题切换永不落盘**: `MainWindowThemeMixin.set_theme()` 先 import 模块级 config
+  singleton, 下一行又用 `config = getattr(self, "config", None)` 局部遮蔽它, 而
+  `MainWindow` 从不设置 `self.config` → 持久化永远不执行(切主题后重启归位)。
+- **🔴 主题配置键不一致**: 出厂 `config.json` / `DEFAULT_CONFIG` 用 `ui.theme`, 而代码
+  读写的是 `app.theme` → 用户设的主题从来没被读过。现读写统一到 `ui.theme`,
+  `"auto"` 归一为 `"system"`(跟随系统外观)。
+- **🟠 配置项静默失效**: `ocr.zoom_min` / `ocr.zoom_max` / `ocr.progress_update_interval` /
+  `app.name` 四项因硬编码副本而改配置不生效, 现全部改回 config 派生
+  (`secureredact/__init__.py`、`workers/ocr_worker.py`、`workers/word_worker.py`)。
+- **🟠 DEBUG_MODE 三处两义**: `canvas.py` 只读 env、`window.py` 的三元表达式在 config
+  存在时**完全忽略 env**。现统一为「env 开启 OR config 开启」。
+- **🟠 规则重叠导致重复遮蔽**: 18 位身份证号会同时命中「身份证号 / 统一社会信用代码 /
+  银行卡号」三条字符集高度重叠的规则 → 命中数翻 3 倍、遮蔽边界不一致。
+  新增 `secureredact/redaction/conflict_resolver.py`, 按优先级
+  (身份证号 > USCC > 银行卡号) 消解重叠命中; 仅对这三条数字类规则生效,
+  其他规则行为完全不变。
+- **🟠 桌面端 QSS 占位符泄漏**: `glass.GLASS_AVAILABLE` 在导入期求值且无 QApplication
+  实例时 `platformName()` 返回无意义默认值 → 判定玻璃可用 → `get_glass_substitution()`
+  返回空 dict → `{card_background}` / `{dock_background}` 原样残留在最终 QSS,
+  Qt 解析失败导致卡片/停靠面板背景色失效。现 `loader._build_mapping()` 对两个占位符
+  做主题 token 兜底, 且 `_detect_glass()` 要求 QApplication 实例真实存在。
+- **🟠 CI 视觉回归脚本无法运行**: `scripts/render_visual_baseline.py` 未把仓库根加入
+  `sys.path` → CI 里报 `ModuleNotFoundError: No module named secureredact`。现已修复,
+  任意 cwd 可运行。
+
+### Changed
+
+- **版本号**: `version.txt` 1.1.13 → **1.1.15**(代码早已包含 v1.1.14 的并列名单上下文
+  与 `extra_tokens` 接通能力, 但版本号从未同步)。
+- **CI 覆盖率门禁**: `secureredact/api.py` 覆盖率 91.14% → **100%**
+  (新增 8 个 API 测试, 22 → 30 例), `--cov-fail-under=100` 退出码由 1 转 0。
+- **打包链路**:
+  - macOS `build_macos_app.sh` 原检查从不存在的 `SecureRedact.icns` → 100% 退出失败,
+    现改为 spec 实际使用的 `assets/logo/macos/AppIcon.icns`
+  - macOS spec 补 `LICENSE`(GPL-3.0 分发要求); Inno Setup 补 `LicenseFile` + LICENSE 复制
+  - 新增 `packaging/requirements-build.txt` 锁定 `pyinstaller==6.18.0` +
+    `pyinstaller-hooks-contrib==2026.10`(jieba 的 5MB 中文词典只靠 hooks-contrib 的
+    `hook-jieba.py` 进包, 失效则打包版姓名识别静默失效); 根 `requirements.txt` 同步锁版
+  - 新增 `packaging/verify_spec_datas.py` 静态预检并接入 3 个构建脚本:
+    产物缺 `version.txt` / `config.json` / `LICENSE` 即构建失败(把静默退化变成构建失败)
+  - `verify_dependencies.py` 依赖清单 11 → 17 项, 并校验 hook 存在性
+  - `SecureRedact_windows_v2.spec`(死代码) 加醒目警示, 避免后人误启用
+- **测试滞后修复(16 项)**: 断言锚点从已变形的 `main.py` 迁到真实实现所在模块
+  (`redaction/rules_loader.py` / `ui/main_window/theme.py` / `secureredact/__init__.py`);
+  路径校验用例去掉写死的 Windows 用户目录; 白名单断言改为结构断言;
+  jieba 样本改为带强上下文的文本。
+
+### Verification
+
+| 指标 | 修复前 | 修复后 |
+|---|---|---|
+| 全量 pytest | 604 用例 / **20 失败** | **683 用例 / 0 失败 / 0 错误** |
+| `secureredact/api.py` 覆盖率 | 91.14% (门禁退出码 1) | **100%** (退出码 0) |
+| `compileall` | — | 退出码 0 |
+| 打包 spec 静态预检 | 无 | 退出码 0 |
+
+新增回归测试: `tests/unit/test_config_path_resolution.py`、`
+`tests/unit/test_version_fallback_sync.py`、
+`tests/unit/test_rule_conflict_resolution.py`, 以及 `test_api.py` 新增 8 例。
+
+---
+
 ## [1.1.13] - 2026-08-24 — 姓名上下文注入 + 三层防护收口
 
 ### Added

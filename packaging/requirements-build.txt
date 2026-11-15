@@ -1,0 +1,26 @@
+# SecureRedact 打包（构建期）依赖清单
+#
+# 用途：锁定 PyInstaller 构建链，保证「同样的代码 -> 同样的产物」。
+#
+# 为什么要单独成文件：
+#   根 requirements.txt 是【运行时】依赖清单；这里的 pyinstaller /
+#   pyinstaller-hooks-contrib 版本会直接决定【产物内容】，必须精确锁定。
+#   构建脚本过去执行的是不带版本约束的 "pip install pyinstaller"，
+#   会把 requirements.txt 里已固定的 pyinstaller==6.18.0 覆盖成当天最新版
+#   -> 构建不可复现。
+#
+# ⚠️ pyinstaller-hooks-contrib 必须锁版本（P0-5）：
+#    jieba 的中文词典(jieba/dict.txt, 约 5MB) 只能通过 hooks-contrib 的
+#    hook-jieba.py（内容为 collect_data_files('jieba')）进入产物。
+#    该 hook 一旦缺失或改名，打包版 import jieba 会失败，而
+#    secureredact/pii/name_recognizer.py::_ensure_jieba() 会把异常静默吞掉
+#    -> 中文姓名识别整块失效，且界面上没有任何报错。
+#
+#    pyinstaller 6.18.0 自身要求 pyinstaller-hooks-contrib>=2025.9；
+#    此处锁定的版本已确认包含 hook-jieba.py / hook-docx.py /
+#    hook-onnxruntime.py / hook-pymupdf.py。
+#
+#    请把这两行同步回根 requirements.txt，保持单一版本源。
+
+pyinstaller==6.18.0
+pyinstaller-hooks-contrib==2026.10

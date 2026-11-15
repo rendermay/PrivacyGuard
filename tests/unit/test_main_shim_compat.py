@@ -54,11 +54,20 @@ class TestMainShimCompat(unittest.TestCase):
     """main.py shim 兼容安全网 — 11 符号当前都在 main.py 模块级可用。"""
 
     def _try_import(self, name):
-        """尝试从 main 导入;Qt DLL 缺失时 skipTest 而非 ERROR。"""
+        """尝试从 main 取模块级符号;Qt DLL 缺失时 skipTest 而非 ERROR。
+
+        符号缺失时给出明确的失败信息(而非裸 KeyError),便于定位
+        "shim 未 re-export 该符号" 这类兼容层漏项 —— 本测试的价值就在于
+        守住 main.py 的 re-export 契约。
+        """
         try:
-            return __import__("main", fromlist=[name]).__dict__[name]
+            module = __import__("main", fromlist=[name])
         except ImportError as e:
             self.skipTest(f"main.py import 失败(通常 PyQt6 不可用): {e}")
+        self.assertTrue(
+            name in module.__dict__,
+            f"main.py shim 必须 re-export '{name}'(兼容层漏项)")
+        return module.__dict__[name]
 
     def test_app_name_available(self):
         APP_NAME = self._try_import("APP_NAME")

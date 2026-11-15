@@ -35,7 +35,11 @@ from secureredact.redaction.black_white_list_store import BlackWhiteListStore
 from secureredact.redaction.whitelist_split import _split_text_by_whitelist
 
 # 常量定义
-PROGRESS_UPDATE_INTERVAL = 0.05
+# P0-5 修复: 原为硬编码 0.05,导致 config.json 的 ocr.progress_update_interval
+#             形同虚设。改回 config 派生(默认值不变)。
+from secureredact.utils.config import config as _config  # noqa: E402
+
+PROGRESS_UPDATE_INTERVAL = _config.get("ocr.progress_update_interval", 0.05)
 
 
 class OCRWorker(QThread):

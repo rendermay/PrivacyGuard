@@ -7,7 +7,7 @@ This file is the primary development guide for Codex and other coding agents wor
 ## Project Overview
 
 **Project**: SecureRedact 信息脱敏助手  
-**Current Version**: v1.1.11 (`1.1.11 - Whitelist Span Trim`)  
+**Current Version**: v1.1.15 (`1.1.15 - Config Path Unification & Release Readiness`))  
 **Last Updated**: 2026-08-20  
 **Status**: v1.1.11 白名单片段级豁免完成；全量回归 162 项 / 160 通过（2 项为 v1.1.11 起既有失败）
 

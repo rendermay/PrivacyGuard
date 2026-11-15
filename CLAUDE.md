@@ -7,16 +7,16 @@ This file is the primary development guide for Claude Code and other coding agen
 ## Project Overview
 
 **Project**: SecureRedact 信息脱敏助手  
-**Current Version**: v1.1.13 (`1.1.13 - Name Context Injection`)  
-**Last Updated**: 2026-08-24  
-**Status**: v1.1.13 姓名上下文注入 + 三层防护收口完成；WordWorker/OCRWorker 默认严格模式 (require_context=True)
+**Current Version**: v1.1.15 (`1.1.13 - Name Context Injection`)  
+**Last Updated**: 2026-11-15  
+**Status**: v1.1.15 姓名上下文注入 + 三层防护收口完成；WordWorker/OCRWorker 默认严格模式 (require_context=True)
 
 SecureRedact is a Python + PyQt6 desktop application for intelligent redaction of PDF and Word documents.
 
-> **⚠️ v1.1.13+ 入口迁移提示 (PR-B0)**
+> **⚠️ v1.1.15+ 入口迁移提示 (PR-B0)**
 >
-> `main.py` (13,026 行) 已转为 **过渡期兼容 shim**。
-> 真正的运行时入口已迁至 `secureredact/main.py`(v1.1.13 PR-B0 引入)。
+> `main.py` (253 行) 已转为 **过渡期兼容 shim**。
+> 真正的运行时入口已迁至 `secureredact/main.py`(v1.1.15 PR-B0 引入)。
 >
 > **禁止继续往 `main.py` 添加新业务代码。**所有新功能请写到 `secureredact/` 对应子包。
 > 阶段 B 重构路线图:详见 `frontend-refactor-plan.md`(当前工作目录)+ `docs/refactor/` (项目内报告)。
@@ -67,7 +67,7 @@ When resuming work, read these files in order:
 
 ### Main architecture
 
-- `main.py` is still the active runtime entry and remains monolithic.
+- `main.py` is a 253-line compatibility shim; the active runtime entry is `secureredact/main.py`.
 - `secureredact/` contains shared modules and partial extractions, but not all runtime logic has moved there.
 - Avoid reintroducing drift between `main.py` and `secureredact/*`.
 
@@ -79,7 +79,7 @@ When resuming work, read these files in order:
 
 ### Active config path
 
-- Runtime currently uses `SimpleConfig` in `main.py`
+- Runtime uses `SimpleConfig` (defined in `secureredact/utils/config.py`, re-exported by `main.py`)
 - Shared config utilities also exist in `secureredact/utils/config.py`
 - Do not assume `ConfigManager` is the active runtime path unless you have explicitly switched the app over
 - **v1.1.11 中文姓名启发式识别 (jieba X3)**：新增 `redaction.enable_name_recognition` 键，默认 False
@@ -148,7 +148,7 @@ Important:
 
 ## Main Files
 
-- `main.py` - active application runtime
+- `main.py` - compatibility shim (253 lines); real entry is `secureredact/main.py`
 - `theme.py` - UI theme definitions
 - `version.txt` - single version source
 - `config.json` - local runtime config
@@ -159,7 +159,7 @@ Important:
 - `secureredact/workers/word_worker.py` - modular Word worker
 - `secureredact/workers/image_merge.py` - modular image merge worker
 - `secureredact/utils/doc_converter.py` - shared DOC→DOCX converter
-- `secureredact/utils/config.py` - modular config manager
+- `secureredact/utils/config.py` - config manager (SimpleConfig = runtime path; ConfigManager = legacy API)
 - `secureredact/utils/exceptions.py` - shared exception classes
 - `secureredact/utils/temp_manager.py` - shared temp file manager
 - `secureredact/utils/security.py` - shared path validation & resource_path

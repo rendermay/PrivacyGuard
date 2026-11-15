@@ -21,7 +21,7 @@ class MainWindowThemeMixin:
     """DARK/LIGHT 主题切换入口。
 
     实际样式应用委托给 StylesheetLoader(PR-B1 引入)。
-    主题状态持久化到 config.json(app.theme 字段)。
+    主题状态持久化到 config.json(ui.theme 字段, 与出厂配置键一致)。
     """
 
     INITIAL_THEME_NAME = "light"  # 启动默认值(若 config 中无)
@@ -46,8 +46,11 @@ class MainWindowThemeMixin:
 
         if name is None:
             name = getattr(self, "theme_name", self.INITIAL_THEME_NAME)
-        if name not in ("light", "dark", "system"):
+        if name not in ("light", "dark", "system", "auto"):
             name = "light"
+        # "auto" 是出厂配置的默认写法, 语义等同 "system"(跟随系统外观)
+        if name == "auto":
+            name = "system"
 
         effective = self._resolve_system_theme() if name == "system" else name
 
@@ -71,14 +74,19 @@ class MainWindowThemeMixin:
         self.theme_name = name
 
     def set_theme(self, name):
-        from secureredact.utils.config import config  # PR-C6.4: config singleton 从 main.py 迁出
-        """public API:切换主题并持久化到 config.json。"""
+        """public API:切换主题并持久化到 config.json。
+
+        P0-5 修复: 原实现先 import 模块级 config singleton,下一行又用
+        `config = getattr(self, "config", None)` 局部遮蔽它 —— 而 MainWindow
+        从不设置 self.config,所以 config 恒为 None,持久化永远不执行
+        (切主题后重启归位)。现直接使用模块级 singleton。
+        """
+        from secureredact.utils.config import config as _config  # PR-C6.4: config singleton 从 main.py 迁出
         if name not in ("light", "dark", "system"):
             return
         self._apply_theme(name)
-        config = getattr(self, "config", None)
-        if config is not None and hasattr(config, "set"):
-            config.set("app.theme", name, persist=True)
+        if _config is not None and hasattr(_config, "set"):
+            _config.set("ui.theme", name, persist=True)
 
 
 __all__ = ["MainWindowThemeMixin"]

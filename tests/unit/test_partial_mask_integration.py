@@ -141,13 +141,24 @@ class TestDefaultRulesMetaLoaded(unittest.TestCase):
     """DEFAULT_RULES_META 模块级常量应在所有内置规则上齐全。"""
 
     def test_all_known_rules_have_meta(self):
+        """所有内置规则都必须在 DEFAULT_RULES_META 中有元数据条目。
+
+        注: '日期时间' 自 v1.1.13 起被产品决策强制禁用(用户选择"选 B 不脱敏",
+        过度脱敏风险高于收益),由 _v113_apply_rule_overrides() 同时从
+        DEFAULT_RULES 与 DEFAULT_RULES_META 中 pop 掉 —— 因此它**不应**有
+        META 条目。这是产品契约,不是回归。
+        """
         from main import DEFAULT_RULES_META
         required = [
             "身份证号", "手机号码", "银行卡号", "固定电话",
-            "统一社会信用代码", "电子邮箱", "法定代表人", "日期时间", "地址（含门牌号）",
+            "统一社会信用代码", "电子邮箱", "法定代表人", "地址（含门牌号）",
         ]
         for name in required:
             self.assertIn(name, DEFAULT_RULES_META, f"{name} 缺少 DEFAULT_RULES_META 条目")
+        # v1.1.13 产品决策: 日期时间规则整体禁用, 不应残留 mask 元数据
+        self.assertNotIn(
+            "日期时间", DEFAULT_RULES_META,
+            "v1.1.13 起 '日期时间' 被强制禁用, 不应残留 DEFAULT_RULES_META 条目")
 
     def test_meta_prefix_suffix_types(self):
         from main import DEFAULT_RULES_META

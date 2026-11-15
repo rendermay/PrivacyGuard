@@ -58,11 +58,21 @@ class TestEnableNameRecognitionAlignment(unittest.TestCase):
     """三处对齐: SimpleConfig (main.py) / ConfigManager (secureredact.utils.config)."""
 
     def test_main_default_rules_does_not_break_existing(self):
-        # Wave 3 不应修改 DEFAULT_RULES 字典,只新增 enable_name_recognition 键
+        """v1.1.13 起 '日期时间' 被代码层强制禁用, 其余核心规则不应受影响。
+
+        注: 这是 v1.1.13 的**产品决策**(用户选择"选 B 不脱敏",过度脱敏
+        风险高于收益),由 _v113_apply_rule_overrides() 强制 pop 实现 ——
+        不是回归。原断言要求 DEFAULT_RULES 必须含 '日期时间',与该产品
+        契约直接冲突,已按决策更正为"不含日期时间 + 其余核心规则仍在"。
+        """
         from main import DEFAULT_RULES  # type: ignore
-        # 现有6+3 条规则不应受影响
-        for name in ("身份证号", "手机号码", "日期时间", "电子邮箱",
-                     "银行卡号", "地址（含门牌号）", "固定电话", "法定代表人"):
+        # v1.1.13 产品决策: '日期时间' 强制禁用 → 不应出现在 DEFAULT_RULES
+        self.assertNotIn(
+            "日期时间", DEFAULT_RULES,
+            "v1.1.13 起 '日期时间' 被代码层强制禁用, DEFAULT_RULES 不应含该规则")
+        # 其余 9 条核心规则不应受影响
+        for name in ("身份证号", "手机号码", "电子邮箱", "银行卡号", "印章",
+                     "地址（含门牌号）", "固定电话", "法定代表人", "统一社会信用代码"):
             self.assertIn(name, DEFAULT_RULES)
 
     def test_module_default_config_unchanged(self):

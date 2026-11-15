@@ -70,14 +70,28 @@ if errorlevel 1 (
 echo [OK] Dependencies installed
 echo.
 
-echo [4/5] Installing PyInstaller...
-pip install pyinstaller -q
-echo [OK] PyInstaller installed
+echo [4/5] Installing PyInstaller (pinned)...
+:: P0-5: 锁定构建期依赖版本。
+:: 之前的 "pip install pyinstaller" 不带版本约束，会把 requirements.txt 里
+:: 已固定的 pyinstaller==6.18.0 覆盖成当天最新版 -> 构建不可复现。
+:: 同时补上此前完全没被固定的 pyinstaller-hooks-contrib：jieba 的 5MB 词典
+:: (jieba/dict.txt) 只能靠它的 hook-jieba.py 进包，缺失会导致打包版
+:: 中文姓名识别静默失效（界面上无任何报错）。
+pip install -r "%PROJECT_DIR%\packaging\requirements-build.txt" -q
+if errorlevel 1 (
+    echo [ERROR] Failed to install pinned build dependencies
+    echo [HINT] Check packaging\requirements-build.txt
+    pause
+    exit /b 1
+)
+echo [OK] PyInstaller (pinned) installed
 echo.
 
 echo [5/5] Checking project files...
-if not exist "main.py" (
-    echo [ERROR] main.py not found
+:: 入口文件：main.py 是过渡期 shim，阶段 B5 收口后会被移除，
+:: 入口迁到 secureredact\main.py，因此两个都接受。
+if not exist "main.py" if not exist "secureredact\main.py" (
+    echo [ERROR] Entry point not found (main.py or secureredact\main.py)
     pause
     exit /b 1
 )

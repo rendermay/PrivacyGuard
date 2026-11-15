@@ -47,8 +47,14 @@ def _detect_glass() -> bool:
         return False
 
     # CI / 无头环境
+    # P0-5 修复: 必须要求 QApplication 实例真实存在 —— 没有实例时
+    #   QApplication.platformName() 会返回一个无意义的默认值(Windows 上是
+    #   'windows'),导致导入期把 headless 环境误判为「玻璃可用」。
     try:
-        platform_name = QApplication.platformName() or ""
+        app = QApplication.instance()
+        if app is None:
+            return False
+        platform_name = app.platformName() or ""
     except Exception:
         return False
     if platform_name.startswith("offscreen") or platform_name == "minimal":

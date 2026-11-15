@@ -178,8 +178,16 @@ a = Analysis(
     datas=[
         # 包含主题文件
         (os.path.join(project_root, 'theme.py'), '.'),
-        # 包含配置文件
+        # 包含配置文件（应用目录 = sys._MEIPASS，与 EXE 同级）
         (os.path.join(project_root, 'config.json'), '.'),
+        # P0-1: 包含版本文件。
+        # 运行时版本读取全部走 Path(__file__).parent../version.txt:
+        #   secureredact/__init__.py             -> _MEIPASS/version.txt
+        #   secureredact/ui/main_window/window.py -> _MEIPASS/version.txt
+        #   main.py (根 shim)                     -> _MEIPASS/version.txt
+        # 冻结后缺失会落 fallback "1.1.12"，与 EXE 版本资源(version_info.txt)不一致，
+        # 导致「窗口标题 / 关于窗口 / EXE 属性」三处版本号互相打架。
+        (os.path.join(project_root, 'version.txt'), '.'),
         # 包含 assets 目录（二维码图片等）
         (os.path.join(project_root, 'assets'), 'assets'),
     ] + onnx_datas + rapid_datas + numpy_datas + numpy_compat_datas + bs4_datas + copy_metadata('numpy'),  # 注意：不要包含 secureredact_datas_all！

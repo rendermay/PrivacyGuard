@@ -1,11 +1,15 @@
 ; SecureRedact Windows 安装程序配置
 ; Inno Setup 脚本
-; 版本来源: 命令行 /DMyAppVersion 或默认值
+; 版本来源: 命令行 /DMyAppVersion 优先（由 3_build_with_setup.bat / 4_create_installer_only.bat
+; 从项目根 version.txt 读出后传入），缺失时回落到下面的默认值。
+; ⚠️ 默认值必须与项目根 version.txt 保持一致，否则安装包文件名 / AppVersion 会与
+;    EXE 版本资源(version_info.txt)、应用内显示的版本号对不上。
+;    当前 version.txt = 1.1.13
 
 #define MyAppName "SecureRedact"
 #define MyAppNameFull "SecureRedact 信息脱敏助手"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.1.11"
+  #define MyAppVersion "1.1.13"
 #endif
 #define MyAppPublisher "SecureRedact Team"
 #define MyAppURL "https://github.com/secureredact/secureredact"
@@ -29,6 +33,10 @@ OutputDir=..\..\..\releases\windows
 OutputBaseFilename=SecureRedact-{#MyAppVersion}-Setup
 SetupIconFile=..\..\..\assets\logo\windows\app_icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
+; GPL-3.0 要求分发时附带许可证副本：安装向导直接展示许可证全文。
+; 该文件是项目根 LICENSE 的逐字节副本（GPL 原文不可改动），
+; 随包分发的副本见下方 [Files] 段（源为项目根 LICENSE）。
+LicenseFile=LICENSE.txt
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -117,6 +125,9 @@ Source: "..\..\..\dist\SecureRedact\{#MyAppExeName}"; DestDir: "{app}"; Flags: i
 Source: "..\..\..\dist\SecureRedact\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Launcher wrapper for DLL checking
 Source: "..\scripts\launcher_wrapper.bat"; DestDir: "{app}"; Flags: ignoreversion
+; GPL-3.0 分发要求：安装目录必须包含许可证全文。
+; 源取项目根 LICENSE（唯一权威副本），落地名统一为 LICENSE.txt。
+Source: "..\..\..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 ; 注意: 不要在任何共享系统文件上使用 "Flags: ignoreversion"
 
 [Icons]

@@ -4,6 +4,34 @@ SecureRedact Windows Build Spec File v2
 PyInstaller Configuration - Enhanced for onnxruntime 1.24.1 compatibility
 """
 
+# ============================================================================
+# ⚠️⚠️ 死代码警告 —— 请勿直接启用本文件 ⚠️⚠️
+# ============================================================================
+# 【当前生效的 spec 是】packaging/windows/config/SecureRedact_windows.spec
+#
+# 【为什么本文件是死代码】
+#   1. 没有任何打包脚本引用它。仓库内全部构建入口都指向 v1 spec：
+#        - packaging/windows/scripts/build_complete.bat      (便携版主链)
+#        - packaging/windows/scripts/2_build_exe.bat
+#        - packaging/windows/scripts/3_build_with_setup.bat  (安装版主链)
+#      仅凭文件名无法触发本文件，必须显式改脚本路径才可能启用。
+#
+#   2. 本文件缺少 v1 spec 已有的关键配置，直接启用会构建失败或运行期崩：
+#        - 无 secureredact.* 的 hiddenimports  -> 模块名解析失败(ModuleNotFoundError)
+#        - hookspath=[]                        -> 不加载 hook-secureredact.py
+#        - runtime_hooks=[]                    -> 不加载 runtime_hook_secureredact.py
+#        - 不含 secureredact/config.json      -> 打包版配置丢失
+#
+#   3. 本文件与 v1 spec 的图标来源不同(此处为 packaging/windows/assets/icon.ico，
+#      v1 为 assets/logo/windows/app_icon.ico)，且只收集了部分依赖(cv2 binaries
+#      在此有、在 v1 没有)，两边的产物并不等价。
+#
+# 【维护约定】
+#   本文件保留仅作历史参考，不参与任何发布链路。
+#   如需真正启用 v2，请先把它与 v1 spec 逐项对齐(hiddenimports / hookspath /
+#   runtime_hooks / datas)，再同步更新上述三个 .bat 脚本的 spec 路径。
+# ============================================================================
+
 import sys
 sys.setrecursionlimit(sys.getrecursionlimit() * 5)
 
@@ -180,7 +208,11 @@ a = Analysis(
     ),
     datas=[
         (os.path.join(project_root, 'theme.py'), '.'),
+        # 包含配置文件（应用目录 = sys._MEIPASS，与 EXE 同级）
         (os.path.join(project_root, 'config.json'), '.'),
+        # P0-1: 包含版本文件 —— 冻结后 Path(__file__).parent../version.txt 必须存在，
+        # 否则落 fallback "1.1.12"，与 EXE 版本资源(version_info.txt)不一致。
+        (os.path.join(project_root, 'version.txt'), '.'),
         (os.path.join(project_root, 'assets'), 'assets'),
     ] + onnx_datas + rapidocr_datas + numpy_datas,
     hiddenimports=[

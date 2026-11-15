@@ -79,6 +79,7 @@ from secureredact.ui.main_window.window import MainWindow  # PR-C9 Task 3: 主�
 from secureredact.redaction.override_store import HitOverrideStore  # v1.1.11: override store 单例
 from secureredact.redaction.doc_hash import compute_doc_hash  # v1.1.11: 文档 hash
 from secureredact.redaction.black_white_list_store import BlackWhiteListStore  # v1.1.11: 黑/白名单 store
+from secureredact import WORD_RULE_SCHEMA_VERSION  # P0-5: shim 兼容 re-export(符号已迁至 secureredact/__init__.py, shim 契约测试要求可从 main 导入)
 
 # v1.1.11: 延迟导入 OCR 模块，便于错误处理
 RapidOCR = None
@@ -144,7 +145,9 @@ def read_app_version():
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except OSError:
-        return "1.1.12"
+        # P0-5: fallback must stay in sync with version.txt.
+        # Guarded by tests/unit/test_version_fallback_sync.py to prevent drift.
+        return "1.1.15"
 
 
 # === 核心防崩溃设置 ===

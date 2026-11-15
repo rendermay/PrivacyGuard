@@ -3,22 +3,29 @@
 import os
 import unittest
 import warnings
+from pathlib import Path
 
 warnings.filterwarnings("ignore")
 
 from secureredact.redaction.black_white_list_store import BlackWhiteListStore
 
+# 真实案卷 PDF(已脱敏版)。仓库未收录 —— 它是真实法律文书, 不适合作为
+# 仓库内二进制 fixture 提交, 因此本模块在样本缺失时整类 skip。
+# 路径按仓库根解析(而非 CWD 相对), 保证从任意工作目录运行行为一致。
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+REAL_PDF = PROJECT_ROOT / "pdf" / "周强起诉状_GUI脱敏.pdf"
+
 
 @unittest.skipUnless(
-    os.path.exists("pdf/周强起诉状_GUI脱敏.pdf"),
-    "需要 pdf/周强起诉状_GUI脱敏.pdf"
+    REAL_PDF.exists(),
+    f"需要真实案卷 PDF: {REAL_PDF}"
 )
 class RealPDFIntegrationTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         import fitz
-        cls.doc = fitz.open("pdf/周强起诉状_GUI脱敏.pdf")
+        cls.doc = fitz.open(str(REAL_PDF))
 
     @classmethod
     def tearDownClass(cls):
