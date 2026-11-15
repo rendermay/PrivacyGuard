@@ -6,92 +6,65 @@ skip —— 而 Windows 上 PyQt6 与 onnxruntime 的 MSVC runtime 冲突恰好�
 ImportError(DLL 初始化例程失败)。于是「OCR 全链路已坏」被伪装成「依赖没装」,
 CI 全绿而 OCR 不可用。
 
-现在:
-    1. 测试模块导入时先走应用同款的 onnxruntime 预加载(见 secureredact/ocr/preload.py)
-    2. 区分三种情况: 真没装(ModuleNotFoundError) -> skip / 装了但 DLL 加载失败 -> **失败**
-    3. 子进程回归用例: 走真实入口模块的加载顺序, 确认「先 ORT 后 Qt」稳定可用
-       (若有人把入口里的预加载删掉, 该用例会立刻变红)
+为什么全部走子进程:
+    pytest-qt 插件在**插件加载期**就会 import PyQt6, 也就是 pytest 进程里 Qt
+    一定先于任何测试模块被加载 —— 此时 onnxruntime 再怎么预加载也来不及,
+    进程内检查必然失败且与被测代码无关。
+    因此把 OCR 检查放进**受控的子进程**, 用应用真实的加载顺序
+    (入口预加载 onnxruntime -> PyQt6 -> onnxruntime -> RapidOCR) 来验证,
+    既能真正检验 DLL 顺序, 又不受 pytest-qt 干扰。
+
+失败分类:
+    1. 真的没装(ModuleNotFoundError)  -> skip(合理)
+    2. 装了但 DLL 加载失败            -> **失败**(绝不能 skip)
 """
 
+import os
 import subprocess
 import sys
 import unittest
 
-# P0-7: 与应用入口同款 —— 任何 PyQt6 import 之前先固定 onnxruntime 的 DLL 绑定顺序
-from secureredact.ocr.preload import preload_onnxruntime  # noqa: E402
 
-preload_onnxruntime()
+_PROBE_CODE = (
+    "import secureredact.main  # 入口模块内部已预加载 onnxruntime(P0-7)\n"
+    "from PyQt6.QtWidgets import QApplication\n"
+    "app = QApplication([])\n"
+    "import onnxruntime\n"
+    "from rapidocr_onnxruntime import RapidOCR\n"
+    "ocr = RapidOCR()\n"
+    "assert ocr is not None\n"
+    "assert callable(ocr)\n"
+    "public_methods = [m for m in dir(ocr) if not m.startswith('_')]\n"
+    "assert len(public_methods) > 0\n"
+    "print('RAPIDOCR-OK', onnxruntime.__version__)\n"
+)
 
 
 class TestRapidOCRAPI(unittest.TestCase):
+    """OCR 引擎可用性(P0-7: 必须走应用真实的 DLL 加载顺序)。"""
 
-    def _import_rapidocr(self):
-        """导入 RapidOCR; 区分「未安装」与「DLL 加载失败」。"""
-        try:
-            from rapidocr_onnxruntime import RapidOCR
-        except ModuleNotFoundError as exc:
-            self.skipTest(f"rapidocr_onnxruntime 未安装: {exc}")
-        except ImportError as exc:
-            # 装了但加载不了 —— 绝不能 skip, 必须让 CI 红
-            self.fail(
-                "rapidocr_onnxruntime 导入失败(已安装但 DLL 加载异常): "
-                f"{exc}\n"
-                "这通常是 Windows 上 PyQt6 与 onnxruntime 的 MSVC runtime 冲突 —— "
-                "请确认入口在 import PyQt6 之前调用了 "
-                "secureredact.ocr.preload.preload_onnxruntime()。"
-            )
-        return RapidOCR
-
-    def test_import_and_init(self):
-        RapidOCR = self._import_rapidocr()
-        ocr = RapidOCR()
-        self.assertIsNotNone(ocr)
-        self.assertTrue(callable(ocr))
-
-    def test_public_methods_available(self):
-        RapidOCR = self._import_rapidocr()
-        ocr = RapidOCR()
-        public_methods = [m for m in dir(ocr) if not m.startswith("_")]
-        # 至少应该暴露可调用接口
-        self.assertGreater(len(public_methods), 0)
-
-
-class TestOnnxRuntimeAfterEntry(unittest.TestCase):
-    """P0-7 回归: 走真实入口模块的加载顺序后, onnxruntime 必须仍可用。
-
-    Windows 上 PyQt6 自带一份较新的 msvcp140.dll; 若先加载 PyQt6 再加载
-    onnxruntime, 后者的原生扩展会因 runtime 版本冲突初始化失败:
-        ImportError: DLL load failed while importing onnxruntime_pybind11_state
-    应用入口通过 secureredact.ocr.preload 预加载来固定顺序; 本用例用**子进程**
-    隔离验证真实入口, 若入口里的预加载被删掉, 本用例会立刻变红。
-    """
-
-    def test_onnxruntime_loads_after_entry_import(self):
-        import os
-
-        code = (
-            "import secureredact.main  # 入口模块内部已预加载 onnxruntime(P0-7)\n"
-            "from PyQt6.QtWidgets import QApplication\n"
-            "app = QApplication([])\n"
-            "import onnxruntime\n"
-            "print('ORT-AFTER-ENTRY-OK', onnxruntime.__version__)\n"
-        )
+    def _run_probe(self):
         env = dict(os.environ)
         env.setdefault("QT_QPA_PLATFORM", "offscreen")
-        proc = subprocess.run(
-            [sys.executable, "-c", code],
+        return subprocess.run(
+            [sys.executable, "-c", _PROBE_CODE],
             capture_output=True,
             text=True,
             env=env,
-            timeout=300,
+            timeout=600,
         )
-        self.assertEqual(
-            proc.returncode,
-            0,
-            "走真实入口后 onnxruntime 仍导入失败 —— DLL runtime 冲突未被 preload 修复:\n"
-            f"stdout={proc.stdout}\nstderr={proc.stderr}",
-        )
-        self.assertIn("ORT-AFTER-ENTRY-OK", proc.stdout)
+
+    def test_ocr_engine_usable_via_entry_order(self):
+        """入口加载顺序下, onnxruntime 与 RapidOCR 必须都可用。"""
+        proc = self._run_probe()
+        out = (proc.stdout or "") + (proc.stderr or "")
+
+        if "No module named" in out and ("rapidocr" in out or "onnxruntime" in out):
+            self.skipTest("rapidocr_onnxruntime 未安装(依赖确实缺失)")
+
+        msg = "OCR 引擎不可用(已安装但加载失败) —— 通常是 Windows 上 PyQt6 与 onnxruntime 的 MSVC runtime 冲突。"
+        self.assertEqual(proc.returncode, 0, msg + "\nstdout=" + str(proc.stdout) + "\nstderr=" + str(proc.stderr))
+        self.assertIn("RAPIDOCR-OK", proc.stdout)
 
 
 if __name__ == "__main__":
