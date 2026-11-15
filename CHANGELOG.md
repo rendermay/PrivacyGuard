@@ -86,6 +86,28 @@
      两处 numpy **仅用于类型标注**, 改为 `if TYPE_CHECKING:` 导入(符合本项目「包导入惰性化」原则)。
   3. **依赖安装失败被静默吞掉** —— CI 的 `pip install -r requirements.txt || true` 会让依赖
      装不上时继续跑, 缺 PyQt6/PyMuPDF 时整批用例变 skip, **CI 照样变绿**。现已去掉 `|| true`。
+### CI 首次全绿(2026-11-15 真实执行)
+
+本次发布是 SecureRedact **历史上第一次在 GitHub Actions 上真正跑通 CI**。
+在此之前 `main` 上的每一次 CI 运行结果都是 `failure`(可查 2026-08-31 / 09-01 / 11-15 的历史 run),
+原因被 `pip install ... || true` 与从未同步的依赖版本共同掩盖。
+
+| CI job | 结果 |
+|---|---|
+| test (Python 3.11, windows-latest) | ✅ success |
+| test (Python 3.13, windows-latest) | ✅ success |
+| test (Python 3.11, ubuntu-latest) | ✅ success |
+| test (Python 3.13, ubuntu-latest) | ✅ success |
+
+每个 job 的 10 个 step 中前 9 个在两个平台全绿; 第 10 步(视觉回归)按平台特性
+限定为 `windows-latest`(像素基线只对生成平台成立)。
+
+### 视觉基线的一个发现
+
+重新生成基线时发现: 旧的 `settings_dialog_light.png` 与 `settings_dialog_dark.png`
+**sha256 完全相同** —— 说明设置中心的 dark 主题**根本没有生效**(QSS 里的
+`{card_background}` 占位符残留导致解析失败)。玻璃占位符修复后两者终于渲染出
+不同结果, 这也解释了 CI 上 14.5%~20.8% 的异常差异。
 ### Verification
 
 | 指标 | 修复前 | 修复后 |
