@@ -108,6 +108,50 @@
 **sha256 完全相同** —— 说明设置中心的 dark 主题**根本没有生效**(QSS 里的
 `{card_background}` 占位符残留导致解析失败)。玻璃占位符修复后两者终于渲染出
 不同结果, 这也解释了 CI 上 14.5%~20.8% 的异常差异。
+### Fixed (P0-7) —— 真机打包验证抓到的 OCR 全链路阻断
+
+本版本做了**第一次真正的打包验证**(此前所有 spec 改动都只做过静态检查),
+结果在产物里抓到两个只有真机打包才会暴露的阻断:
+
+- **🔴 Windows 上 PyQt6 与 onnxruntime 的 MSVC runtime 冲突 → OCR 完全不可用**:
+  打包产物里同时存在两份 MSVC runtime:
+  `
+    _internal/msvcp140.dll                (541KB, onnxruntime 能用的那份)
+    _internal/PyQt6/Qt6/bin/msvcp140.dll  (576KB, PyQt6 自带的那份)
+  `
+  PyInstaller 会把 `PyQt6/Qt6/bin` 加入 DLL 搜索路径, 于是 PyQt6 先加载时绑定的是
+  576KB 那份; 随后 `onnxruntime_pybind11_state.pyd` 初始化失败:
+  `
+    ImportError: DLL load failed while importing onnxruntime_pybind11_state:
+                 动态链接库(DLL)初始化例程失败。
+  `
+  后果: **PDF 扫描件 / 混合型 PDF / 图片通道 OCR 全部失效**。实测两种加载顺序:
+  `
+    Qt 先 -> onnxruntime 失败
+    ORT 先 -> 两者都正常
+  `
+  对策: 新增 `secureredact/ocr/preload.py`, 两个入口(`secureredact/main.py` 与根
+  `main.py`)在任何 PyQt6 import **之前**先加载 onnxruntime, 固定 DLL 绑定顺序
+  (代价: 启动期多约 0.5~1s)。
+
+- **🔴 测试把「DLL 加载失败」伪装成「依赖未安装」**:
+  `tests/unit/test_ocr_api.py` 原实现对**任何** ImportError 都 `skipTest("未安装")`,
+  而上面的 DLL 冲突恰好也是 ImportError —— 于是「OCR 已坏」被伪装成「依赖没装」,
+  **CI 全绿而 OCR 不可用**。现改为区分三种情况(真没装→skip / 装了但 DLL 加载失败→
+  **失败** / 正常→断言), 并新增子进程回归用例「先加载 PyQt6 再加载 onnxruntime 必须仍可用」。
+
+### 打包验证结果(v1.1.15 真机构建)
+
+| 检查项 | 结果 |
+|---|---|
+| PyInstaller 构建(`SecureRedact_windows.spec`) | ✅ 退出码 0 |
+| 产物 `version.txt` | ✅ 1.1.15 |
+| EXE 版本资源(FileVersion) | ✅ 1.1.15.0 |
+| 产物 `config.json` | ✅ 6897 bytes |
+| 产物 `jieba/dict.txt` | ✅ 4.8MB(hooks-contrib 的 hook 生效) |
+| 打包版 OCR 引擎初始化 | ✅ RapidOCR 正常实例化 |
+| 打包版 exe 启动 | ✅ 稳定运行 |
+| 打包版冻结态配置写入 | ✅ 创建 `~/.secureredact/` |
 ### Verification
 
 | 指标 | 修复前 | 修复后 |

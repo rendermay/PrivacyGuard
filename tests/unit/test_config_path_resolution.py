@@ -12,6 +12,7 @@
 """
 import json
 import os
+import sys
 import unittest
 import tempfile
 from pathlib import Path
@@ -201,6 +202,132 @@ class TestThemePersistence(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn('config.get("ui.theme"', window_src)
         self.assertNotIn('config.get("app.theme"', window_src)
+
+
+class TestFrozenConfigPaths(unittest.TestCase):
+    """模拟 PyInstaller 冻结形态, 验证配置路径解析。
+
+    这条分支在开发机上永远不会执行(只有打包后的 exe 才会走),
+    而打包版配置 100% 丢失正是本版本修复的缺陷 —— 必须有测试守护。
+    """
+
+    def _simulate_frozen(self, meipass):
+        old_frozen = getattr(sys, "frozen", None)
+        old_meipass = getattr(sys, "_MEIPASS", None)
+        try:
+            sys.frozen = True
+            sys._MEIPASS = meipass
+            yield
+        finally:
+            if old_frozen is None:
+                try:
+                    delattr(sys, "frozen")
+                except AttributeError:
+                    pass
+            else:
+                sys.frozen = old_frozen
+            if old_meipass is None:
+                try:
+                    delattr(sys, "_MEIPASS")
+                except AttributeError:
+                    pass
+            else:
+                sys._MEIPASS = old_meipass
+
+    def test_frozen_reads_bundled_config_and_writes_user_dir(self):
+        """冻结态: 基线读 _MEIPASS/config.json, 写入用户目录 ~/.secureredact。"""
+        from contextlib import contextmanager
+        from secureredact.utils import config as cfg_mod
+
+        @contextmanager
+        def _frozen(meipass):
+            old_frozen = getattr(sys, "frozen", None)
+            old_meipass = getattr(sys, "_MEIPASS", None)
+            try:
+                sys.frozen = True
+                sys._MEIPASS = meipass
+                yield
+            finally:
+                if old_frozen is None:
+                    try:
+                        delattr(sys, "frozen")
+                    except AttributeError:
+                        pass
+                else:
+                    sys.frozen = old_frozen
+                if old_meipass is None:
+                    try:
+                        delattr(sys, "_MEIPASS")
+                    except AttributeError:
+                        pass
+                else:
+                    sys._MEIPASS = old_meipass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            meipass = os.path.join(tmp, "_internal")
+            os.makedirs(meipass)
+            bundled = os.path.join(meipass, "config.json")
+            with open(bundled, "w", encoding="utf-8") as handle:
+                json.dump({"redaction": {"replacement_text": "[FROZEN]"}}, handle)
+
+            with _frozen(meipass):
+                write_path, base_path = cfg_mod.resolve_config_paths()
+
+            self.assertIsNotNone(base_path, "冻结态必须找到随包出厂配置")
+            self.assertEqual(
+                os.path.normcase(os.path.abspath(base_path)),
+                os.path.normcase(os.path.abspath(bundled)),
+                "冻结态基线必须是 _MEIPASS/config.json",
+            )
+            self.assertEqual(
+                os.path.normcase(os.path.abspath(write_path)),
+                os.path.normcase(os.path.abspath(os.path.expanduser("~/.secureredact/config.json"))),
+                "冻结态写入必须是用户目录(安装到 Program Files 时只读)",
+            )
+
+    def test_frozen_simple_config_reads_bundled_config(self):
+        """冻结态下 SimpleConfig 必须真的读到随包出厂配置(打包版配置丢失的回归守护)。"""
+        from contextlib import contextmanager
+        from secureredact.utils.config import SimpleConfig
+
+        @contextmanager
+        def _frozen(meipass):
+            old_frozen = getattr(sys, "frozen", None)
+            old_meipass = getattr(sys, "_MEIPASS", None)
+            try:
+                sys.frozen = True
+                sys._MEIPASS = meipass
+                yield
+            finally:
+                if old_frozen is None:
+                    try:
+                        delattr(sys, "frozen")
+                    except AttributeError:
+                        pass
+                else:
+                    sys.frozen = old_frozen
+                if old_meipass is None:
+                    try:
+                        delattr(sys, "_MEIPASS")
+                    except AttributeError:
+                        pass
+                else:
+                    sys._MEIPASS = old_meipass
+
+        with tempfile.TemporaryDirectory() as tmp:
+            meipass = os.path.join(tmp, "_internal")
+            os.makedirs(meipass)
+            with open(os.path.join(meipass, "config.json"), "w", encoding="utf-8") as handle:
+                json.dump({"redaction": {"replacement_text": "[FROZEN]"}}, handle)
+
+            with _frozen(meipass):
+                config = SimpleConfig()
+
+            self.assertEqual(
+                config.get("redaction.replacement_text"),
+                "[FROZEN]",
+                "冻结态必须读到随包出厂配置 —— 打包版配置 100% 丢失的回归守护",
+            )
 
 
 if __name__ == "__main__":

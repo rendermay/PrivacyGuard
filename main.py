@@ -112,6 +112,11 @@ def init_ocr_engine():
         traceback.print_exc()
         return False
 
+# P0-7: 必须在任何 PyQt6 import 之前预加载 onnxruntime —— 规避 Windows 上
+#   PyQt6 与 onnxruntime 的 MSVC runtime 冲突(详见 secureredact/ocr/preload.py)。
+from secureredact.ocr.preload import preload_onnxruntime
+preload_onnxruntime()
+
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QBoxLayout, QGridLayout,
                              QHBoxLayout, QPushButton, QLabel, QFileDialog,

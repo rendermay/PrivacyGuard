@@ -23,6 +23,12 @@
 
 from __future__ import annotations
 
+# P0-7: 必须在任何 PyQt6 import 之前预加载 onnxruntime —— 规避 Windows 上
+#   PyQt6 与 onnxruntime 的 MSVC runtime 冲突(详见 secureredact/ocr/preload.py)。
+from secureredact.ocr.preload import preload_onnxruntime
+
+preload_onnxruntime()
+
 import os
 import sys
 import threading
