@@ -73,6 +73,19 @@
   路径校验用例去掉写死的 Windows 用户目录; 白名单断言改为结构断言;
   jieba 样本改为带强上下文的文本。
 
+### Fixed (CI 真实执行后追加)
+
+- **CI 首次真实执行暴露的三个阻断**(此前被 `pip install ... || true` 与本地环境掩盖):
+  1. **onnxruntime DLL 崩溃** —— `numpy 2.4.2` + `onnxruntime 1.32.0` 与 PyQt6 + cv2 同时载入时
+     onnxruntime DLL 触发 access violation(0xC0000005), **整个 pytest 进程崩溃**。
+     `requirements.txt` 的 `onnxruntime>=1.24.1` 无上限 → CI 装到了无人验证过的 1.32.0。
+     现锁回实测通过的 `numpy==2.3.1` + `onnxruntime==1.28.0`。
+  2. **numpy 被重复加载** —— `secureredact/ocr/base.py` 与 `ocr/rapidocr.py` 的模块级
+     `import numpy` 把 numpy 拖进 `secureredact.api` 的导入链, 在 coverage 预导入场景触发
+     numpy 2.4 的 `cannot load module more than once per process` 硬错误 → api 覆盖率掉到 5%。
+     两处 numpy **仅用于类型标注**, 改为 `if TYPE_CHECKING:` 导入(符合本项目「包导入惰性化」原则)。
+  3. **依赖安装失败被静默吞掉** —— CI 的 `pip install -r requirements.txt || true` 会让依赖
+     装不上时继续跑, 缺 PyQt6/PyMuPDF 时整批用例变 skip, **CI 照样变绿**。现已去掉 `|| true`。
 ### Verification
 
 | 指标 | 修复前 | 修复后 |
